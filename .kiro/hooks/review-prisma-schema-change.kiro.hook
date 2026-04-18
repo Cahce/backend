@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Review Prisma schema change",
+  "description": "When prisma/schema.prisma is saved, review the schema change for correctness, migration impact, and hybrid editor compatibility",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "prisma/schema.prisma"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review this Prisma schema change before treating it as valid.\n\nReturn:\n1. Current problem\n2. Proposed schema changes\n3. Affected modules/use cases\n4. Migration impact\n5. Data backfill or compatibility concerns\n6. API contract impact\n7. Rollback strategy\n\nAlso check whether the schema still supports:\n- editor document state\n- compile jobs\n- artifacts\n- snapshots/versioning\n- collaboration metadata\n\nDo not rewrite unrelated files."
+  }
+}

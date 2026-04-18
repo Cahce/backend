@@ -1,0 +1,2 @@
+# This file ensures the var/artifacts directory is tracked by git
+# Actual artifact contents are gitignored

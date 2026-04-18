@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Build and smoke test API",
+  "description": "After each spec task completes, run a TypeScript build and API smoke test to catch regressions early",
+  "version": "1",
+  "when": {
+    "type": "postTaskExecution"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "npm run build && npm run test:api:smoke"
+  }
+}

@@ -1,0 +1,2 @@
+# This file ensures the var/storage directory is tracked by git
+# Actual storage contents are gitignored

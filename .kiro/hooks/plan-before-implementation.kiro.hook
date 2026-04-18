@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Plan before implementation",
+  "description": "Before any task execution, read steering files and produce a structured implementation plan following project architecture rules",
+  "version": "1",
+  "when": {
+    "type": "preTaskExecution"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Read all steering files first.\n\nBefore implementation, produce a short plan using the project architecture rules.\n\nReturn:\n1. Target module\n2. Target layer\n3. Affected files\n4. Why those files belong to that layer\n5. Whether there is database impact\n6. Whether this affects the hybrid editor model\n\nDo not write code yet. Only plan."
+  }
+}

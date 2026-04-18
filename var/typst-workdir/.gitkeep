@@ -1,0 +1,2 @@
+# This file ensures the var/typst-workdir directory is tracked by git
+# Actual workdir contents are gitignored

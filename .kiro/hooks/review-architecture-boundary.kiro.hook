@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Review architecture boundary",
+  "description": "When any backend module TypeScript file is saved, review it for clean architecture boundary violations",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/modules/**/*.ts"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review this backend file against project architecture rules.\n\nCheck:\n- correct module placement\n- correct layer placement\n- dependency direction violations\n- framework leakage into domain/application\n- direct DB access from delivery\n- naming convention mismatch\n\nReturn:\n- issues found\n- why each issue violates architecture\n- the smallest safe fix"
+  }
+}
