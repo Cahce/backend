@@ -432,7 +432,7 @@ This implementation plan covers the foundational backend capabilities for two co
     - _Requirements: 28_
 
 - [x]* 14. Unit tests for project-files module use cases
-  - [ ]* 14.1 Write unit tests for CreateFileUseCase
+  - [x]* 14.1 Write unit tests for CreateFileUseCase
     - Test successful creation
     - Test FILE_ALREADY_EXISTS error
     - Test PROJECT_NOT_FOUND error
