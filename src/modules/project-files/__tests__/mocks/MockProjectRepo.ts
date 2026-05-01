@@ -30,7 +30,7 @@ export class MockProjectRepo implements ProjectRepo {
     this.projects.clear();
   }
 
-  async create(data: CreateProjectData): Promise<Project> {
+  async create(_data: CreateProjectData): Promise<Project> {
     throw new Error('Not implemented in mock');
   }
 
@@ -38,15 +38,15 @@ export class MockProjectRepo implements ProjectRepo {
     return this.projects.get(id) || null;
   }
 
-  async listByOwnerId(ownerId: string): Promise<Project[]> {
+  async listByOwnerId(_ownerId: string): Promise<Project[]> {
     throw new Error('Not implemented in mock');
   }
 
-  async update(data: UpdateProjectData): Promise<Project> {
+  async update(_data: UpdateProjectData): Promise<Project> {
     throw new Error('Not implemented in mock');
   }
 
-  async delete(projectId: string): Promise<void> {
+  async delete(_projectId: string): Promise<void> {
     throw new Error('Not implemented in mock');
   }
 }
