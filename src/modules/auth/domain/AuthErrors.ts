@@ -78,3 +78,52 @@ export class NewPasswordSameAsOldError extends AuthError {
         this.name = "NewPasswordSameAsOldError";
     }
 }
+
+export class UserNotFoundError extends AuthError {
+    constructor() {
+        super("Không tìm thấy người dùng", "USER_NOT_FOUND");
+        this.name = "UserNotFoundError";
+    }
+}
+
+/**
+ * Auth error constants for use in use cases
+ */
+export const AuthErrors = {
+    INVALID_EMAIL_FORMAT: {
+        code: 'INVALID_EMAIL_FORMAT',
+        message: 'Định dạng email không hợp lệ',
+    },
+    UNSUPPORTED_EMAIL_DOMAIN: {
+        code: 'UNSUPPORTED_EMAIL_DOMAIN',
+        message: 'Tên miền email không được hỗ trợ. Vui lòng sử dụng @tlu.edu.vn hoặc @e.tlu.edu.vn',
+    },
+    INVALID_CREDENTIALS: {
+        code: 'INVALID_CREDENTIALS',
+        message: 'Email hoặc mật khẩu không đúng',
+    },
+    ACCOUNT_INACTIVE: {
+        code: 'ACCOUNT_INACTIVE',
+        message: 'Tài khoản đã bị vô hiệu hóa',
+    },
+    UNAUTHORIZED: {
+        code: 'UNAUTHORIZED',
+        message: 'Chưa xác thực',
+    },
+    USER_NOT_FOUND: {
+        code: 'USER_NOT_FOUND',
+        message: 'Không tìm thấy người dùng',
+    },
+    OLD_PASSWORD_INCORRECT: {
+        code: 'OLD_PASSWORD_INCORRECT',
+        message: 'Mật khẩu cũ không đúng',
+    },
+    PASSWORDS_DO_NOT_MATCH: {
+        code: 'PASSWORDS_DO_NOT_MATCH',
+        message: 'Mật khẩu xác nhận không khớp',
+    },
+    NEW_PASSWORD_SAME_AS_OLD: {
+        code: 'NEW_PASSWORD_SAME_AS_OLD',
+        message: 'Mật khẩu mới phải khác mật khẩu cũ',
+    },
+} as const;

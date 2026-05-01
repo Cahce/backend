@@ -81,3 +81,63 @@ export const ErrorResponseSchema = z.object({
 });
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
+
+// Get User By Email
+export const GetUserByEmailParamsSchema = z.object({
+    email: z
+        .string()
+        .email("Định dạng email không hợp lệ")
+        .describe("Email của người dùng cần tra cứu"),
+});
+
+export type GetUserByEmailParamsDto = z.infer<typeof GetUserByEmailParamsSchema>;
+
+export const UserWithProfileResponseSchema = z.object({
+    id: z.string(),
+    email: z.string(),
+    role: z.enum(["admin", "student", "teacher"]),
+    isActive: z.boolean(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    studentProfile: z.object({
+        id: z.string(),
+        studentCode: z.string(),
+        fullName: z.string(),
+        phone: z.string().nullable(),
+        class: z.object({
+            id: z.string(),
+            name: z.string(),
+            code: z.string(),
+            major: z.object({
+                id: z.string(),
+                name: z.string(),
+                code: z.string(),
+                faculty: z.object({
+                    id: z.string(),
+                    name: z.string(),
+                    code: z.string(),
+                }),
+            }),
+        }),
+    }).optional(),
+    teacherProfile: z.object({
+        id: z.string(),
+        teacherCode: z.string(),
+        fullName: z.string(),
+        phone: z.string().nullable(),
+        academicRank: z.string(),
+        academicDegree: z.string(),
+        department: z.object({
+            id: z.string(),
+            name: z.string(),
+            code: z.string(),
+            faculty: z.object({
+                id: z.string(),
+                name: z.string(),
+                code: z.string(),
+            }),
+        }),
+    }).optional(),
+});
+
+export type UserWithProfileResponseDto = z.infer<typeof UserWithProfileResponseSchema>;

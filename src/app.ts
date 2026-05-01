@@ -15,6 +15,7 @@ import { teacherManagementRoutes } from "./modules/admin/delivery/http/TeacherMa
 import { studentManagementRoutes } from "./modules/admin/delivery/http/StudentManagement/Routes.js";
 import { projectRoutes } from "./modules/projects/delivery/http/Project/Routes.js";
 import { projectFileRoutes } from "./modules/project-files/delivery/http/ProjectFile/Routes.js";
+import { teacherProfileRoutes } from "./modules/teachers/delivery/http/Profile/Routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
     const app = Fastify({
@@ -61,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await app.register(studentManagementRoutes, { prefix: "/api/v1/admin" });
     await app.register(projectRoutes, { prefix: "/api/v1" });
     await app.register(projectFileRoutes, { prefix: "/api/v1" });
+    await app.register(teacherProfileRoutes, { prefix: "/api/v1/teachers" });
 
     return app;
 }

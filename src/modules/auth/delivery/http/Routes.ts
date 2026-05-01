@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { LoginUseCase } from "../../application/LoginUseCase.js";
 import { GetCurrentUserUseCase } from "../../application/GetCurrentUserUseCase.js";
+import { GetUserByEmailUseCase } from "../../application/GetUserByEmailUseCase.js";
 import { LogoutUseCase } from "../../application/LogoutUseCase.js";
 import { ChangePasswordUseCase } from "../../application/ChangePasswordUseCase.js";
 import { UserRepoPrisma } from "../../infra/UserRepoPrisma.js";
@@ -10,8 +11,10 @@ import { TokenRevocationRepoPrisma } from "../../infra/TokenRevocationRepoPrisma
 import {
     LoginRequestSchema,
     ChangePasswordRequestSchema,
+    GetUserByEmailParamsSchema,
     type LoginRequestDto,
     type ChangePasswordRequestDto,
+    type GetUserByEmailParamsDto,
 } from "./Dto.js";
 
 /**
@@ -118,6 +121,77 @@ const schemas = {
             },
         },
     },
+    userWithProfileResponse: {
+        type: "object",
+        properties: {
+            id: { type: "string" },
+            email: { type: "string" },
+            role: { type: "string", enum: ["admin", "student", "teacher"] },
+            isActive: { type: "boolean" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+            studentProfile: {
+                type: "object",
+                properties: {
+                    id: { type: "string" },
+                    studentCode: { type: "string" },
+                    fullName: { type: "string" },
+                    phone: { type: "string", nullable: true },
+                    class: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            code: { type: "string" },
+                            major: {
+                                type: "object",
+                                properties: {
+                                    id: { type: "string" },
+                                    name: { type: "string" },
+                                    code: { type: "string" },
+                                    faculty: {
+                                        type: "object",
+                                        properties: {
+                                            id: { type: "string" },
+                                            name: { type: "string" },
+                                            code: { type: "string" },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            teacherProfile: {
+                type: "object",
+                properties: {
+                    id: { type: "string" },
+                    teacherCode: { type: "string" },
+                    fullName: { type: "string" },
+                    phone: { type: "string", nullable: true },
+                    academicRank: { type: "string" },
+                    academicDegree: { type: "string" },
+                    department: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            code: { type: "string" },
+                            faculty: {
+                                type: "object",
+                                properties: {
+                                    id: { type: "string" },
+                                    name: { type: "string" },
+                                    code: { type: "string" },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
     errorResponse: {
         type: "object",
         properties: {
@@ -153,6 +227,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const loginUseCase = new LoginUseCase(userRepo, passwordHasher, tokenService);
     const getCurrentUserUseCase = new GetCurrentUserUseCase(userRepo);
+    const getUserByEmailUseCase = new GetUserByEmailUseCase(userRepo, app.prisma);
     const logoutUseCase = new LogoutUseCase(tokenRevocationRepo);
     const changePasswordUseCase = new ChangePasswordUseCase(userRepo, passwordHasher);
 
@@ -236,6 +311,75 @@ export async function authRoutes(app: FastifyInstance) {
             }
 
             const statusCode = getStatusCodeForError(result.error.code) as 200 | 401 | 500;
+            return reply.code(statusCode).send({
+                error: result.error,
+            });
+        },
+    );
+
+    // GET /api/v1/auth/user/:email
+    app.get<{ Params: GetUserByEmailParamsDto }>(
+        "/user/:email",
+        {
+            preHandler: app.auth.verify,
+            schema: {
+                description: "Lấy thông tin người dùng theo email (bao gồm profile sinh viên/giảng viên)",
+                tags: ["auth"],
+                security: [{ bearerAuth: [] }],
+                params: {
+                    type: "object",
+                    required: ["email"],
+                    properties: {
+                        email: {
+                            type: "string",
+                            format: "email",
+                            description: "Email của người dùng cần tra cứu",
+                        },
+                    },
+                },
+                response: {
+                    200: schemas.userWithProfileResponse,
+                    401: schemas.errorResponse,
+                    403: schemas.errorResponse,
+                    404: schemas.errorResponse,
+                    500: schemas.errorResponse,
+                },
+            },
+        },
+        async (request, reply) => {
+            const requesterId = request.user.sub;
+            const requesterRole = request.user.role;
+
+            // Validate params
+            const parseResult = GetUserByEmailParamsSchema.safeParse(request.params);
+
+            if (!parseResult.success) {
+                const firstError = parseResult.error.issues[0];
+                return reply.code(400).send({
+                    error: {
+                        code: "VALIDATION_ERROR",
+                        message: firstError.message,
+                    },
+                });
+            }
+
+            // Execute use case
+            const result = await getUserByEmailUseCase.execute({
+                email: parseResult.data.email,
+                requesterId,
+                requesterRole,
+            });
+
+            // Map result to HTTP response
+            if (result.success) {
+                return reply.code(200).send({
+                    ...result.data,
+                    createdAt: result.data.createdAt.toISOString(),
+                    updatedAt: result.data.updatedAt.toISOString(),
+                });
+            }
+
+            const statusCode = getStatusCodeForError(result.error.code);
             return reply.code(statusCode).send({
                 error: result.error,
             });
@@ -355,6 +499,8 @@ function getStatusCodeForError(errorCode: string): number {
             return 401;
         case "ACCOUNT_INACTIVE":
             return 403;
+        case "USER_NOT_FOUND":
+            return 404;
         case "INTERNAL_ERROR":
         default:
             return 500;
