@@ -11,6 +11,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed:users": "tsx scripts/seed-users.ts",
+    "seed:admin": "tsx scripts/seed-admin-data.ts",
+    "seed:all": "npm run seed:users && npm run seed:admin",
     "test:unit:projects": "tsx --test src/modules/projects/__tests__/**/*.test.ts",
     "test:unit:project-files": "tsx --test src/modules/project-files/__tests__/**/*.test.ts",
     "test:unit": "npm run test:unit:projects && npm run test:unit:project-files",
