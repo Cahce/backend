@@ -43,6 +43,13 @@ export class MockFileRepo implements FileRepo {
     sizeBytes: number;
     sha256: string;
   }): Promise<File> {
+    const key = `${data.projectId}:${data.path}`;
+    
+    // Check if file already exists
+    if (this.files.has(key)) {
+      throw new Error('FILE_ALREADY_EXISTS');
+    }
+
     const id = `file-${this.nextId++}`;
     const now = new Date();
     const file: File = {
@@ -60,7 +67,7 @@ export class MockFileRepo implements FileRepo {
       createdAt: now,
       updatedAt: now,
     };
-    const key = `${data.projectId}:${data.path}`;
+    
     this.files.set(key, file);
     return file;
   }

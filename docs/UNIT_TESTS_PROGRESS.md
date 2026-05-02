@@ -50,8 +50,8 @@ All 5 use cases fully tested with 32 passing tests:
    - ✅ Deny teacher from deleting other teacher's project
    - ✅ Allow teacher to delete own project
 
-### Project-Files Module Unit Tests (In Progress)
-Mock repositories created, 2 use cases tested:
+### Project-Files Module Unit Tests (Completed) ✅
+All 8 use cases fully tested with 71 passing tests:
 
 1. **CreateFileUseCase** (12 tests) ✅
    - ✅ Create file successfully with valid data
@@ -75,15 +75,72 @@ Mock repositories created, 2 use cases tested:
    - ✅ Return UNAUTHORIZED error
    - ✅ Include full content in response
 
-## Remaining Work
+3. **ListFilesUseCase** (7 tests) ✅
+   - ✅ List all files in project
+   - ✅ Return files ordered by path alphabetically
+   - ✅ Exclude textContent and storageKey from response
+   - ✅ Return empty list when project has no files
+   - ✅ Return PROJECT_NOT_FOUND error
+   - ✅ Return UNAUTHORIZED error
+   - ✅ Allow admin to list files in any project
 
-### Project-Files Module Unit Tests (To Do)
-3. **ListFilesUseCase** - Test file listing with metadata exclusion
-4. **UpdateFileUseCase** - Test file content updates with hash recomputation
-5. **RenameFileUseCase** - Test file renaming with path validation
-6. **DeleteFileUseCase** - Test file deletion
-7. **GetFilesForCompilationUseCase** - Test compilation file filtering
-8. **CreateFilesFromTemplateUseCase** - Test batch file creation
+4. **UpdateFileUseCase** (9 tests) ✅
+   - ✅ Update file content successfully
+   - ✅ Recompute size and hash after update
+   - ✅ Update lastEditedAt timestamp
+   - ✅ Return PROJECT_NOT_FOUND error
+   - ✅ Return FILE_NOT_FOUND error
+   - ✅ Return UNAUTHORIZED error
+   - ✅ Allow admin to update file in any project
+   - ✅ Handle empty content update
+   - ✅ Handle UTF-8 content correctly
+
+5. **RenameFileUseCase** (12 tests) ✅
+   - ✅ Rename file successfully
+   - ✅ Preserve all file metadata during rename
+   - ✅ Return PROJECT_NOT_FOUND error
+   - ✅ Return FILE_NOT_FOUND error at oldPath
+   - ✅ Return FILE_ALREADY_EXISTS error at newPath
+   - ✅ Return UNAUTHORIZED error
+   - ✅ Allow admin to rename file in any project
+   - ✅ Reject newPath with ../
+   - ✅ Reject newPath starting with ./
+   - ✅ Reject absolute newPath
+   - ✅ Reject empty newPath
+   - ✅ Allow renaming to subdirectory path
+
+6. **DeleteFileUseCase** (8 tests) ✅
+   - ✅ Delete file successfully
+   - ✅ Return PROJECT_NOT_FOUND error
+   - ✅ Return FILE_NOT_FOUND error
+   - ✅ Return UNAUTHORIZED error
+   - ✅ Allow admin to delete file in any project
+   - ✅ Not affect other files when deleting one file
+   - ✅ Allow teacher to delete file in own project
+   - ✅ Deny teacher from deleting file in other teacher project
+
+7. **GetFilesForCompilationUseCase** (7 tests) ✅
+   - ✅ Retrieve all compilation-relevant files
+   - ✅ Include only typst files when no other compilation files exist
+   - ✅ Return empty array when no compilation files exist
+   - ✅ Return PROJECT_NOT_FOUND error
+   - ✅ Return UNAUTHORIZED error
+   - ✅ Allow admin to get compilation files from any project
+   - ✅ Include full file content for compilation
+
+8. **CreateFilesFromTemplateUseCase** (10 tests) ✅
+   - ✅ Create multiple files from template successfully
+   - ✅ Compute size and hash for each file
+   - ✅ Apply storage policy to each file
+   - ✅ Handle empty template files array
+   - ✅ Create files with different kinds
+   - ✅ Preserve mimeType for each file
+   - ✅ Handle files without mimeType
+   - ✅ Return error when file creation fails
+   - ✅ Handle UTF-8 content in template files
+   - ✅ Create files in correct order
+
+## Remaining Work
 
 ### Integration Tests (To Do)
 - HTTP route tests for projects module (5 endpoints)
@@ -113,9 +170,9 @@ Mock repositories created, 2 use cases tested:
 ## Test Coverage Summary
 
 ### Current Status
-- **Projects Module**: 100% use case coverage (5/5 use cases)
-- **Project-Files Module**: 25% use case coverage (2/8 use cases)
-- **Total Tests Passing**: 50 tests
+- **Projects Module**: 100% use case coverage (5/5 use cases) ✅
+- **Project-Files Module**: 100% use case coverage (8/8 use cases) ✅
+- **Total Tests Passing**: 103 tests (32 projects + 71 project-files)
 - **Total Tests Failing**: 0 tests
 
 ### Coverage Goals
