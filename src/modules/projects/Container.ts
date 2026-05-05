@@ -7,12 +7,17 @@
 
 import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { ProjectRepo } from './domain/Project/Ports.js';
+import type { ProjectSettingsRepository } from './domain/ProjectSettingsRepository.js';
 import { ProjectRepoPrisma } from './infra/ProjectRepoPrisma.js';
+import { PrismaProjectSettingsRepository } from './infra/PrismaProjectSettingsRepository.js';
 import { CreateProjectUseCase } from './application/CreateProjectUseCase.js';
 import { GetProjectUseCase } from './application/GetProjectUseCase.js';
 import { ListProjectsUseCase } from './application/ListProjectsUseCase.js';
 import { UpdateProjectUseCase } from './application/UpdateProjectUseCase.js';
 import { DeleteProjectUseCase } from './application/DeleteProjectUseCase.js';
+import { GetProjectSettings } from './application/GetProjectSettings.js';
+import { UpdateProjectSettings } from './application/UpdateProjectSettings.js';
+import type { FileRepo } from '../project-files/domain/ProjectFile/Ports.js';
 
 /**
  * Projects Module Container
@@ -22,6 +27,7 @@ import { DeleteProjectUseCase } from './application/DeleteProjectUseCase.js';
 export class ProjectsContainer {
   // Repository (typed as interface for DIP compliance)
   private projectRepo: ProjectRepo;
+  private settingsRepo: ProjectSettingsRepository;
 
   // Use Cases
   public createProjectUseCase: CreateProjectUseCase;
@@ -29,10 +35,13 @@ export class ProjectsContainer {
   public listProjectsUseCase: ListProjectsUseCase;
   public updateProjectUseCase: UpdateProjectUseCase;
   public deleteProjectUseCase: DeleteProjectUseCase;
+  public getProjectSettings: GetProjectSettings;
+  public updateProjectSettings: UpdateProjectSettings;
 
-  constructor(prisma: PrismaClient) {
-    // Initialize repository
+  constructor(prisma: PrismaClient, fileRepo: FileRepo) {
+    // Initialize repositories
     this.projectRepo = new ProjectRepoPrisma(prisma);
+    this.settingsRepo = new PrismaProjectSettingsRepository(prisma);
 
     // Wire use cases
     this.createProjectUseCase = new CreateProjectUseCase(this.projectRepo);
@@ -40,6 +49,12 @@ export class ProjectsContainer {
     this.listProjectsUseCase = new ListProjectsUseCase(this.projectRepo);
     this.updateProjectUseCase = new UpdateProjectUseCase(this.projectRepo);
     this.deleteProjectUseCase = new DeleteProjectUseCase(this.projectRepo);
+    this.getProjectSettings = new GetProjectSettings(this.settingsRepo, this.projectRepo);
+    this.updateProjectSettings = new UpdateProjectSettings(
+      this.settingsRepo,
+      this.projectRepo,
+      fileRepo,
+    );
   }
 
   /**

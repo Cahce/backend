@@ -26,6 +26,13 @@ export const swaggerPlugin = fp(async function swaggerPlugin(app: FastifyInstanc
                     },
                 },
             },
+            tags: [
+                { name: "auth", description: "Authentication endpoints" },
+                { name: "projects", description: "Project management" },
+                { name: "project-files", description: "Project file management" },
+                { name: "project-settings", description: "Per-project settings (mainPath, compileOptions)" },
+                { name: "compile", description: "Server-side Typst compilation jobs and artifacts" },
+            ],
         },
     });
 

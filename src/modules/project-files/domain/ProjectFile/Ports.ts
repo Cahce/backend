@@ -73,4 +73,12 @@ export interface FileRepo {
    * @returns List of File entities suitable for compilation
    */
   findForCompilation(projectId: string): Promise<File[]>;
+
+  /**
+   * Check if a file exists at the given path
+   * @param projectId - Project ID
+   * @param path - File path
+   * @returns true if file exists, false otherwise
+   */
+  exists(projectId: string, path: string): Promise<boolean>;
 }

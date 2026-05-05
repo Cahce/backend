@@ -70,7 +70,7 @@ export class CreateFileUseCase {
       );
 
       if (existingFile) {
-        return failure(FileErrors.FILE_ALREADY_EXISTS.code, FileErrors.FILE_ALREADY_EXISTS.message);
+        return failure(FileErrors.FILE_PATH_CONFLICT.code, FileErrors.FILE_PATH_CONFLICT.message);
       }
 
       // Compute size and hash

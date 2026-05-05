@@ -18,11 +18,27 @@ export const FileErrors = {
   },
 
   /**
-   * File already exists at path
+   * File already exists at path (generic)
    */
   FILE_ALREADY_EXISTS: {
     code: 'FILE_ALREADY_EXISTS',
     message: 'Tệp đã tồn tại',
+  },
+
+  /**
+   * POST /files — conflict: file already exists at the given path
+   */
+  FILE_PATH_CONFLICT: {
+    code: 'FILE_PATH_CONFLICT',
+    message: 'Đường dẫn tệp đã tồn tại',
+  },
+
+  /**
+   * PATCH /files:rename — conflict: target path already occupied
+   */
+  RENAME_TARGET_EXISTS: {
+    code: 'RENAME_TARGET_EXISTS',
+    message: 'Đường dẫn đích đã tồn tại',
   },
 
   /**

@@ -244,6 +244,31 @@ export async function projectFileRoutes(app: FastifyInstance) {
       });
 
       if (result.success) {
+        const file = result.data;
+        
+        // Binary streaming for image/data files with storageKey
+        if ((file.kind === 'image' || file.kind === 'data') && file.storageKey) {
+          try {
+            const stream = await app.storage.get(file.storageKey);
+            const contentType = file.mimeType || 'application/octet-stream';
+            
+            reply.header('Content-Type', contentType);
+            if (file.sizeBytes) {
+              reply.header('Content-Length', file.sizeBytes);
+            }
+            
+            return reply.send(stream);
+          } catch (error) {
+            return reply.code(404).send({
+              error: {
+                code: 'STORAGE_NOT_FOUND',
+                message: 'File content not found in storage',
+              },
+            });
+          }
+        }
+        
+        // JSON response for text files
         return reply.code(200).send({
           ...result.data,
           content: result.data.textContent,

@@ -1,0 +1,120 @@
+/**
+ * Compile module container
+ * 
+ * Dependency injection wiring for the compile module.
+ */
+
+import type { FastifyInstance } from 'fastify';
+import type { CompileJob } from './domain/CompileJob.js';
+import type { CompileJobResponse } from './delivery/http/Dto.js';
+import { EnqueueCompileJob } from './application/EnqueueCompileJob.js';
+import { ListCompileJobs } from './application/ListCompileJobs.js';
+import { GetCompileJob } from './application/GetCompileJob.js';
+import { GetLatestArtifact } from './application/GetLatestArtifact.js';
+import { ProcessCompileJob } from './application/ProcessCompileJob.js';
+import { PrismaCompileJobRepository } from './infra/PrismaCompileJobRepository.js';
+import { PrismaCompileArtifactRepository } from './infra/PrismaCompileArtifactRepository.js';
+import { PrismaProjectFileSnapshotAdapter } from './infra/PrismaProjectFileSnapshotAdapter.js';
+import { NodeTypstCompileService } from './infra/NodeTypstCompileService.js';
+import { InProcessCompileQueue } from './infra/InProcessCompileQueue.js';
+import type { ProjectAccessPolicy } from './domain/Policies.js';
+
+// Import project settings repository
+import { PrismaProjectSettingsRepository } from '../projects/infra/PrismaProjectSettingsRepository.js';
+
+export interface CompileContainer {
+  enqueueCompileJob: EnqueueCompileJob;
+  listCompileJobs: ListCompileJobs;
+  getCompileJob: GetCompileJob;
+  getLatestArtifact: GetLatestArtifact;
+  getMainPath(projectId: string): Promise<string>;
+  toResponse(job: CompileJob): CompileJobResponse;
+}
+
+export function buildCompileContainer(app: FastifyInstance): CompileContainer {
+  // Repositories
+  const jobs = new PrismaCompileJobRepository(app.prisma);
+  const artifacts = new PrismaCompileArtifactRepository(app.prisma);
+  const snapshot = new PrismaProjectFileSnapshotAdapter(app.prisma, app.storage);
+  const settingsRepo = new PrismaProjectSettingsRepository(app.prisma);
+
+  // Services
+  const compiler = new NodeTypstCompileService();
+
+  // Worker
+  const processJob = new ProcessCompileJob(
+    jobs,
+    artifacts,
+    snapshot,
+    compiler,
+    app.storage,
+    Number(process.env.COMPILE_TIMEOUT_MS ?? 60000),
+    app.log,
+  );
+
+  // Queue
+  const queue = new InProcessCompileQueue(processJob, {
+    enabled: process.env.COMPILE_WORKER_ENABLED === 'true',
+    log: app.log,
+  });
+
+  // Start queue
+  queue.start();
+
+  // Access policy (reuse from projects module)
+  const accessPolicy: ProjectAccessPolicy = {
+    async requireProjectAccess(projectId: string, userId: string): Promise<void> {
+      const project = await app.prisma.project.findUnique({
+        where: { id: projectId },
+        include: {
+          members: {
+            where: { userId },
+          },
+        },
+      });
+
+      if (!project) {
+        throw new Error('PROJECT_NOT_FOUND');
+      }
+
+      if (project.ownerId !== userId && project.members.length === 0) {
+        throw new Error('PROJECT_ACCESS_DENIED');
+      }
+    },
+  };
+
+  // Use cases
+  const enqueueCompileJob = new EnqueueCompileJob(jobs, accessPolicy, queue);
+  const listCompileJobs = new ListCompileJobs(jobs, accessPolicy);
+  const getCompileJob = new GetCompileJob(jobs, accessPolicy);
+  const getLatestArtifact = new GetLatestArtifact(jobs, artifacts, accessPolicy, app.storage);
+
+  // Helper to get main path from settings
+  async function getMainPath(projectId: string): Promise<string> {
+    const settings = await settingsRepo.findOrCreate(projectId);
+    return settings.mainPath;
+  }
+
+  // Response mapper
+  function toResponse(job: CompileJob): CompileJobResponse {
+    return {
+      id: job.id,
+      projectId: job.projectId,
+      entryPath: job.entryPath,
+      status: job.status,
+      diagnostics: job.diagnostics as any,
+      latestArtifactId: job.latestArtifactId,
+      createdAt: job.createdAt.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
+    };
+  }
+
+  return {
+    enqueueCompileJob,
+    listCompileJobs,
+    getCompileJob,
+    getLatestArtifact,
+    getMainPath,
+    toResponse,
+  };
+}

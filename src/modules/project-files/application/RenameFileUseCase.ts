@@ -76,7 +76,7 @@ export class RenameFileUseCase {
       );
 
       if (fileAtNewPath) {
-        return failure(FileErrors.FILE_ALREADY_EXISTS.code, FileErrors.FILE_ALREADY_EXISTS.message);
+        return failure(FileErrors.RENAME_TARGET_EXISTS.code, FileErrors.RENAME_TARGET_EXISTS.message);
       }
 
       // Rename file via repository

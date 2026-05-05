@@ -162,7 +162,7 @@ describe('CreateFileUseCase', () => {
 
     assert.strictEqual(result.success, false);
     if (!result.success) {
-      assert.strictEqual(result.error.code, FileErrors.FILE_ALREADY_EXISTS.code);
+      assert.strictEqual(result.error.code, FileErrors.FILE_PATH_CONFLICT.code);
     }
   });
 

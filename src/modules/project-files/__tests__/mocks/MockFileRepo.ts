@@ -153,4 +153,9 @@ export class MockFileRepo implements FileRepo {
       .filter(f => f.projectId === projectId && compilationKinds.includes(f.kind));
     return files;
   }
+
+  async exists(projectId: string, path: string): Promise<boolean> {
+    const key = `${projectId}:${path}`;
+    return this.files.has(key);
+  }
 }

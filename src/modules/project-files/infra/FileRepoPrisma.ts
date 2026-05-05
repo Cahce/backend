@@ -24,18 +24,32 @@ export class FileRepoPrisma implements FileRepo {
     input: CreateFileData & { storageMode: string; sizeBytes: number; sha256: string },
   ): Promise<File> {
     try {
-      const file = await this.prisma.file.create({
-        data: {
-          projectId: input.projectId,
-          path: input.path,
-          kind: input.kind,
-          textContent: input.storageMode === 'inline' ? input.content : null,
-          storageKey: input.storageMode === 'object_storage' ? `${input.projectId}/${input.path}` : null,
-          mimeType: input.mimeType || null,
-          sizeBytes: input.sizeBytes,
-          sha256: input.sha256,
-          lastEditedAt: new Date(),
-        },
+      const now = new Date();
+      
+      // Use transaction to update both file and project
+      const file = await this.prisma.$transaction(async (tx) => {
+        // Create file
+        const createdFile = await tx.file.create({
+          data: {
+            projectId: input.projectId,
+            path: input.path,
+            kind: input.kind,
+            textContent: input.storageMode === 'inline' ? input.content : null,
+            storageKey: input.storageMode === 'object_storage' ? `${input.projectId}/${input.path}` : null,
+            mimeType: input.mimeType || null,
+            sizeBytes: input.sizeBytes,
+            sha256: input.sha256,
+            lastEditedAt: now,
+          },
+        });
+
+        // Update project lastEditedAt
+        await tx.project.update({
+          where: { id: input.projectId },
+          data: { lastEditedAt: now },
+        });
+
+        return createdFile;
       });
 
       return this.mapToFile(file, input.storageMode as StorageMode);
@@ -105,19 +119,33 @@ export class FileRepoPrisma implements FileRepo {
     input: UpdateFileData & { sizeBytes: number; sha256: string },
   ): Promise<File> {
     try {
-      const file = await this.prisma.file.update({
-        where: {
-          projectId_path: {
-            projectId: input.projectId,
-            path: input.path,
+      const now = new Date();
+      
+      // Use transaction to update both file and project
+      const file = await this.prisma.$transaction(async (tx) => {
+        // Update file
+        const updatedFile = await tx.file.update({
+          where: {
+            projectId_path: {
+              projectId: input.projectId,
+              path: input.path,
+            },
           },
-        },
-        data: {
-          textContent: input.content,
-          sizeBytes: input.sizeBytes,
-          sha256: input.sha256,
-          lastEditedAt: new Date(),
-        },
+          data: {
+            textContent: input.content,
+            sizeBytes: input.sizeBytes,
+            sha256: input.sha256,
+            lastEditedAt: now,
+          },
+        });
+
+        // Update project lastEditedAt
+        await tx.project.update({
+          where: { id: input.projectId },
+          data: { lastEditedAt: now },
+        });
+
+        return updatedFile;
       });
 
       return this.mapToFile(file, this.determineStorageMode(file));
@@ -204,6 +232,19 @@ export class FileRepoPrisma implements FileRepo {
     });
 
     return files.map((file) => this.mapToFile(file, this.determineStorageMode(file)));
+  }
+
+  /**
+   * Check if a file exists at the given path
+   */
+  async exists(projectId: string, path: string): Promise<boolean> {
+    const count = await this.prisma.file.count({
+      where: {
+        projectId,
+        path,
+      },
+    });
+    return count > 0;
   }
 
   /**
