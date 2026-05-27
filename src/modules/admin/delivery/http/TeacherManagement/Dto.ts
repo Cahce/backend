@@ -11,6 +11,52 @@ extendZodWithOpenApi(z);
  * =========================
  */
 
+// Account inline creation modes
+export const AccountInlineSchema = z.discriminatedUnion("mode", [
+    z.object({
+        mode: z.literal("none").openapi({
+            description: "Không tạo tài khoản",
+        }),
+    }),
+    z.object({
+        mode: z.literal("link").openapi({
+            description: "Liên kết với tài khoản có sẵn",
+        }),
+        accountId: z
+            .string()
+            .trim()
+            .min(1, "ID tài khoản là bắt buộc khi mode=link")
+            .openapi({
+                description: "ID tài khoản cần liên kết",
+                example: "cmnztabnn0000e8vmyzb8gqtn",
+            }),
+    }),
+    z.object({
+        mode: z.literal("create").openapi({
+            description: "Tạo tài khoản mới",
+        }),
+        email: z
+            .string()
+            .trim()
+            .email("Email không hợp lệ")
+            .min(1, "Email là bắt buộc khi mode=create")
+            .openapi({
+                description: "Email tài khoản mới",
+                example: "nguyenvana@tlu.edu.vn",
+            }),
+        password: z
+            .string()
+            .trim()
+            .min(8, "Mật khẩu phải có ít nhất 8 ký tự")
+            .openapi({
+                description: "Mật khẩu tài khoản mới",
+                example: "Password123",
+            }),
+    }),
+]);
+
+export type AccountInlineDto = z.infer<typeof AccountInlineSchema>;
+
 // Create Teacher Request
 export const CreateTeacherRequestSchema = z
     .object({
@@ -67,9 +113,12 @@ export const CreateTeacherRequestSchema = z
             .trim()
             .optional()
             .openapi({
-                description: "ID tài khoản liên kết (nếu có)",
+                description: "ID tài khoản liên kết (backward compatibility, dùng account.mode=link thay thế)",
                 example: "cmnztabnn0000e8vmyzb8gqtn",
             }),
+        account: AccountInlineSchema.optional().openapi({
+            description: "Tùy chọn tạo/liên kết tài khoản inline",
+        }),
     })
     .openapi("CreateTeacherRequest");
 

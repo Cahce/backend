@@ -228,7 +228,7 @@ export async function authRoutes(app: FastifyInstance) {
     const loginUseCase = new LoginUseCase(userRepo, passwordHasher, tokenService);
     const getCurrentUserUseCase = new GetCurrentUserUseCase(userRepo);
     const getUserByEmailUseCase = new GetUserByEmailUseCase(userRepo, app.prisma);
-    const logoutUseCase = new LogoutUseCase(tokenRevocationRepo);
+    const logoutUseCase = new LogoutUseCase(tokenRevocationRepo, app.tokenRevocationCache);
     const changePasswordUseCase = new ChangePasswordUseCase(userRepo, passwordHasher);
 
     // POST /api/v1/auth/login

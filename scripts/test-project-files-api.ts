@@ -162,17 +162,24 @@ async function runTests() {
     console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
   });
 
-  await test("POST /api/v1/projects/:projectId/files - Missing kind (400)", async () => {
+  // `kind` is intentionally optional — the backend auto-detects from the
+  // file extension via `detectKindFromPath` (see ProjectFile/Routes.ts
+  // L215 docstring + `detectKindFromPath` in FileKindPolicy.ts). So a
+  // missing `kind` should succeed (201) and the resulting file should be
+  // kind=typst for a .typ extension.
+  await test("POST /api/v1/projects/:projectId/files - Missing kind auto-detects from path", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/files`, {
-      path: "test.typ",
+      path: "autodetect.typ",
       content: "No kind provided",
     });
 
-    if (result.status !== 400) {
-      throw new Error(`Expected 400, got ${result.status}`);
+    if (result.status !== 201) {
+      throw new Error(`Expected 201, got ${result.status}: ${JSON.stringify(result.data)}`);
     }
-
-    console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
+    if (result.data?.kind !== "typst") {
+      throw new Error(`Expected kind=typst (auto-detected), got ${result.data?.kind}`);
+    }
+    console.log(`  Auto-detected kind: ${result.data.kind}`);
   });
 
   await test("POST /api/v1/projects/:projectId/files - Missing content (400)", async () => {

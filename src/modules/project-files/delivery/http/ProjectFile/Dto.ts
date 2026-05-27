@@ -11,8 +11,20 @@ extendZodWithOpenApi(z);
  * =========================
  */
 
-// File Kind Schema
-export const FileKindSchema = z.enum(['typst', 'bib', 'image', 'data', 'other']);
+// File Kind Schema - all 11 values from Prisma FileKind enum
+export const FileKindSchema = z.enum([
+  'typst',
+  'bib',
+  'image',
+  'vector',
+  'font',
+  'markdown',
+  'config',
+  'data',
+  'text',
+  'pdf',
+  'other',
+]);
 
 // Create File Request
 export const CreateFileRequestSchema = z
@@ -25,8 +37,8 @@ export const CreateFileRequestSchema = z
         description: 'Đường dẫn tệp (tương đối với thư mục gốc dự án)',
         example: 'main.typ',
       }),
-    kind: FileKindSchema.openapi({
-      description: 'Loại tệp',
+    kind: FileKindSchema.optional().openapi({
+      description: 'Loại tệp (tùy chọn - sẽ tự động phát hiện từ đường dẫn nếu không cung cấp)',
       example: 'typst',
     }),
     content: z.string().openapi({

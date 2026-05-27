@@ -1,10 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { ProjectSettings } from "../../../domain/ProjectSettings.js";
-import { PrismaProjectSettingsRepository } from "../../../infra/PrismaProjectSettingsRepository.js";
-import { ProjectRepoPrisma } from "../../../infra/ProjectRepoPrisma.js";
-import { FileRepoPrisma } from "../../../../project-files/infra/FileRepoPrisma.js";
-import { GetProjectSettings as GetProjectSettingsUseCase } from "../../../application/GetProjectSettings.js";
-import { UpdateProjectSettings as UpdateProjectSettingsUseCase } from "../../../application/UpdateProjectSettings.js";
+import type { ProjectsContainer } from "../../../Container.js";
 import { updateProjectSettingsSchema, type ProjectSettingsResponse } from "./Dto.js";
 
 function toResponse(settings: ProjectSettings): ProjectSettingsResponse {
@@ -17,17 +13,11 @@ function toResponse(settings: ProjectSettings): ProjectSettingsResponse {
     };
 }
 
-export async function projectSettingsRoutes(app: FastifyInstance): Promise<void> {
-    const settingsRepo = new PrismaProjectSettingsRepository(app.prisma);
-    const projectRepo = new ProjectRepoPrisma(app.prisma);
-    const fileRepo = new FileRepoPrisma(app.prisma);
-
-    const getProjectSettings = new GetProjectSettingsUseCase(settingsRepo, projectRepo);
-    const updateProjectSettings = new UpdateProjectSettingsUseCase(
-        settingsRepo,
-        projectRepo,
-        fileRepo,
-    );
+export async function projectSettingsRoutes(
+    app: FastifyInstance,
+    container: ProjectsContainer,
+): Promise<void> {
+    const { getProjectSettings, updateProjectSettings } = container;
 
     app.get<{
         Params: { projectId: string };

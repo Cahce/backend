@@ -6,6 +6,7 @@
 
 import type { FileRepo } from '../../domain/ProjectFile/Ports.js';
 import type { File, FileKind, StorageMode } from '../../domain/ProjectFile/Types.js';
+import { StorageMode as StorageModeEnum } from '../../domain/ProjectFile/Types.js';
 
 /**
  * Mock implementation of FileRepo for unit tests
@@ -68,6 +69,40 @@ export class MockFileRepo implements FileRepo {
       updatedAt: now,
     };
     
+    this.files.set(key, file);
+    return file;
+  }
+
+  async createBinary(data: {
+    projectId: string;
+    path: string;
+    kind: FileKind;
+    storageKey: string;
+    mimeType: string;
+    sizeBytes: number;
+    sha256: string;
+  }): Promise<File> {
+    const key = `${data.projectId}:${data.path}`;
+    if (this.files.has(key)) {
+      throw new Error('FILE_ALREADY_EXISTS');
+    }
+    const id = `file-${this.nextId++}`;
+    const now = new Date();
+    const file: File = {
+      id,
+      projectId: data.projectId,
+      path: data.path,
+      kind: data.kind,
+      storageMode: StorageModeEnum.ObjectStorage,
+      textContent: null,
+      storageKey: data.storageKey,
+      mimeType: data.mimeType,
+      sizeBytes: data.sizeBytes,
+      sha256: data.sha256,
+      lastEditedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
     this.files.set(key, file);
     return file;
   }

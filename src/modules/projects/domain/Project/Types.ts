@@ -24,6 +24,8 @@ export type Project = {
   title: string;
   category: TemplateCategory;
   ownerId: string | null;
+  templateId: string | null;
+  templateVersionId: string | null;
   createdAt: Date;
   updatedAt: Date;
   lastEditedAt: Date | null;
@@ -36,6 +38,8 @@ export type CreateProjectData = {
   title: string;
   category: TemplateCategory;
   ownerId: string;
+  templateId?: string | null;
+  templateVersionId?: string | null;
 };
 
 /**

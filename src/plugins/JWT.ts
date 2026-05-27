@@ -2,15 +2,28 @@ import fp from "fastify-plugin";
 import fastifyJwt from "@fastify/jwt";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { UserRole } from "../shared/auth/Types.js";
+import { LruTokenRevocationCache } from "../shared/auth/LruTokenRevocationCache.js";
 
 export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
     const secret = app.config.auth.jwtSecret;
 
     await app.register(fastifyJwt, { secret });
 
+    // In-memory LRU cache cho kết quả revocation lookup.
+    // Cache hit short-circuit DB query trong app.auth.verify — đây là hot path
+    // (mọi route auth-required đi qua).
+    //
+    // - TTL 60s: logout của user khác (cùng jti) phản ứng trong ≤ 60s.
+    // - LogoutUseCase invalidate cache ngay sau khi revoke → race nhỏ chấp nhận được.
+    const tokenRevocationCache = new LruTokenRevocationCache();
+    app.decorate("tokenRevocationCache", tokenRevocationCache);
+
     /**
-     * Verify JWT token and check for revocation
-     * Populates request.user with decoded token payload
+     * Verify JWT token and check for revocation.
+     * Populates request.user with decoded token payload.
+     *
+     * Cache hit-path: nếu `jti` đã được verify trong 60s gần đây và chưa bị
+     * revoke, không query DB.
      */
     async function verify(req: FastifyRequest, reply: FastifyReply): Promise<void> {
         try {
@@ -34,12 +47,9 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
             });
         }
 
-        const revoked = await app.prisma.invalidToken.findUnique({
-            where: { jti },
-            select: { jti: true },
-        });
-
-        if (revoked) {
+        // Cache hit path — không đụng DB.
+        const cached = tokenRevocationCache.get(jti);
+        if (cached === "revoked") {
             return reply.code(401).send({
                 error: {
                     code: "TOKEN_REVOKED",
@@ -47,6 +57,27 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
                 },
             });
         }
+        if (cached === "valid") {
+            return;
+        }
+
+        // Cache miss — fall back DB lookup.
+        const revoked = await app.prisma.invalidToken.findUnique({
+            where: { jti },
+            select: { jti: true },
+        });
+
+        if (revoked) {
+            tokenRevocationCache.set(jti, "revoked");
+            return reply.code(401).send({
+                error: {
+                    code: "TOKEN_REVOKED",
+                    message: "Token đã bị thu hồi",
+                },
+            });
+        }
+
+        tokenRevocationCache.set(jti, "valid");
     }
 
     /**

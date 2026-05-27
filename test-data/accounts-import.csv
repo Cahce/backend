@@ -1,0 +1,5 @@
+email,password,role,isActive,linkType,linkCode
+admin1@tlu.edu.vn,,admin,true,,
+teacher1@tlu.edu.vn,,teacher,true,teacher,GV001
+student1@e.tlu.edu.vn,Password123!,student,true,student,SV001
+teacher2@tlu.edu.vn,,teacher,false,,

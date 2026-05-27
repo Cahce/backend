@@ -17,6 +17,9 @@ import { RenameFileUseCase } from './application/RenameFileUseCase.js';
 import { DeleteFileUseCase } from './application/DeleteFileUseCase.js';
 import { GetFilesForCompilationUseCase } from './application/GetFilesForCompilationUseCase.js';
 import { CreateFilesFromTemplateUseCase } from './application/CreateFilesFromTemplateUseCase.js';
+import { UploadBinaryFileUseCase } from './application/UploadBinaryFileUseCase.js';
+import type { BlobStorage } from '../../shared/storage/BlobStorage.js';
+import type { ProjectAccessPolicy } from '../compile/domain/Policies.js';
 
 /**
  * Project Files Module Container
@@ -36,6 +39,8 @@ export class ProjectFilesContainer {
   public deleteFileUseCase: DeleteFileUseCase;
   public getFilesForCompilationUseCase: GetFilesForCompilationUseCase;
   public createFilesFromTemplateUseCase: CreateFilesFromTemplateUseCase;
+  // Lazy: wired only when uploadBinary deps are supplied to wireBinaryUpload().
+  public uploadBinaryFileUseCase: UploadBinaryFileUseCase | null = null;
 
   constructor(prisma: PrismaClient, projectRepo: ProjectRepo) {
     // Initialize repository
@@ -53,6 +58,20 @@ export class ProjectFilesContainer {
       projectRepo,
     );
     this.createFilesFromTemplateUseCase = new CreateFilesFromTemplateUseCase(this.fileRepo);
+  }
+
+  /**
+   * Wire the binary-upload use case. Separate from the constructor because
+   * BlobStorage and ProjectAccessPolicy are infrastructure decorations that
+   * become available later in `app.ts` after their respective plugins register.
+   * Call once from app.ts after both deps are ready.
+   */
+  wireBinaryUpload(blobStorage: BlobStorage, projectAccess: ProjectAccessPolicy): void {
+    this.uploadBinaryFileUseCase = new UploadBinaryFileUseCase(
+      this.fileRepo,
+      blobStorage,
+      projectAccess,
+    );
   }
 
   /**

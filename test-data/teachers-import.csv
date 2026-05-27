@@ -1,0 +1,4 @@
+teacherCode,fullName,departmentCode,academicRank,academicDegree,phone,accountEmail,accountPassword
+GV001,Nguyễn Văn A,KHMT,Giảng viên,Thạc sĩ,0123456789,nguyenvana@tlu.edu.vn,
+GV002,Trần Thị B,KHMT,Giảng viên chính,Tiến sĩ,0987654321,tranthib@tlu.edu.vn,Password123!
+GV003,Lê Văn C,HTTT,Phó giáo sư,Tiến sĩ,0912345678,,

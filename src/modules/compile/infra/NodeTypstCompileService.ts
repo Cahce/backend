@@ -5,28 +5,48 @@
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler';
+import { config } from '../../../config/index.js';
+import { withTimeout } from '../../../shared/async/withTimeout.js';
 import type { TypstCompileService, TypstCompileInput, TypstCompileResult } from '../domain/TypstCompileService.js';
 import type { CompileDiagnostic } from '../domain/CompileDiagnostic.js';
 
 export class NodeTypstCompileService implements TypstCompileService {
   async compile(input: TypstCompileInput): Promise<TypstCompileResult> {
     try {
-      // Read entry file
+      // Verify the entry file exists on disk before invoking the compiler so
+      // we can produce a clean error rather than relying on typst.ts's less
+      // descriptive failure mode. `readFile` is throw-away — typst.ts itself
+      // reads the file via the workspace; we no longer pass the content
+      // through `mainFileContent` because typst-ts-node-compiler 0.7.x now
+      // rejects requests that specify both `mainFileContent` and
+      // `mainFilePath` simultaneously ("main file content and path cannot
+      // be specified at the same time, with []").
       const entryFullPath = join(input.workDir, input.entryPath);
-      const mainContent = await readFile(entryFullPath, 'utf-8');
+      await readFile(entryFullPath, 'utf-8');
 
-      // Create compiler instance with workspace
+      // Resolve font directory to an absolute path so NodeCompiler finds it
+      // regardless of the process working directory at runtime.
+      const fontDir = resolve(config.compile.fontDirs);
+
+      // Create compiler instance with workspace and local font directory.
+      // fontArgs is an array of NodeAddFontPaths | NodeAddFontBlobs; here we
+      // point it at the project's bundled fonts under backend/var/fonts/.
       const compiler = NodeCompiler.create({
         workspace: input.workDir,
+        fontArgs: [{ fontPaths: [fontDir] }],
       });
 
-      // Compile with timeout
+      // Compile with timeout.
+      // typst-ts-node-compiler 0.7.x resolves relative `mainFilePath`
+      // against `process.cwd()`, not against the `workspace` option — so
+      // a relative `entryPath` ends up referring to the wrong directory
+      // and the compiler rejects with "entry file is not in workspace".
+      // Always pass the absolute path that we already computed.
       const compilePromise = (async () => {
         const compileResult = compiler.compile({
-          mainFileContent: mainContent,
-          mainFilePath: input.entryPath,
+          mainFilePath: entryFullPath,
         });
 
         // Check if compilation has errors
@@ -70,8 +90,11 @@ export class NodeTypstCompileService implements TypstCompileService {
         };
       })();
 
-      const timeoutPromise = new Promise<TypstCompileResult>((resolve) => {
-        setTimeout(() => resolve({
+      // Race compile against timeout. `withTimeout` clears the underlying
+      // `setTimeout` no matter which side wins, eliminating the orphan-timer
+      // leak that the naïve `Promise.race(...)` pattern caused under load.
+      return await withTimeout(compilePromise, input.timeoutMs, {
+        onTimeout: () => ({
           ok: false,
           diagnostics: [
             {
@@ -79,10 +102,8 @@ export class NodeTypstCompileService implements TypstCompileService {
               message: 'Compilation timeout exceeded',
             },
           ],
-        }), input.timeoutMs);
+        }),
       });
-
-      return await Promise.race([compilePromise, timeoutPromise]);
     } catch (error) {
       return {
         ok: false,

@@ -1,14 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { CreateStudentProfileUseCase } from "../../../application/StudentManagement/CreateStudentProfileUseCase.js";
-import { ListStudentProfilesUseCase } from "../../../application/StudentManagement/ListStudentProfilesUseCase.js";
-import { GetStudentProfileDetailsUseCase } from "../../../application/StudentManagement/GetStudentProfileDetailsUseCase.js";
-import { UpdateStudentProfileUseCase } from "../../../application/StudentManagement/UpdateStudentProfileUseCase.js";
-import { DeleteStudentProfileUseCase } from "../../../application/StudentManagement/DeleteStudentProfileUseCase.js";
-import { LinkAccountToStudentUseCase } from "../../../application/StudentManagement/LinkAccountToStudentUseCase.js";
-import { UnlinkAccountFromStudentUseCase } from "../../../application/StudentManagement/UnlinkAccountFromStudentUseCase.js";
-import { StudentProfileRepoPrisma } from "../../../infra/StudentProfileRepoPrisma.js";
-import { ClassRepoPrisma } from "../../../infra/ClassRepoPrisma.js";
-import { AdminAccountRepoPrisma } from "../../../infra/AdminAccountRepoPrisma.js";
+import { AdminContainer } from "../../../Container.js";
+import { ImportStudents } from "../../../application/import/ImportStudents.js";
+import { FileParser } from "../../../infra/FileParser.js";
 import {
     CreateStudentRequestSchema,
     UpdateStudentRequestSchema,
@@ -32,17 +25,15 @@ import {
  * Student Management module HTTP routes
  */
 export async function studentManagementRoutes(app: FastifyInstance) {
-    const studentRepo = new StudentProfileRepoPrisma(app.prisma);
-    const classRepo = new ClassRepoPrisma(app.prisma);
-    const accountRepo = new AdminAccountRepoPrisma(app.prisma);
-
-    const createStudentUseCase = new CreateStudentProfileUseCase(studentRepo, classRepo);
-    const listStudentsUseCase = new ListStudentProfilesUseCase(studentRepo);
-    const getStudentDetailsUseCase = new GetStudentProfileDetailsUseCase(studentRepo);
-    const updateStudentUseCase = new UpdateStudentProfileUseCase(studentRepo, classRepo);
-    const deleteStudentUseCase = new DeleteStudentProfileUseCase(studentRepo);
-    const linkAccountUseCase = new LinkAccountToStudentUseCase(studentRepo, accountRepo);
-    const unlinkAccountUseCase = new UnlinkAccountFromStudentUseCase(studentRepo);
+    const container = new AdminContainer(app.prisma);
+    const createStudentUseCase = container.createStudentProfileUseCase;
+    const listStudentsUseCase = container.listStudentProfilesUseCase;
+    const getStudentDetailsUseCase = container.getStudentProfileDetailsUseCase;
+    const updateStudentUseCase = container.updateStudentProfileUseCase;
+    const deleteStudentUseCase = container.deleteStudentProfileUseCase;
+    const linkAccountUseCase = container.linkAccountToStudentUseCase;
+    const unlinkAccountUseCase = container.unlinkAccountFromStudentUseCase;
+    const importStudents = new ImportStudents(app.prisma);
 
     // POST /api/v1/admin/students - create student
     app.post<{ Body: CreateStudentRequestDto }>(
@@ -502,6 +493,140 @@ export async function studentManagementRoutes(app: FastifyInstance) {
             return reply.code(getStatusCodeForError(result.error.code)).send({
                 error: result.error,
             });
+        },
+    );
+
+    // POST /api/v1/admin/students/import - import students from XLSX/CSV file
+    app.post(
+        "/students/import",
+        {
+            preHandler: app.auth.requireAdmin,
+            schema: {
+                description: "Nhập danh sách sinh viên từ file XLSX (ưu tiên) hoặc CSV (có thể tạo tài khoản)",
+                tags: ["admin-students"],
+                security: [{ bearerAuth: [] }],
+                consumes: ["multipart/form-data"],
+                response: {
+                    200: {
+                        description: "Kết quả nhập file",
+                        type: "object",
+                        properties: {
+                            total: { type: "number" },
+                            created: { type: "number" },
+                            skipped: { type: "number" },
+                            failed: { type: "number" },
+                            errors: { type: "array", items: { type: "object" } },
+                            generatedPasswords: { type: "array", items: { type: "object" } },
+                        },
+                    },
+                    400: { ...ErrorResponseJsonSchema },
+                    401: { ...ErrorResponseJsonSchema },
+                    403: { ...ErrorResponseJsonSchema },
+                    500: { ...ErrorResponseJsonSchema },
+                },
+            },
+        },
+        async (request, reply) => {
+            try {
+                const data = await request.file();
+                if (!data) {
+                    return reply.code(400).send({
+                        error: { code: "NO_FILE", message: "Không tìm thấy file" },
+                    });
+                }
+
+                // Validate MIME type (accept both XLSX and CSV)
+                const mimeValidation = FileParser.validateMimeType(data.mimetype);
+                if (!mimeValidation.valid) {
+                    return reply.code(400).send({
+                        error: { 
+                            code: "INVALID_FILE_TYPE", 
+                            message: "Chỉ chấp nhận file XLSX hoặc CSV" 
+                        },
+                    });
+                }
+
+                const buffer = await data.toBuffer();
+                
+                // Parse file (auto-detect XLSX or CSV)
+                const parsed = FileParser.parseSpreadsheet(buffer, data.mimetype);
+                const result = await importStudents.execute(parsed.rows);
+
+                return reply.code(200).send(result);
+            } catch (error) {
+                return reply.code(400).send({
+                    error: {
+                        code: "IMPORT_ERROR",
+                        message: error instanceof Error ? error.message : "Lỗi nhập file",
+                    },
+                });
+            }
+        },
+    );
+
+    // GET /api/v1/admin/students/import/template - download XLSX/CSV template
+    app.get(
+        "/students/import/template",
+        {
+            preHandler: app.auth.requireAdmin,
+            schema: {
+                description: "Tải file mẫu XLSX (ưu tiên) hoặc CSV để nhập sinh viên",
+                tags: ["admin-students"],
+                security: [{ bearerAuth: [] }],
+                querystring: {
+                    type: "object",
+                    properties: {
+                        format: {
+                            type: "string",
+                            enum: ["xlsx", "csv"],
+                            description: "Định dạng file (mặc định: xlsx)",
+                        },
+                    },
+                },
+                response: {
+                    200: { description: "File mẫu", type: "string" },
+                    401: { ...ErrorResponseJsonSchema },
+                    403: { ...ErrorResponseJsonSchema },
+                },
+            },
+        },
+        async (request, reply) => {
+            const query = request.query as { format?: "xlsx" | "csv" };
+            const format = query.format || "xlsx";
+
+            const headers = [
+                "STT",
+                "Mã sinh viên",
+                "Họ và Tên",
+                "Lớp",
+                "Email",
+                "Mật Khẩu",
+                "Số điện thoại",
+            ];
+
+            const exampleRow = {
+                STT: "1",
+                "Mã sinh viên": "2251172560",
+                "Họ và Tên": "Nguyễn Văn A",
+                "Lớp": "62TH1",
+                Email: "2251172560@e.tlu.edu.vn",
+                "Mật Khẩu": "123456",
+                "Số điện thoại": "901234567",
+            };
+
+            if (format === "xlsx") {
+                const buffer = FileParser.buildXlsxTemplate(headers, exampleRow);
+                return reply
+                    .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .header("Content-Disposition", 'attachment; filename="sinh_vien_mau.xlsx"')
+                    .send(buffer);
+            } else {
+                const csv = FileParser.buildCsvTemplate(headers, exampleRow);
+                return reply
+                    .header("Content-Type", "text/csv; charset=utf-8")
+                    .header("Content-Disposition", 'attachment; filename="sinh_vien_mau.csv"')
+                    .send(csv);
+            }
         },
     );
 }

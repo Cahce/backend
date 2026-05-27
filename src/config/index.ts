@@ -10,9 +10,17 @@ const EnvSchema = z.object({
     // Blob Storage
     BLOB_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     STORAGE_DIR: z.string().default("./.storage"),
+    // Template Storage
+    TEMPLATE_STORAGE_DIR: z.string().default("./storage/templates"),
     // Compile
     COMPILE_WORKER_ENABLED: z.coerce.boolean().default(true),
     COMPILE_TIMEOUT_MS: z.coerce.number().default(60000),
+    COMPILE_FONT_DIRS: z.string().default('./var/fonts'),
+    // Bibliography Integration
+    ZOTERO_API_BASE: z.string().default("https://api.zotero.org"),
+    OPENALEX_MAILTO: z.string().default(""),
+    // Binary File Upload
+    MAX_UPLOAD_SIZE_BYTES: z.coerce.number().default(10 * 1024 * 1024), // 10 MB
 });
 
 const env = EnvSchema.parse(process.env);
@@ -35,9 +43,20 @@ export const config = {
         driver: env.BLOB_STORAGE_DRIVER,
         dir: env.STORAGE_DIR,
     },
+    templateStorage: {
+        dir: env.TEMPLATE_STORAGE_DIR,
+    },
     compile: {
         workerEnabled: env.COMPILE_WORKER_ENABLED,
         timeoutMs: env.COMPILE_TIMEOUT_MS,
+        fontDirs: env.COMPILE_FONT_DIRS,
+    },
+    bibliography: {
+        zoteroApiBase: env.ZOTERO_API_BASE,
+        openalexMailto: env.OPENALEX_MAILTO,
+    },
+    upload: {
+        maxBytes: env.MAX_UPLOAD_SIZE_BYTES,
     },
 } as const;
 

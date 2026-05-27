@@ -1,12 +1,16 @@
 import type { PrismaClient } from "../generated/prisma/index.js";
 import type { AppConfig } from "../config/index.js";
 import type { UserRole } from "../shared/auth/Types.js";
+import type { MaterializeTemplate } from "../modules/projects/domain/MaterializeTemplate.js";
+import type { TokenRevocationCachePort } from "../shared/auth/TokenRevocationCachePort.js";
 import type { FastifyRequest, FastifyReply } from "fastify";
 
 declare module "fastify" {
     interface FastifyInstance {
         prisma: PrismaClient;
         config: AppConfig;
+        materializeTemplate: MaterializeTemplate;
+        tokenRevocationCache: TokenRevocationCachePort;
         auth: {
             /**
              * Verify JWT token and check for revocation

@@ -32,4 +32,39 @@ export const ProjectErrors = {
     code: 'VALIDATION_ERROR',
     message: 'Dữ liệu không hợp lệ',
   },
+
+  /**
+   * Upload exceeded compressed or expanded size limit.
+   * Mapped to HTTP 413.
+   */
+  ZIP_PAYLOAD_TOO_LARGE: {
+    code: 'ZIP_PAYLOAD_TOO_LARGE',
+    message: 'Tệp .zip vượt quá giới hạn cho phép',
+  },
+
+  /**
+   * Zip contains a path traversal segment (e.g. `..`) or absolute path.
+   * Mapped to HTTP 400.
+   */
+  ZIP_PATH_TRAVERSAL: {
+    code: 'ZIP_PATH_TRAVERSAL',
+    message: 'Tệp .zip chứa đường dẫn không hợp lệ',
+  },
+
+  /**
+   * Zip is corrupt / not a valid archive.
+   * Mapped to HTTP 400.
+   */
+  ZIP_MALFORMED: {
+    code: 'ZIP_MALFORMED',
+    message: 'Tệp .zip không hợp lệ hoặc bị hỏng',
+  },
+
+  /**
+   * Upload missing the expected `file` field.
+   */
+  MISSING_FILE: {
+    code: 'MISSING_FILE',
+    message: 'Cần upload một tệp .zip',
+  },
 } as const;

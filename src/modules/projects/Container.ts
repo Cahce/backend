@@ -17,7 +17,12 @@ import { UpdateProjectUseCase } from './application/UpdateProjectUseCase.js';
 import { DeleteProjectUseCase } from './application/DeleteProjectUseCase.js';
 import { GetProjectSettings } from './application/GetProjectSettings.js';
 import { UpdateProjectSettings } from './application/UpdateProjectSettings.js';
+import { ExportProjectUseCase } from './application/ExportProjectUseCase.js';
+import { ImportProjectUseCase } from './application/ImportProjectUseCase.js';
 import type { FileRepo } from '../project-files/domain/ProjectFile/Ports.js';
+import type { MaterializeTemplate } from './domain/MaterializeTemplate.js';
+import type { BlobStorage } from '../../shared/storage/BlobStorage.js';
+import type { ProjectAccessPolicy } from '../compile/domain/Policies.js';
 
 /**
  * Projects Module Container
@@ -37,14 +42,30 @@ export class ProjectsContainer {
   public deleteProjectUseCase: DeleteProjectUseCase;
   public getProjectSettings: GetProjectSettings;
   public updateProjectSettings: UpdateProjectSettings;
+  /** Wired by {@link wireZipPortability} after app-level dependencies are ready. */
+  public exportProjectUseCase: ExportProjectUseCase | null = null;
+  /** Wired by {@link wireZipPortability}. */
+  public importProjectUseCase: ImportProjectUseCase | null = null;
+  /** Keep around to construct zip use cases on demand. */
+  private readonly fileRepo: FileRepo;
 
-  constructor(prisma: PrismaClient, fileRepo: FileRepo) {
+  constructor(
+    prisma: PrismaClient,
+    fileRepo: FileRepo,
+    materializeTemplate?: MaterializeTemplate,
+  ) {
+    this.fileRepo = fileRepo;
     // Initialize repositories
     this.projectRepo = new ProjectRepoPrisma(prisma);
     this.settingsRepo = new PrismaProjectSettingsRepository(prisma);
 
     // Wire use cases
-    this.createProjectUseCase = new CreateProjectUseCase(this.projectRepo);
+    this.createProjectUseCase = new CreateProjectUseCase(
+      this.projectRepo,
+      fileRepo,
+      this.settingsRepo,
+      materializeTemplate,
+    );
     this.getProjectUseCase = new GetProjectUseCase(this.projectRepo);
     this.listProjectsUseCase = new ListProjectsUseCase(this.projectRepo);
     this.updateProjectUseCase = new UpdateProjectUseCase(this.projectRepo);
@@ -63,5 +84,27 @@ export class ProjectsContainer {
    */
   getProjectRepo(): ProjectRepo {
     return this.projectRepo;
+  }
+
+  /**
+   * Wire export/import (zip portability) use cases once the BlobStorage and
+   * ProjectAccessPolicy are available. Follows the same lazy-wiring pattern
+   * as `ProjectFilesContainer.wireBinaryUpload`.
+   */
+  wireZipPortability(
+    blobStorage: BlobStorage,
+    projectAccess: ProjectAccessPolicy,
+  ): void {
+    this.exportProjectUseCase = new ExportProjectUseCase(
+      this.projectRepo,
+      this.fileRepo,
+      projectAccess,
+      blobStorage,
+    );
+    this.importProjectUseCase = new ImportProjectUseCase(
+      this.projectRepo,
+      this.fileRepo,
+      blobStorage,
+    );
   }
 }

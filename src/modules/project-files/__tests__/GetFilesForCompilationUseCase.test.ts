@@ -27,6 +27,8 @@ describe('GetFilesForCompilationUseCase', () => {
       title: 'Test Project',
       category: TemplateCategory.Thesis,
       ownerId: 'user-123',
+      templateId: null,
+      templateVersionId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       lastEditedAt: null,

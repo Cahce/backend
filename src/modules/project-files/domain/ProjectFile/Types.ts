@@ -6,12 +6,19 @@
 
 /**
  * File kind enumeration
+ * Mirrors Prisma FileKind enum with all 11 values
  */
 export enum FileKind {
   Typst = 'typst',
   Bib = 'bib',
   Image = 'image',
+  Vector = 'vector',
+  Font = 'font',
+  Markdown = 'markdown',
+  Config = 'config',
   Data = 'data',
+  Text = 'text',
+  Pdf = 'pdf',
   Other = 'other',
 }
 

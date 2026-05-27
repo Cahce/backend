@@ -2,6 +2,7 @@
 // No framework dependencies
 
 import type { Result } from '../Types.js';
+import { success, failure } from '../Types.js';
 import type { StudentProfile, UpdateStudentData } from '../../domain/StudentManagement/Types.js';
 import type { StudentProfileRepo } from '../../domain/StudentManagement/Ports.js';
 import type { ClassRepo } from '../../domain/Class/Ports.js';
@@ -15,33 +16,26 @@ export class UpdateStudentProfileUseCase {
   ) {}
 
   async execute(id: string, data: UpdateStudentData): Promise<Result<StudentProfile>> {
-    // Check if student exists
     const existing = await this.studentRepo.findById(id);
     if (!existing) {
-      return {
-        success: false,
-        error: StudentErrors.STUDENT_NOT_FOUND
-      };
+      return failure(StudentErrors.STUDENT_NOT_FOUND.code, StudentErrors.STUDENT_NOT_FOUND.message);
     }
 
-    // Validate student code if being updated
     if (data.studentCode !== undefined) {
       const codeValidation = StudentPolicy.validateStudentCode(data.studentCode);
       if (!codeValidation.success) {
         return codeValidation;
       }
 
-      // Check for duplicate student code (excluding current student)
       const duplicate = await this.studentRepo.findByStudentCode(data.studentCode);
       if (duplicate && duplicate.id !== id) {
-        return {
-          success: false,
-          error: StudentErrors.DUPLICATE_STUDENT_CODE
-        };
+        return failure(
+          StudentErrors.DUPLICATE_STUDENT_CODE.code,
+          StudentErrors.DUPLICATE_STUDENT_CODE.message
+        );
       }
     }
 
-    // Validate full name if being updated
     if (data.fullName !== undefined) {
       const nameValidation = StudentPolicy.validateFullName(data.fullName);
       if (!nameValidation.success) {
@@ -49,31 +43,25 @@ export class UpdateStudentProfileUseCase {
       }
     }
 
-    // Validate class if being updated
     if (data.classId !== undefined) {
       const academicClass = await this.classRepo.findById(data.classId);
       if (!academicClass) {
-        return {
-          success: false,
-          error: StudentErrors.CLASS_NOT_FOUND
-        };
+        return failure(
+          StudentErrors.CLASS_NOT_FOUND.code,
+          StudentErrors.CLASS_NOT_FOUND.message
+        );
       }
     }
 
-    // Update student profile
     try {
       const updated = await this.studentRepo.update(id, data);
-      return {
-        success: true,
-        data: updated
-      };
+      return success(updated);
     } catch (error) {
-      // Handle unique constraint violation from database
       if (error instanceof Error && error.message.includes('unique')) {
-        return {
-          success: false,
-          error: StudentErrors.DUPLICATE_STUDENT_CODE
-        };
+        return failure(
+          StudentErrors.DUPLICATE_STUDENT_CODE.code,
+          StudentErrors.DUPLICATE_STUDENT_CODE.message
+        );
       }
       throw error;
     }

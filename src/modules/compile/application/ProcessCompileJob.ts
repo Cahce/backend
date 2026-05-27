@@ -42,9 +42,12 @@ export class ProcessCompileJob {
     const startMs = Date.now();
     const workDir = await mkdtemp(join(tmpdir(), 'typst-'));
     try {
-      // Write project files to temp directory
-      const files = await this.snapshot.listFiles(job.projectId);
-      for (const f of files) {
+      // Stream project files to temp directory one at a time. The snapshot
+      // adapter yields each file and enforces a cumulative byte ceiling
+      // (MAX_SNAPSHOT_BYTES) — throws SnapshotTooLargeError if a project
+      // exceeds the limit, which propagates to the catch below and surfaces
+      // as a failed job (instead of OOM'ing the worker).
+      for await (const f of this.snapshot.listFiles(job.projectId)) {
         const dest = join(workDir, f.path);
         await mkdir(dirname(dest), { recursive: true });
         await writeFile(dest, f.content);

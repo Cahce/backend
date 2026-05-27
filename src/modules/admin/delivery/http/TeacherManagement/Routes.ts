@@ -1,14 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { CreateTeacherProfileUseCase } from "../../../application/TeacherManagement/CreateTeacherProfileUseCase.js";
-import { ListTeacherProfilesUseCase } from "../../../application/TeacherManagement/ListTeacherProfilesUseCase.js";
-import { GetTeacherProfileDetailsUseCase } from "../../../application/TeacherManagement/GetTeacherProfileDetailsUseCase.js";
-import { UpdateTeacherProfileUseCase } from "../../../application/TeacherManagement/UpdateTeacherProfileUseCase.js";
-import { DeleteTeacherProfileUseCase } from "../../../application/TeacherManagement/DeleteTeacherProfileUseCase.js";
-import { LinkAccountToTeacherUseCase } from "../../../application/TeacherManagement/LinkAccountToTeacherUseCase.js";
-import { UnlinkAccountFromTeacherUseCase } from "../../../application/TeacherManagement/UnlinkAccountFromTeacherUseCase.js";
-import { TeacherProfileRepoPrisma } from "../../../infra/TeacherProfileRepoPrisma.js";
-import { DepartmentRepoPrisma } from "../../../infra/DepartmentRepoPrisma.js";
-import { AdminAccountRepoPrisma } from "../../../infra/AdminAccountRepoPrisma.js";
+import { AdminContainer } from "../../../Container.js";
+import { ImportTeachers } from "../../../application/import/ImportTeachers.js";
+import { FileParser } from "../../../infra/FileParser.js";
 import {
     CreateTeacherRequestSchema,
     UpdateTeacherRequestSchema,
@@ -32,17 +25,15 @@ import {
  * Teacher Management module HTTP routes
  */
 export async function teacherManagementRoutes(app: FastifyInstance) {
-    const teacherRepo = new TeacherProfileRepoPrisma(app.prisma);
-    const departmentRepo = new DepartmentRepoPrisma(app.prisma);
-    const accountRepo = new AdminAccountRepoPrisma(app.prisma);
-
-    const createTeacherUseCase = new CreateTeacherProfileUseCase(teacherRepo, departmentRepo);
-    const listTeachersUseCase = new ListTeacherProfilesUseCase(teacherRepo);
-    const getTeacherDetailsUseCase = new GetTeacherProfileDetailsUseCase(teacherRepo);
-    const updateTeacherUseCase = new UpdateTeacherProfileUseCase(teacherRepo, departmentRepo);
-    const deleteTeacherUseCase = new DeleteTeacherProfileUseCase(teacherRepo);
-    const linkAccountUseCase = new LinkAccountToTeacherUseCase(teacherRepo, accountRepo);
-    const unlinkAccountUseCase = new UnlinkAccountFromTeacherUseCase(teacherRepo);
+    const container = new AdminContainer(app.prisma);
+    const createTeacherUseCase = container.createTeacherProfileUseCase;
+    const listTeachersUseCase = container.listTeacherProfilesUseCase;
+    const getTeacherDetailsUseCase = container.getTeacherProfileDetailsUseCase;
+    const updateTeacherUseCase = container.updateTeacherProfileUseCase;
+    const deleteTeacherUseCase = container.deleteTeacherProfileUseCase;
+    const linkAccountUseCase = container.linkAccountToTeacherUseCase;
+    const unlinkAccountUseCase = container.unlinkAccountFromTeacherUseCase;
+    const importTeachers = new ImportTeachers(app.prisma);
 
     // POST /api/v1/admin/teachers - create teacher
     app.post<{ Body: CreateTeacherRequestDto }>(
@@ -502,6 +493,144 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
             return reply.code(getStatusCodeForError(result.error.code)).send({
                 error: result.error,
             });
+        },
+    );
+
+    // POST /api/v1/admin/teachers/import - import teachers from XLSX/CSV file
+    app.post(
+        "/teachers/import",
+        {
+            preHandler: app.auth.requireAdmin,
+            schema: {
+                description: "Nhập danh sách giảng viên từ file XLSX (ưu tiên) hoặc CSV (có thể tạo tài khoản)",
+                tags: ["admin-teachers"],
+                security: [{ bearerAuth: [] }],
+                consumes: ["multipart/form-data"],
+                response: {
+                    200: {
+                        description: "Kết quả nhập file",
+                        type: "object",
+                        properties: {
+                            total: { type: "number" },
+                            created: { type: "number" },
+                            skipped: { type: "number" },
+                            failed: { type: "number" },
+                            errors: { type: "array", items: { type: "object" } },
+                            generatedPasswords: { type: "array", items: { type: "object" } },
+                        },
+                    },
+                    400: { ...ErrorResponseJsonSchema },
+                    401: { ...ErrorResponseJsonSchema },
+                    403: { ...ErrorResponseJsonSchema },
+                    500: { ...ErrorResponseJsonSchema },
+                },
+            },
+        },
+        async (request, reply) => {
+            try {
+                const data = await request.file();
+                if (!data) {
+                    return reply.code(400).send({
+                        error: { code: "NO_FILE", message: "Không tìm thấy file" },
+                    });
+                }
+
+                // Validate MIME type (accept both XLSX and CSV)
+                const mimeValidation = FileParser.validateMimeType(data.mimetype);
+                if (!mimeValidation.valid) {
+                    return reply.code(400).send({
+                        error: { 
+                            code: "INVALID_FILE_TYPE", 
+                            message: "Chỉ chấp nhận file XLSX hoặc CSV" 
+                        },
+                    });
+                }
+
+                const buffer = await data.toBuffer();
+                
+                // Parse file (auto-detect XLSX or CSV)
+                const parsed = FileParser.parseSpreadsheet(buffer, data.mimetype);
+                const result = await importTeachers.execute(parsed.rows);
+
+                return reply.code(200).send(result);
+            } catch (error) {
+                return reply.code(400).send({
+                    error: {
+                        code: "IMPORT_ERROR",
+                        message: error instanceof Error ? error.message : "Lỗi nhập file",
+                    },
+                });
+            }
+        },
+    );
+
+    // GET /api/v1/admin/teachers/import/template - download XLSX/CSV template
+    app.get(
+        "/teachers/import/template",
+        {
+            preHandler: app.auth.requireAdmin,
+            schema: {
+                description: "Tải file mẫu XLSX (ưu tiên) hoặc CSV để nhập giảng viên",
+                tags: ["admin-teachers"],
+                security: [{ bearerAuth: [] }],
+                querystring: {
+                    type: "object",
+                    properties: {
+                        format: {
+                            type: "string",
+                            enum: ["xlsx", "csv"],
+                            description: "Định dạng file (mặc định: xlsx)",
+                        },
+                    },
+                },
+                response: {
+                    200: { description: "File mẫu", type: "string" },
+                    401: { ...ErrorResponseJsonSchema },
+                    403: { ...ErrorResponseJsonSchema },
+                },
+            },
+        },
+        async (request, reply) => {
+            const query = request.query as { format?: "xlsx" | "csv" };
+            const format = query.format || "xlsx";
+
+            // No "Mã GV" column on purpose — matches "Mẫu Import Giảng viên.xlsx".
+            // ImportTeachers auto-generates teacherCode from the dominant DB pattern.
+            const headers = [
+                "STT",
+                "Họ và Tên",
+                "Học hàm",
+                "Học vị",
+                "Bộ Môn",
+                "Email",
+                "Mật Khẩu",
+                "Số điện thoại",
+            ];
+
+            const exampleRow = {
+                STT: "1",
+                "Họ và Tên": "Kiều Tuấn Dũng",
+                "Học hàm": "Không",
+                "Học vị": "Thạc sĩ",
+                "Bộ Môn": "KTPM",
+                Email: "kieutuandung@tlu.edu.vn",
+                "Mật Khẩu": "123456",
+                "Số điện thoại": "987654321",
+            };
+
+            if (format === "xlsx") {
+                const buffer = FileParser.buildXlsxTemplate(headers, exampleRow);
+                return reply
+                    .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .header("Content-Disposition", 'attachment; filename="giang_vien_mau.xlsx"')
+                    .send(buffer);
+            } else {
+                const csv = FileParser.buildCsvTemplate(headers, exampleRow);
+                return reply
+                    .header("Content-Type", "text/csv; charset=utf-8")
+                    .header("Content-Disposition", 'attachment; filename="giang_vien_mau.csv"')
+                    .send(csv);
+            }
         },
     );
 }

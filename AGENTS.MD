@@ -34,6 +34,25 @@ Do not:
 
 This backend powers a collaborative Typst platform.
 
+### Kiro guidance for Codex
+
+Treat the repo-level Kiro materials as required playbooks for backend work:
+
+- `../.kiro/steering/README.md`
+- `../.kiro/steering/kiro-workflow.md`
+- `../.kiro/steering/editor-hybrid-architecture.md`
+- `../.kiro/steering/typst-reference-workflow.md`
+- relevant files under `../.kiro/skills/`
+
+When backend work touches Typst/editor, compile/export, project files, or bibliography behavior, inspect the smallest relevant slice under:
+
+- `references/texlyre`
+- `references/typst-online-editor`
+- `../Frontendtluscholareditor/references/texlyre`
+- `../Frontendtluscholareditor/references/typst-online-editor`
+
+Use those repos for behavior and architecture only. Do not copy their UI, CSS, or branding.
+
 Core backend responsibilities:
 - authentication and authorization
 - project and file persistence

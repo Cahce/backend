@@ -2,6 +2,7 @@
 // No framework dependencies
 
 import type { Result } from '../Types.js';
+import { success, failure } from '../Types.js';
 import type { TeacherProfileWithContext } from '../../domain/TeacherManagement/Types.js';
 import type { TeacherProfileRepo } from '../../domain/TeacherManagement/Ports.js';
 import { TeacherErrors } from '../../domain/TeacherManagement/Errors.js';
@@ -11,17 +12,9 @@ export class GetTeacherProfileDetailsUseCase {
 
   async execute(id: string): Promise<Result<TeacherProfileWithContext>> {
     const teacher = await this.teacherRepo.findById(id);
-
     if (!teacher) {
-      return {
-        success: false,
-        error: TeacherErrors.TEACHER_NOT_FOUND
-      };
+      return failure(TeacherErrors.TEACHER_NOT_FOUND.code, TeacherErrors.TEACHER_NOT_FOUND.message);
     }
-
-    return {
-      success: true,
-      data: teacher
-    };
+    return success(teacher);
   }
 }

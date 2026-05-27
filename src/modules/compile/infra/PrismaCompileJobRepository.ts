@@ -2,7 +2,7 @@
  * Prisma implementation of CompileJobRepository
  */
 
-import type { PrismaClient } from '../../../generated/prisma/index.js';
+import type { Prisma, PrismaClient } from '../../../generated/prisma/index.js';
 import { z } from 'zod';
 import type { CompileJobRepository, CreateCompileJobData } from '../domain/CompileJobRepository.js';
 import { CompileJob, type CompileStatus } from '../domain/CompileJob.js';
@@ -98,7 +98,9 @@ export class PrismaCompileJobRepository implements CompileJobRepository {
       where: { id: job.id },
       data: {
         status: job.status,
-        diagnostics: job.diagnostics as any,
+        // CompileDiagnostic[] is JSON-serializable; cast to Prisma's JSON
+        // input type after asserting unknown to satisfy structural checks.
+        diagnostics: job.diagnostics as unknown as Prisma.InputJsonValue,
         latestArtifactId: job.latestArtifactId,
         updatedAt: job.updatedAt,
       },

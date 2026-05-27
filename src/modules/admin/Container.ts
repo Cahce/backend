@@ -3,12 +3,20 @@ import type { FacultyRepo } from "./domain/Faculty/Ports.js";
 import type { DepartmentRepo } from "./domain/Department/Ports.js";
 import type { MajorRepo } from "./domain/Major/Ports.js";
 import type { ClassRepo } from "./domain/Class/Ports.js";
+import type { TeacherProfileRepo } from "./domain/TeacherManagement/Ports.js";
+import type { StudentProfileRepo } from "./domain/StudentManagement/Ports.js";
+import type { AdminAccountRepo } from "./domain/AccountManagement/Ports.js";
+import type { EmailPolicy } from "./domain/AccountManagement/Policies.js";
 
 // Repositories (concrete implementations)
 import { FacultyRepoPrisma } from "./infra/FacultyRepoPrisma.js";
 import { DepartmentRepoPrisma } from "./infra/DepartmentRepoPrisma.js";
 import { MajorRepoPrisma } from "./infra/MajorRepoPrisma.js";
 import { ClassRepoPrisma } from "./infra/ClassRepoPrisma.js";
+import { TeacherProfileRepoPrisma } from "./infra/TeacherProfileRepoPrisma.js";
+import { StudentProfileRepoPrisma } from "./infra/StudentProfileRepoPrisma.js";
+import { AdminAccountRepoPrisma } from "./infra/AdminAccountRepoPrisma.js";
+import { EnvEmailPolicy } from "./domain/AccountManagement/Policies.js";
 
 // Prisma Client type
 import type { PrismaClient } from "../../generated/prisma/index.js";
@@ -41,53 +49,120 @@ import { GetClassByIdUseCase } from "./application/Class/GetClassByIdUseCase.js"
 import { UpdateClassUseCase } from "./application/Class/UpdateClassUseCase.js";
 import { DeleteClassUseCase } from "./application/Class/DeleteClassUseCase.js";
 
+// Teacher Management Use Cases
+import { CreateTeacherProfileUseCase } from "./application/TeacherManagement/CreateTeacherProfileUseCase.js";
+import { ListTeacherProfilesUseCase } from "./application/TeacherManagement/ListTeacherProfilesUseCase.js";
+import { GetTeacherProfileDetailsUseCase } from "./application/TeacherManagement/GetTeacherProfileDetailsUseCase.js";
+import { UpdateTeacherProfileUseCase } from "./application/TeacherManagement/UpdateTeacherProfileUseCase.js";
+import { DeleteTeacherProfileUseCase } from "./application/TeacherManagement/DeleteTeacherProfileUseCase.js";
+import { LinkAccountToTeacherUseCase } from "./application/TeacherManagement/LinkAccountToTeacherUseCase.js";
+import { UnlinkAccountFromTeacherUseCase } from "./application/TeacherManagement/UnlinkAccountFromTeacherUseCase.js";
+
+// Student Management Use Cases
+import { CreateStudentProfileUseCase } from "./application/StudentManagement/CreateStudentProfileUseCase.js";
+import { ListStudentProfilesUseCase } from "./application/StudentManagement/ListStudentProfilesUseCase.js";
+import { GetStudentProfileDetailsUseCase } from "./application/StudentManagement/GetStudentProfileDetailsUseCase.js";
+import { UpdateStudentProfileUseCase } from "./application/StudentManagement/UpdateStudentProfileUseCase.js";
+import { DeleteStudentProfileUseCase } from "./application/StudentManagement/DeleteStudentProfileUseCase.js";
+import { LinkAccountToStudentUseCase } from "./application/StudentManagement/LinkAccountToStudentUseCase.js";
+import { UnlinkAccountFromStudentUseCase } from "./application/StudentManagement/UnlinkAccountFromStudentUseCase.js";
+
+// Account Management Use Cases
+import { CreateAccountUseCase } from "./application/AccountManagement/CreateAccountUseCase.js";
+import { ListAccountsUseCase } from "./application/AccountManagement/ListAccountsUseCase.js";
+import { GetAccountUseCase } from "./application/AccountManagement/GetAccountUseCase.js";
+import { UpdateAccountUseCase } from "./application/AccountManagement/UpdateAccountUseCase.js";
+import { DeleteAccountUseCase } from "./application/AccountManagement/DeleteAccountUseCase.js";
+import { ResetAccountPasswordUseCase } from "./application/AccountManagement/ResetAccountPasswordUseCase.js";
+
+// Import Use Cases
+import { ImportFaculties } from "./application/import/ImportFaculties.js";
+
 /**
  * Admin Module Container
- * 
+ *
  * Centralized dependency wiring for the admin module.
  * Instantiates repositories and use cases with proper dependencies.
+ *
+ * Routes should consume use cases from this container instead of creating
+ * repositories/use cases inline, to keep dependency-inversion intact.
  */
 export class AdminContainer {
-    // Repositories (typed as interfaces for DIP compliance)
-    private facultyRepo: FacultyRepo;
-    private departmentRepo: DepartmentRepo;
-    private majorRepo: MajorRepo;
-    private classRepo: ClassRepo;
+    // Repositories & policies (typed as interfaces for DIP compliance)
+    public readonly facultyRepo: FacultyRepo;
+    public readonly departmentRepo: DepartmentRepo;
+    public readonly majorRepo: MajorRepo;
+    public readonly classRepo: ClassRepo;
+    public readonly teacherProfileRepo: TeacherProfileRepo;
+    public readonly studentProfileRepo: StudentProfileRepo;
+    public readonly accountRepo: AdminAccountRepo;
+    public readonly emailPolicy: EmailPolicy;
 
     // Faculty Use Cases
-    public createFacultyUseCase: CreateFacultyUseCase;
-    public listFacultiesUseCase: ListFacultiesUseCase;
-    public getFacultyByIdUseCase: GetFacultyByIdUseCase;
-    public updateFacultyUseCase: UpdateFacultyUseCase;
-    public deleteFacultyUseCase: DeleteFacultyUseCase;
+    public readonly createFacultyUseCase: CreateFacultyUseCase;
+    public readonly listFacultiesUseCase: ListFacultiesUseCase;
+    public readonly getFacultyByIdUseCase: GetFacultyByIdUseCase;
+    public readonly updateFacultyUseCase: UpdateFacultyUseCase;
+    public readonly deleteFacultyUseCase: DeleteFacultyUseCase;
+    public readonly importFaculties: ImportFaculties;
 
     // Department Use Cases
-    public createDepartmentUseCase: CreateDepartmentUseCase;
-    public listDepartmentsUseCase: ListDepartmentsUseCase;
-    public getDepartmentByIdUseCase: GetDepartmentByIdUseCase;
-    public updateDepartmentUseCase: UpdateDepartmentUseCase;
-    public deleteDepartmentUseCase: DeleteDepartmentUseCase;
+    public readonly createDepartmentUseCase: CreateDepartmentUseCase;
+    public readonly listDepartmentsUseCase: ListDepartmentsUseCase;
+    public readonly getDepartmentByIdUseCase: GetDepartmentByIdUseCase;
+    public readonly updateDepartmentUseCase: UpdateDepartmentUseCase;
+    public readonly deleteDepartmentUseCase: DeleteDepartmentUseCase;
 
     // Major Use Cases
-    public createMajorUseCase: CreateMajorUseCase;
-    public listMajorsUseCase: ListMajorsUseCase;
-    public getMajorByIdUseCase: GetMajorByIdUseCase;
-    public updateMajorUseCase: UpdateMajorUseCase;
-    public deleteMajorUseCase: DeleteMajorUseCase;
+    public readonly createMajorUseCase: CreateMajorUseCase;
+    public readonly listMajorsUseCase: ListMajorsUseCase;
+    public readonly getMajorByIdUseCase: GetMajorByIdUseCase;
+    public readonly updateMajorUseCase: UpdateMajorUseCase;
+    public readonly deleteMajorUseCase: DeleteMajorUseCase;
 
     // Class Use Cases
-    public createClassUseCase: CreateClassUseCase;
-    public listClassesUseCase: ListClassesUseCase;
-    public getClassByIdUseCase: GetClassByIdUseCase;
-    public updateClassUseCase: UpdateClassUseCase;
-    public deleteClassUseCase: DeleteClassUseCase;
+    public readonly createClassUseCase: CreateClassUseCase;
+    public readonly listClassesUseCase: ListClassesUseCase;
+    public readonly getClassByIdUseCase: GetClassByIdUseCase;
+    public readonly updateClassUseCase: UpdateClassUseCase;
+    public readonly deleteClassUseCase: DeleteClassUseCase;
+
+    // Teacher Management Use Cases
+    public readonly createTeacherProfileUseCase: CreateTeacherProfileUseCase;
+    public readonly listTeacherProfilesUseCase: ListTeacherProfilesUseCase;
+    public readonly getTeacherProfileDetailsUseCase: GetTeacherProfileDetailsUseCase;
+    public readonly updateTeacherProfileUseCase: UpdateTeacherProfileUseCase;
+    public readonly deleteTeacherProfileUseCase: DeleteTeacherProfileUseCase;
+    public readonly linkAccountToTeacherUseCase: LinkAccountToTeacherUseCase;
+    public readonly unlinkAccountFromTeacherUseCase: UnlinkAccountFromTeacherUseCase;
+
+    // Student Management Use Cases
+    public readonly createStudentProfileUseCase: CreateStudentProfileUseCase;
+    public readonly listStudentProfilesUseCase: ListStudentProfilesUseCase;
+    public readonly getStudentProfileDetailsUseCase: GetStudentProfileDetailsUseCase;
+    public readonly updateStudentProfileUseCase: UpdateStudentProfileUseCase;
+    public readonly deleteStudentProfileUseCase: DeleteStudentProfileUseCase;
+    public readonly linkAccountToStudentUseCase: LinkAccountToStudentUseCase;
+    public readonly unlinkAccountFromStudentUseCase: UnlinkAccountFromStudentUseCase;
+
+    // Account Management Use Cases
+    public readonly createAccountUseCase: CreateAccountUseCase;
+    public readonly listAccountsUseCase: ListAccountsUseCase;
+    public readonly getAccountUseCase: GetAccountUseCase;
+    public readonly updateAccountUseCase: UpdateAccountUseCase;
+    public readonly deleteAccountUseCase: DeleteAccountUseCase;
+    public readonly resetAccountPasswordUseCase: ResetAccountPasswordUseCase;
 
     constructor(prisma: PrismaClient) {
-        // Initialize repositories
+        // Initialize repositories & shared policies
         this.facultyRepo = new FacultyRepoPrisma(prisma);
         this.departmentRepo = new DepartmentRepoPrisma(prisma);
         this.majorRepo = new MajorRepoPrisma(prisma);
         this.classRepo = new ClassRepoPrisma(prisma);
+        this.teacherProfileRepo = new TeacherProfileRepoPrisma(prisma);
+        this.studentProfileRepo = new StudentProfileRepoPrisma(prisma);
+        this.accountRepo = new AdminAccountRepoPrisma(prisma);
+        this.emailPolicy = new EnvEmailPolicy();
 
         // Wire Faculty use cases
         this.createFacultyUseCase = new CreateFacultyUseCase(this.facultyRepo);
@@ -95,6 +170,7 @@ export class AdminContainer {
         this.getFacultyByIdUseCase = new GetFacultyByIdUseCase(this.facultyRepo);
         this.updateFacultyUseCase = new UpdateFacultyUseCase(this.facultyRepo);
         this.deleteFacultyUseCase = new DeleteFacultyUseCase(this.facultyRepo);
+        this.importFaculties = new ImportFaculties(this.facultyRepo);
 
         // Wire Department use cases
         this.createDepartmentUseCase = new CreateDepartmentUseCase(this.departmentRepo, this.facultyRepo);
@@ -116,5 +192,35 @@ export class AdminContainer {
         this.getClassByIdUseCase = new GetClassByIdUseCase(this.classRepo);
         this.updateClassUseCase = new UpdateClassUseCase(this.classRepo, this.majorRepo);
         this.deleteClassUseCase = new DeleteClassUseCase(this.classRepo);
+
+        // Wire Teacher Management use cases
+        this.createTeacherProfileUseCase = new CreateTeacherProfileUseCase(
+            this.teacherProfileRepo, this.departmentRepo, this.accountRepo
+        );
+        this.listTeacherProfilesUseCase = new ListTeacherProfilesUseCase(this.teacherProfileRepo);
+        this.getTeacherProfileDetailsUseCase = new GetTeacherProfileDetailsUseCase(this.teacherProfileRepo);
+        this.updateTeacherProfileUseCase = new UpdateTeacherProfileUseCase(this.teacherProfileRepo, this.departmentRepo);
+        this.deleteTeacherProfileUseCase = new DeleteTeacherProfileUseCase(this.teacherProfileRepo);
+        this.linkAccountToTeacherUseCase = new LinkAccountToTeacherUseCase(this.teacherProfileRepo, this.accountRepo);
+        this.unlinkAccountFromTeacherUseCase = new UnlinkAccountFromTeacherUseCase(this.teacherProfileRepo);
+
+        // Wire Student Management use cases
+        this.createStudentProfileUseCase = new CreateStudentProfileUseCase(
+            this.studentProfileRepo, this.classRepo, this.accountRepo
+        );
+        this.listStudentProfilesUseCase = new ListStudentProfilesUseCase(this.studentProfileRepo);
+        this.getStudentProfileDetailsUseCase = new GetStudentProfileDetailsUseCase(this.studentProfileRepo);
+        this.updateStudentProfileUseCase = new UpdateStudentProfileUseCase(this.studentProfileRepo, this.classRepo);
+        this.deleteStudentProfileUseCase = new DeleteStudentProfileUseCase(this.studentProfileRepo);
+        this.linkAccountToStudentUseCase = new LinkAccountToStudentUseCase(this.studentProfileRepo, this.accountRepo);
+        this.unlinkAccountFromStudentUseCase = new UnlinkAccountFromStudentUseCase(this.studentProfileRepo);
+
+        // Wire Account Management use cases
+        this.createAccountUseCase = new CreateAccountUseCase(this.accountRepo, this.emailPolicy);
+        this.listAccountsUseCase = new ListAccountsUseCase(this.accountRepo);
+        this.getAccountUseCase = new GetAccountUseCase(this.accountRepo);
+        this.updateAccountUseCase = new UpdateAccountUseCase(this.accountRepo, this.emailPolicy);
+        this.deleteAccountUseCase = new DeleteAccountUseCase(this.accountRepo);
+        this.resetAccountPasswordUseCase = new ResetAccountPasswordUseCase(this.accountRepo);
     }
 }

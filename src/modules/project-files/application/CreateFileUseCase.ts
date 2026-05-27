@@ -11,6 +11,7 @@ import type { File, FileKind } from '../domain/ProjectFile/Types.js';
 import { FileErrors } from '../domain/ProjectFile/Errors.js';
 import { StoragePolicy } from '../domain/ProjectFile/Policies.js';
 import { ProjectAuthPolicy, type AuthContext } from '../../projects/domain/Project/Policies.js';
+import { detectKindFromPath } from '../domain/FileKindPolicy.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
@@ -20,7 +21,7 @@ import { success, failure } from './Types.js';
 export interface CreateFileCommand {
   projectId: string;
   path: string;
-  kind: FileKind;
+  kind?: FileKind; // Optional - will be auto-detected from path if not provided
   content: string;
   mimeType?: string;
   userId: string;
@@ -77,14 +78,17 @@ export class CreateFileUseCase {
       const sizeBytes = Buffer.byteLength(command.content, 'utf8');
       const sha256 = crypto.createHash('sha256').update(command.content, 'utf8').digest('hex');
 
+      // Determine file kind (use provided kind or auto-detect from path)
+      const fileKind = command.kind ?? detectKindFromPath(command.path);
+
       // Apply storage policy
-      const storageMode = StoragePolicy.determineStorageMode(sizeBytes, command.kind);
+      const storageMode = StoragePolicy.determineStorageMode(sizeBytes, fileKind);
 
       // Create file via repository
       const file = await this.fileRepo.create({
         projectId: command.projectId,
         path: command.path,
-        kind: command.kind,
+        kind: fileKind,
         content: command.content,
         mimeType: command.mimeType,
         storageMode,

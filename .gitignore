@@ -14,6 +14,8 @@ build/
 /src/generated/prisma
 
 # Local storage directories
+.storage/
+
 /var/typst-workdir/*
 !/var/typst-workdir/.gitkeep
 
@@ -22,6 +24,12 @@ build/
 
 /var/artifacts/*
 !/var/artifacts/.gitkeep
+
+# Local reference checkouts
+references/
+
+# Codex/Claude temporary worktrees
+.claude/worktrees/
 
 # Environment variables
 .env

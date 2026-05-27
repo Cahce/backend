@@ -40,6 +40,8 @@ export class MockProjectRepo implements ProjectRepo {
       title: data.title,
       category: data.category,
       ownerId: data.ownerId,
+      templateId: data.templateId || null,
+      templateVersionId: data.templateVersionId || null,
       createdAt: now,
       updatedAt: now,
       lastEditedAt: null,

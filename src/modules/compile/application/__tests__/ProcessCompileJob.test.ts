@@ -51,7 +51,12 @@ function makeArtifactRepo(): CompileArtifactRepository {
 
 function makeSnapshot(files: { path: string; content: string }[] = []): ProjectFileSnapshotPort {
   return {
-    listFiles: async () => files,
+    // Port now returns AsyncIterable (B-8): yield each fixture file in turn.
+    listFiles: async function* () {
+      for (const file of files) {
+        yield file;
+      }
+    },
   };
 }
 

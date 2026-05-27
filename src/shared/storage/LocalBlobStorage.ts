@@ -1,4 +1,5 @@
 import { createReadStream, createWriteStream } from "node:fs";
+import type { WriteStream } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
@@ -18,6 +19,14 @@ export class LocalBlobStorage implements BlobStorage {
         return `${this.absPath(key)}.json`;
     }
 
+    /**
+     * Stream `body` into the blob file. On any error mid-pipeline (write fails,
+     * source aborts, client disconnects), we explicitly destroy the source
+     * stream and unlink the partial `.bin` so the next put for the same key
+     * starts from a clean slate. Without this cleanup, request-body streams
+     * would keep being drained into RAM after the write target died, and
+     * orphan partial files would litter the storage directory.
+     */
     async put(
         key: string,
         body: Readable | Buffer,
@@ -28,24 +37,42 @@ export class LocalBlobStorage implements BlobStorage {
         const hash = createHash("sha256");
         let sizeBytes = 0;
         const source = Buffer.isBuffer(body) ? Readable.from([body]) : body;
-        await pipeline(
-            source,
-            async function* (src) {
-                for await (const chunk of src) {
-                    hash.update(chunk);
-                    sizeBytes += chunk.length;
-                    yield chunk;
-                }
-            },
-            createWriteStream(file),
-        );
-        const meta: BlobMetadata = {
-            sizeBytes,
-            sha256: hash.digest("hex"),
-            contentType,
-        };
-        await writeFile(this.metaPath(key), JSON.stringify(meta));
-        return meta;
+        let writeStream: WriteStream | undefined;
+        try {
+            writeStream = createWriteStream(file);
+            await pipeline(
+                source,
+                async function* (src) {
+                    for await (const chunk of src) {
+                        hash.update(chunk);
+                        sizeBytes += chunk.length;
+                        yield chunk;
+                    }
+                },
+                writeStream,
+            );
+            const meta: BlobMetadata = {
+                sizeBytes,
+                sha256: hash.digest("hex"),
+                contentType,
+            };
+            await writeFile(this.metaPath(key), JSON.stringify(meta));
+            return meta;
+        } catch (err) {
+            // Tear down stream resources so they don't keep reading or
+            // holding file descriptors. `destroyed` guard avoids a double
+            // destroy when pipeline already cleaned its target.
+            if (!source.destroyed && typeof source.destroy === "function") {
+                source.destroy();
+            }
+            if (writeStream && !writeStream.destroyed) {
+                writeStream.destroy();
+            }
+            // Best-effort partial-file cleanup. Ignore ENOENT (file never
+            // created) and other unlink errors — they're not actionable here.
+            await unlink(file).catch(() => undefined);
+            throw err;
+        }
     }
 
     async get(key: string): Promise<Readable> {

@@ -7,6 +7,7 @@
  */
 
 import type { File, CreateFileData, UpdateFileData, RenameFileData } from './Types.js';
+import type { FileKind } from './Types.js';
 
 /**
  * File repository interface
@@ -21,6 +22,26 @@ export interface FileRepo {
    * @returns Created File entity
    */
   create(data: CreateFileData & { storageMode: string; sizeBytes: number; sha256: string }): Promise<File>;
+
+  /**
+   * Create a new File whose content lives in blob storage (binary upload).
+   *
+   * Unlike `create()` — which expects a UTF-8 string `content` and writes it
+   * inline into the `textContent` column — this variant takes the
+   * `storageKey` already written by `BlobStorage.put()` plus the binary
+   * metadata (mimeType / sizeBytes / sha256) and persists the File row only.
+   *
+   * @returns Created File entity (storageMode = 'object_storage')
+   */
+  createBinary(data: {
+    projectId: string;
+    path: string;
+    kind: FileKind;
+    storageKey: string;
+    mimeType: string;
+    sizeBytes: number;
+    sha256: string;
+  }): Promise<File>;
 
   /**
    * Find File by ID

@@ -1,4 +1,5 @@
 import type { ITokenRevocationRepository } from "../domain/Ports.js";
+import type { TokenRevocationCachePort } from "../../../shared/auth/TokenRevocationCachePort.js";
 import { AuthError, InternalAuthError } from "../domain/AuthErrors.js";
 
 /**
@@ -27,7 +28,10 @@ export interface LogoutFailure {
 export type LogoutResponse = LogoutResult | LogoutFailure;
 
 export class LogoutUseCase {
-    constructor(private readonly tokenRevocationRepo: ITokenRevocationRepository) {}
+    constructor(
+        private readonly tokenRevocationRepo: ITokenRevocationRepository,
+        private readonly tokenRevocationCache?: TokenRevocationCachePort,
+    ) {}
 
     async execute(command: LogoutCommand): Promise<LogoutResponse> {
         try {
@@ -35,8 +39,13 @@ export class LogoutUseCase {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + 1);
 
-            // Revoke the token
+            // Revoke the token (DB write — source of truth)
             await this.tokenRevocationRepo.revoke(command.jti, command.userId, expiresAt);
+
+            // Invalidate cache immediately so subsequent `verify()` doesn't
+            // serve stale `valid` until TTL expires. Seed `revoked` sentinel
+            // to also short-circuit DB lookup in the meantime.
+            this.tokenRevocationCache?.set(command.jti, "revoked");
 
             return {
                 success: true,

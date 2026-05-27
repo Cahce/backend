@@ -27,6 +27,8 @@ export class ProjectRepoPrisma implements ProjectRepo {
           title: data.title,
           category: data.category,
           ownerId: data.ownerId,
+          templateId: data.templateId || null,
+          templateVersionId: data.templateVersionId || null,
         },
       });
 
@@ -117,6 +119,8 @@ export class ProjectRepoPrisma implements ProjectRepo {
     title: string;
     category: string;
     ownerId: string | null;
+    templateId?: string | null;
+    templateVersionId?: string | null;
     createdAt: Date;
     updatedAt: Date;
     lastEditedAt: Date | null;
@@ -126,6 +130,8 @@ export class ProjectRepoPrisma implements ProjectRepo {
       title: prismaProject.title,
       category: prismaProject.category as TemplateCategory,
       ownerId: prismaProject.ownerId,
+      templateId: prismaProject.templateId || null,
+      templateVersionId: prismaProject.templateVersionId || null,
       createdAt: prismaProject.createdAt,
       updatedAt: prismaProject.updatedAt,
       lastEditedAt: prismaProject.lastEditedAt,

@@ -10,6 +10,7 @@ import { Prisma } from '../../../generated/prisma/index.js';
 import type { FileRepo } from '../domain/ProjectFile/Ports.js';
 import type { File, CreateFileData, UpdateFileData, RenameFileData } from '../domain/ProjectFile/Types.js';
 import { FileKind, StorageMode } from '../domain/ProjectFile/Types.js';
+import { getCompilationKinds } from '../domain/FileKindPolicy.js';
 
 /**
  * Prisma-based File repository implementation
@@ -57,6 +58,56 @@ export class FileRepoPrisma implements FileRepo {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           // Unique constraint violation - file already exists at path
+          throw new Error('FILE_ALREADY_EXISTS');
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new binary-content File. Differs from {@link create} in that
+   * `storageKey` is supplied externally (already written to blob storage) and
+   * `textContent` is forced to NULL.
+   */
+  async createBinary(input: {
+    projectId: string;
+    path: string;
+    kind: FileKind;
+    storageKey: string;
+    mimeType: string;
+    sizeBytes: number;
+    sha256: string;
+  }): Promise<File> {
+    try {
+      const now = new Date();
+      const file = await this.prisma.$transaction(async (tx) => {
+        const createdFile = await tx.file.create({
+          data: {
+            projectId: input.projectId,
+            path: input.path,
+            kind: input.kind,
+            textContent: null,
+            storageKey: input.storageKey,
+            mimeType: input.mimeType,
+            sizeBytes: input.sizeBytes,
+            sha256: input.sha256,
+            lastEditedAt: now,
+          },
+        });
+
+        await tx.project.update({
+          where: { id: input.projectId },
+          data: { lastEditedAt: now },
+        });
+
+        return createdFile;
+      });
+
+      return this.mapToFile(file, StorageMode.ObjectStorage);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
           throw new Error('FILE_ALREADY_EXISTS');
         }
       }
@@ -219,14 +270,14 @@ export class FileRepoPrisma implements FileRepo {
 
   /**
    * Find files for compilation
-   * Returns files with kind: typst, bib, image, or data
+   * Returns files with compilation-relevant kinds (typst, bib, image, vector, font, data, config)
    */
   async findForCompilation(projectId: string): Promise<File[]> {
     const files = await this.prisma.file.findMany({
       where: {
         projectId,
         kind: {
-          in: ['typst', 'bib', 'image', 'data'],
+          in: getCompilationKinds(),
         },
       },
     });

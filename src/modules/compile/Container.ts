@@ -95,14 +95,16 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
     return settings.mainPath;
   }
 
-  // Response mapper
+  // Response mapper. CompileDiagnostic and CompileDiagnosticDto are
+  // structurally identical; spread to convert ReadonlyArray to a mutable
+  // array that fits the DTO's Array type.
   function toResponse(job: CompileJob): CompileJobResponse {
     return {
       id: job.id,
       projectId: job.projectId,
       entryPath: job.entryPath,
       status: job.status,
-      diagnostics: job.diagnostics as any,
+      diagnostics: [...job.diagnostics],
       latestArtifactId: job.latestArtifactId,
       createdAt: job.createdAt.toISOString(),
       updatedAt: job.updatedAt.toISOString(),

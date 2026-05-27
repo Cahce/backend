@@ -49,7 +49,13 @@ enum FileKind {
   typst
   bib
   image
+  vector
+  font
+  markdown
+  config
   data
+  text
+  pdf
   other
 }
 
@@ -79,6 +85,12 @@ enum ZoteroSyncType {
   incremental
 }
 
+enum OpenAlexImportStatus {
+  imported
+  skipped_duplicate
+  failed
+}
+
 /**
  * =========================
  * Users
@@ -91,6 +103,7 @@ model User {
   passwordHash        String
   isActive            Boolean          @default(true)
   mustChangePassword  Boolean          @default(false)
+  passwordChangedAt   DateTime?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   
@@ -106,6 +119,7 @@ model User {
   quota               UserQuota?
   invalidTokens       InvalidToken[]
   zoteroConnections   ZoteroConnection[]
+  openAlexImportLogs  OpenAlexImportLog[]
 }
 
 /**
@@ -250,6 +264,7 @@ model TemplateVersion {
   versionNumber String
   changelog     String?
   storageKey    String
+  entryPath     String    @default("main.typ")
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   projects      Project[]
@@ -264,6 +279,11 @@ model TemplateVersion {
  * Zotero Integration
  * =========================
  */
+
+/// Kết nối Zotero của user.
+/// `accessToken` lưu encrypted blob `v1:iv:tag:cipher` (base64),
+/// mã hoá AES-256-GCM bởi `shared/crypto/SecretCipher.ts` (key HKDF từ JWT_SECRET).
+/// `refreshToken` không dùng (chỉ API-key flow); giữ cột vì tương thích migration cũ.
 model ZoteroConnection {
   id              String              @id @default(cuid())
   userId          String
@@ -283,20 +303,49 @@ model ZoteroConnection {
 }
 
 model ZoteroSyncLog {
-  id           String            @id @default(cuid())
-  connectionId String
-  connection   ZoteroConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  projectId    String?
-  syncType     ZoteroSyncType
-  status       ZoteroSyncStatus
-  itemsSynced  Int               @default(0)
-  errorMessage String?
-  startedAt    DateTime          @default(now())
-  finishedAt   DateTime?
+  id            String            @id @default(cuid())
+  connectionId  String
+  connection    ZoteroConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  projectId     String?
+  project       Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  targetBibPath String?
+  syncType      ZoteroSyncType
+  status        ZoteroSyncStatus
+  itemsSynced   Int               @default(0)
+  itemsAdded    Int               @default(0)
+  itemsUpdated  Int               @default(0)
+  itemsSkipped  Int               @default(0)
+  errorCode     String?
+  errorMessage  String?
+  startedAt     DateTime          @default(now())
+  finishedAt    DateTime?
 
   @@index([connectionId, startedAt])
-  @@index([projectId])
+  @@index([projectId, startedAt])
   @@index([status])
+}
+
+/// Audit từng entry OpenAlex được import vào file .bib của project.
+/// Dùng cho dedupe (frontend disable nút "Lưu vào .bib" nếu đã import).
+model OpenAlexImportLog {
+  id            String                @id @default(cuid())
+  userId        String
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  openAlexId    String
+  citationKey   String
+  targetBibPath String
+  doi           String?
+  title         String?
+  year          Int?
+  status        OpenAlexImportStatus
+  errorMessage  String?
+  importedAt    DateTime              @default(now())
+
+  @@index([projectId, importedAt])
+  @@index([userId, importedAt])
+  @@index([openAlexId])
 }
 
 /**
@@ -329,7 +378,10 @@ model Project {
   compileArtifacts CompileArtifact[]
   snapshots    ProjectSnapshot[]
   wordCountSnapshots ProjectWordCountSnapshot[]
+  zoteroSyncLogs      ZoteroSyncLog[]
+  openAlexImportLogs  OpenAlexImportLog[]
 
+  @@index([ownerId])
   @@index([templateId])
   @@index([templateVersionId])
   @@index([category])
@@ -346,6 +398,7 @@ model ProjectSettings {
   mainPath       String   @default("main.typ")
   compileOptions Json?
   zoteroConfig   Json?
+  openalexConfig Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

@@ -36,6 +36,13 @@ export const CreateProjectRequestSchema = z
       description: 'Danh mục dự án',
       example: 'thesis',
     }),
+    templateVersionId: z
+      .string()
+      .optional()
+      .openapi({
+        description: 'ID phiên bản mẫu (tùy chọn)',
+        example: 'cmnztabnn0000e8vmyzb8gqtn',
+      }),
   })
   .openapi('CreateProjectRequest');
 
