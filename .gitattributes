@@ -1,0 +1,18 @@
+# Exclude generated files and dependencies from language statistics
+package-lock.json linguist-generated=true
+*.lock linguist-generated=true
+yarn.lock linguist-generated=true
+pnpm-lock.yaml linguist-generated=true
+
+# Exclude migrations and seeds from contribution stats
+prisma/migrations/** linguist-generated=true
+prisma/seed/** linguist-generated=true
+
+# Exclude test data
+test-data/** linguist-generated=true
+var/fonts/** linguist-generated=true
+storage/** linguist-generated=true
+
+# Mark documentation as documentation
+*.md linguist-documentation=true
+docs/** linguist-documentation=true
