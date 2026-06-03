@@ -1,0 +1,5 @@
+# Git commits to ignore in blame view
+# Add commit SHAs here that you want to exclude from contribution stats
+# Example:
+# abc123def456  # Initial automated commit
+# 789ghi012jkl  # Bulk import from AI
