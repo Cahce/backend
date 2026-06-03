@@ -1,0 +1,8 @@
+# .mailmap - Map multiple identities to a single contributor
+# Format: Preferred Name <preferred@email.com> <actual@email.com>
+
+# Map all claude commits to Cahce
+Cahce <cahce@example.com> <claude@anthropic.com>
+Cahce <cahce@example.com> claude <claude@anthropic.com>
+Cahce <cahce@example.com> <noreply@github.com>
+Cahce <cahce@example.com> claude <noreply@github.com>
