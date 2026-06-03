@@ -78,4 +78,26 @@ export class PrismaCompileArtifactRepository implements CompileArtifactRepositor
       createdAt: artifact.createdAt,
     };
   }
+
+  async findLatestByProjectId(projectId: string): Promise<CompileArtifact | null> {
+    const artifact = await this.prisma.compileArtifact.findFirst({
+      where: { projectId, format: 'pdf' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!artifact) {
+      return null;
+    }
+
+    return {
+      id: artifact.id,
+      projectId: artifact.projectId,
+      jobId: artifact.jobId || '',
+      format: artifact.format as 'pdf',
+      storageKey: artifact.storageKey,
+      sizeBytes: artifact.sizeBytes || 0,
+      sha256: artifact.sha256 || '',
+      createdAt: artifact.createdAt,
+    };
+  }
 }

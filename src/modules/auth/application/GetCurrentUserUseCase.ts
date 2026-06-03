@@ -1,5 +1,7 @@
 import type { IUserRepository } from "../domain/Ports.js";
 import { AuthError, InternalAuthError, UnauthorizedError } from "../domain/AuthErrors.js";
+import { getPermissionsForRole } from "../../../shared/auth/Permissions.js";
+import type { AuthUserView } from "./Types.js";
 
 /**
  * Get current user use case
@@ -12,11 +14,7 @@ export interface GetCurrentUserCommand {
 
 export interface GetCurrentUserResult {
     success: true;
-    user: {
-        id: string;
-        email: string;
-        role: "admin" | "student" | "teacher";
-    };
+    user: AuthUserView;
 }
 
 export interface GetCurrentUserFailure {
@@ -52,6 +50,8 @@ export class GetCurrentUserUseCase {
                     id: user.id,
                     email: user.email,
                     role: user.role,
+                    permissions: getPermissionsForRole(user.role),
+                    mustChangePassword: user.mustChangePassword,
                 },
             };
         } catch (error) {

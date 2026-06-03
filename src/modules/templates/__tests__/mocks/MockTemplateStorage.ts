@@ -93,6 +93,33 @@ export class MockTemplateStorage implements TemplateStorageGateway {
     }
   }
 
+  async writeFiles(input: {
+    templateId: string;
+    versionId: string;
+    files: { path: string; content: string }[];
+    entryPath: string;
+  }): Promise<{ storageKey: string; fileCount: number; entryPath: string }> {
+    if (this.shouldThrowError) {
+      throw new Error(this.shouldThrowError);
+    }
+
+    if (!input.files.some((f) => f.path === input.entryPath)) {
+      throw new Error('INVALID_ARCHIVE');
+    }
+
+    const storageKey = `${input.templateId}/${input.versionId}`;
+    this.storage.set(
+      storageKey,
+      input.files.map((f) => ({ path: f.path, content: f.content })),
+    );
+
+    return {
+      storageKey,
+      fileCount: input.files.length,
+      entryPath: input.entryPath,
+    };
+  }
+
   async readFiles(storageKey: string): Promise<MaterializedFile[]> {
     if (this.shouldThrowError) {
       throw new Error(this.shouldThrowError);

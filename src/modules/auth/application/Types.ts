@@ -2,19 +2,25 @@
  * Application layer types for auth module
  */
 
+import type { Permission } from "../../../shared/auth/Permissions.js";
+
 export interface LoginCommand {
     email: string;
     password: string;
 }
 
+export interface AuthUserView {
+    id: string;
+    email: string;
+    role: "admin" | "student" | "teacher";
+    permissions: Permission[];
+    mustChangePassword: boolean;
+}
+
 export interface LoginResult {
     success: true;
     accessToken: string;
-    user: {
-        id: string;
-        email: string;
-        role: "admin" | "student" | "teacher";
-    };
+    user: AuthUserView;
 }
 
 export interface LoginFailure {

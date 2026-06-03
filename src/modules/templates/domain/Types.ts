@@ -28,6 +28,13 @@ export type Template = {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * Editable "source project" (admin-owned working copy) this template is
+   * authored from. `null` when the template has no source project yet.
+   * Optional so existing constructions (tests, seeds) don't need updating;
+   * the Prisma repo always populates it.
+   */
+  sourceProjectId?: string | null;
 };
 
 /**

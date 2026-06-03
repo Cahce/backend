@@ -6,7 +6,7 @@
  */
 
 import type { PrismaClient } from '../../generated/prisma/index.js';
-import type { TemplateRepo, TemplateStorageGateway } from './domain/Ports.js';
+import type { TemplateRepo, TemplateStorageGateway, SourceProjectGateway } from './domain/Ports.js';
 import type { MaterializedFile } from './domain/Types.js';
 import { InvalidTemplateVersionError } from './domain/Errors.js';
 import { TemplateRepoPrisma } from './infra/TemplateRepoPrisma.js';
@@ -24,6 +24,9 @@ import { DeactivateTemplateVersionUseCase } from './application/DeactivateTempla
 import { UpdateTemplateVersionUseCase } from './application/UpdateTemplateVersionUseCase.js';
 import { GetTemplateVersionFileUseCase } from './application/GetTemplateVersionFileUseCase.js';
 import { MaterializeTemplateVersionUseCase } from './application/MaterializeTemplateVersionUseCase.js';
+import { CreateTemplateSourceProjectUseCase } from './application/CreateTemplateSourceProjectUseCase.js';
+import { ImportTemplateSourceProjectUseCase } from './application/ImportTemplateSourceProjectUseCase.js';
+import { PublishTemplateVersionFromSourceUseCase } from './application/PublishTemplateVersionFromSourceUseCase.js';
 
 /**
  * Templates Module Container
@@ -49,6 +52,10 @@ export class TemplatesContainer {
   public updateTemplateVersion: UpdateTemplateVersionUseCase;
   public getTemplateVersionFile: GetTemplateVersionFileUseCase;
   public materializeTemplateVersion: MaterializeTemplateVersionUseCase;
+  /** Source-project authoring use cases — wired by {@link wireSourceProjectAuthoring}. */
+  public createTemplateSourceProject: CreateTemplateSourceProjectUseCase | null = null;
+  public importTemplateSourceProject: ImportTemplateSourceProjectUseCase | null = null;
+  public publishTemplateVersionFromSource: PublishTemplateVersionFromSourceUseCase | null = null;
 
   constructor(deps: { prisma: PrismaClient; templateStorageDir: string }) {
     // Initialize repositories and gateways.
@@ -80,6 +87,30 @@ export class TemplatesContainer {
       this.templateRepo,
       this.storage,
     );
+  }
+
+  /**
+   * Wire the source-project authoring use cases (create/import source project,
+   * publish version from source). Deferred — like
+   * `ProjectsContainer.wireZipPortability` — because the gateway is composed
+   * from the projects + project-files containers, which are built after this
+   * container in `app.ts`.
+   */
+  wireSourceProjectAuthoring(gateway: SourceProjectGateway): void {
+    this.createTemplateSourceProject = new CreateTemplateSourceProjectUseCase(
+      this.templateRepo,
+      gateway,
+    );
+    this.importTemplateSourceProject = new ImportTemplateSourceProjectUseCase(
+      this.templateRepo,
+      gateway,
+    );
+    this.publishTemplateVersionFromSource =
+      new PublishTemplateVersionFromSourceUseCase(
+        this.templateRepo,
+        this.storage,
+        gateway,
+      );
   }
 
   /**

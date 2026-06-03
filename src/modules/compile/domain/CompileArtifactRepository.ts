@@ -37,4 +37,10 @@ export interface CompileArtifactRepository {
    * Find artifact by job ID
    */
   findByJobId(jobId: string): Promise<CompileArtifact | null>;
+
+  /**
+   * Find the most recent PDF artifact for a project (across all jobs).
+   * Used by the admin oversight PDF download.
+   */
+  findLatestByProjectId(projectId: string): Promise<CompileArtifact | null>;
 }

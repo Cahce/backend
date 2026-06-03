@@ -241,7 +241,7 @@ describe('CreateProjectUseCase', () => {
       }
     });
 
-    it('should create empty project when no templateVersionId provided', async () => {
+    it('should scaffold default files when no templateVersionId provided', async () => {
       const mockMaterialize: MaterializeTemplate = async (_versionId: string) => {
         throw new Error('Should not be called');
       };
@@ -267,9 +267,15 @@ describe('CreateProjectUseCase', () => {
         // Verify project was created
         assert.strictEqual(result.data.title, 'Empty Project');
 
-        // Verify no files were created
         const files = await mockFileRepo.listByProjectId(result.data.id);
-        assert.strictEqual(files.length, 0);
+        assert.strictEqual(files.length, 3);
+        assert.ok(files.find((f) => f.path === 'main.typ'));
+        assert.ok(files.find((f) => f.path === 'bibliography.bib'));
+        assert.ok(files.find((f) => f.path === 'project.toml'));
+
+        const settings = mockSettingsRepo.getSettings(result.data.id);
+        assert.ok(settings);
+        assert.strictEqual(settings.mainPath, 'main.typ');
       }
     });
 

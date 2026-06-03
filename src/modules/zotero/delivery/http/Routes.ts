@@ -299,6 +299,8 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
           collectionKey: query.collectionKey,
           start: query.start,
           limit: query.limit,
+          sort: query.sort,
+          direction: query.direction,
         });
 
         const dtos = result.items.map(item => ({

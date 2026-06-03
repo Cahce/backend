@@ -46,6 +46,13 @@ const EXT_MAP: Record<string, FileKind> = {
   csv: FileKind.Data,
   tsv: FileKind.Data,
   xml: FileKind.Data,
+
+  // Citation Style Language (CSL) — XML data consumed by Typst's
+  // `#bibliography(style: "x.csl")`. Mapped to Data (not a new enum value) so
+  // it counts as a compilation input + stored as text without a Prisma
+  // migration. UI detects `.csl` by extension where it needs to treat it
+  // specially (citation-style picker).
+  csl: FileKind.Data,
   
   // Plain text
   txt: FileKind.Text,
@@ -164,6 +171,7 @@ export function getMimeTypeForKind(kind: FileKind, ext?: string): string {
     case FileKind.Data:
       if (ext === 'csv') return 'text/csv';
       if (ext === 'tsv') return 'text/tab-separated-values';
+      if (ext === 'csl') return 'application/vnd.citationstyles.style+xml';
       return 'application/xml';
     
     case FileKind.Typst:

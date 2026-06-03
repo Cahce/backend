@@ -184,6 +184,23 @@ export class TemplateRepoPrisma implements TemplateRepo {
   }
 
   /**
+   * Link a template to its editable "source project" (admin authoring copy).
+   */
+  async setSourceProject(templateId: string, projectId: string): Promise<void> {
+    try {
+      await this.prisma.template.update({
+        where: { id: templateId },
+        data: { sourceProjectId: projectId },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new Error('TEMPLATE_NOT_FOUND');
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Count projects using this template or any of its versions
    */
   async countProjectsUsing(id: string): Promise<number> {
@@ -348,6 +365,7 @@ export class TemplateRepoPrisma implements TemplateRepo {
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
+    sourceProjectId: string | null;
   }): Template {
     return {
       id: prismaTemplate.id,
@@ -358,6 +376,7 @@ export class TemplateRepoPrisma implements TemplateRepo {
       isActive: prismaTemplate.isActive,
       createdAt: prismaTemplate.createdAt,
       updatedAt: prismaTemplate.updatedAt,
+      sourceProjectId: prismaTemplate.sourceProjectId,
     };
   }
 

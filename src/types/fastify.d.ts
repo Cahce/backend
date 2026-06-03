@@ -1,6 +1,7 @@
 import type { PrismaClient } from "../generated/prisma/index.js";
 import type { AppConfig } from "../config/index.js";
 import type { UserRole } from "../shared/auth/Types.js";
+import type { Permission } from "../shared/auth/Permissions.js";
 import type { MaterializeTemplate } from "../modules/projects/domain/MaterializeTemplate.js";
 import type { TokenRevocationCachePort } from "../shared/auth/TokenRevocationCachePort.js";
 import type { FastifyRequest, FastifyReply } from "fastify";
@@ -39,6 +40,19 @@ declare module "fastify" {
              * preHandler: app.auth.requireRoles(["admin", "teacher"])
              */
             requireRoles: (roles: UserRole[]) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+            /**
+             * Require a specific RBAC permission (capability derived from role).
+             * Verifies JWT, then checks the user's role grants the permission.
+             * Returns 401 if unauthenticated, 403 (FORBIDDEN) if the permission is missing.
+             *
+             * @param permission - Required permission, e.g. "users:manage"
+             * @returns Fastify preHandler function
+             *
+             * @example
+             * preHandler: app.auth.requirePermission("users:manage")
+             */
+            requirePermission: (permission: Permission) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
         };
     }
 }

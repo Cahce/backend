@@ -114,6 +114,12 @@ interface Project {
   title: string;
 }
 
+interface ProjectSettingsEnvelope {
+  settings: {
+    mainPath: string;
+  };
+}
+
 async function createProject(token: string, title: string): Promise<Project> {
   const res = await fetch(`${BASE_URL}/api/v1/projects`, {
     method: "POST",
@@ -250,6 +256,79 @@ async function run(): Promise<void> {
     }
   }
   if (importedId) await deleteProject(token, importedId);
+
+  // --- Import — wrapper folder normalization --------------------------------
+  const wrappedZip = new AdmZip();
+  wrappedZip.addFile(
+    "templatemaudoantotnghiep/project.toml",
+    Buffer.from('name = "Wrapped Import"\nentry = "main.typ"\n', "utf-8"),
+  );
+  wrappedZip.addFile(
+    "templatemaudoantotnghiep/main.typ",
+    Buffer.from('#include "chapters/Chuong3.typ"\n#bibliography("bibliography.bib")\n', "utf-8"),
+  );
+  wrappedZip.addFile(
+    "templatemaudoantotnghiep/chapters/Chuong3.typ",
+    Buffer.from("= Chuong 3\n\nNested chapter.\n", "utf-8"),
+  );
+  wrappedZip.addFile(
+    "templatemaudoantotnghiep/bibliography.bib",
+    Buffer.from("@article{sample2024,\n  title = {Sample},\n  year = {2024}\n}\n", "utf-8"),
+  );
+
+  let wrappedImportedId: string | null = null;
+  {
+    const res = await postZip(token, wrappedZip.toBuffer());
+    if (res.status !== 201) {
+      const body = await res.text();
+      bad("Import wrapped project", `status=${res.status} body=${body}`);
+    } else {
+      const created = await json<Project>(res);
+      wrappedImportedId = created.id;
+      if (created.title === "Wrapped Import") {
+        ok("Import wrapped project → title from stripped project.toml", `id=${created.id}`);
+      } else {
+        bad("Import wrapped title", `expected "Wrapped Import", got "${created.title}"`);
+      }
+
+      const filesRes = await fetch(
+        `${BASE_URL}/api/v1/projects/${created.id}/files`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const filesBody = await filesRes.json();
+      const files = (filesBody.files ?? filesBody) as Array<{ path: string }>;
+      const paths = files.map((f) => f.path).sort();
+      const expected = [
+        "bibliography.bib",
+        "chapters/Chuong3.typ",
+        "main.typ",
+        "project.toml",
+      ];
+      if (JSON.stringify(paths) === JSON.stringify(expected)) {
+        ok("Import wrapped project strips archive root", paths.join(", "));
+      } else {
+        bad(
+          "Import wrapped file tree",
+          `expected ${JSON.stringify(expected)}, got ${JSON.stringify(paths)}`,
+        );
+      }
+
+      const settingsRes = await fetch(
+        `${BASE_URL}/api/v1/projects/${created.id}/settings`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const settingsBody = await json<ProjectSettingsEnvelope>(settingsRes);
+      if (settingsBody.settings?.mainPath === "main.typ") {
+        ok("Import wrapped project persists mainPath", settingsBody.settings.mainPath);
+      } else {
+        bad(
+          "Import wrapped mainPath",
+          `expected main.typ, got ${JSON.stringify(settingsBody)}`,
+        );
+      }
+    }
+  }
+  if (wrappedImportedId) await deleteProject(token, wrappedImportedId);
 
   // --- Import — missing file ------------------------------------------------
   {

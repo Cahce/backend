@@ -19,7 +19,9 @@
     "test:unit:project-files": "tsx --test src/modules/project-files/__tests__/**/*.test.ts",
     "test:unit:compile": "tsx --test src/modules/compile/**/__tests__/**/*.test.ts src/shared/storage/__tests__/**/*.test.ts",
     "test:unit:templates": "tsx --test src/modules/templates/__tests__/**/*.test.ts",
-    "test:unit": "npm run test:unit:projects && npm run test:unit:project-files && npm run test:unit:compile && npm run test:unit:templates",
+    "test:unit:zotero": "tsx --test src/modules/zotero/**/__tests__/**/*.test.ts",
+    "test:unit:capture": "tsx --test src/modules/capture/**/__tests__/**/*.test.ts",
+    "test:unit": "npm run test:unit:projects && npm run test:unit:project-files && npm run test:unit:compile && npm run test:unit:templates && npm run test:unit:zotero && npm run test:unit:capture",
     "test:api:smoke": "tsx scripts/smoke-test.ts",
     "test:api:health": "tsx scripts/health-check.ts",
     "test:api:login": "tsx scripts/test-login.ts",
@@ -32,7 +34,15 @@
     "test:api:templates:public": "tsx scripts/test-templates-public-api.ts",
     "test:api:templates": "npm run test:api:templates:admin && npm run test:api:templates:public",
     "test:api:stage1": "npm run test:api:projects && npm run test:api:project-files",
-    "test": "npm run test:unit && npm run test:api:stage1"
+    "test": "npm run test:unit && npm run test:api:stage1",
+    "test:api:admin:faculties": "tsx scripts/test-admin-faculties-api.ts",
+    "test:api:admin:departments": "tsx scripts/test-admin-departments-api.ts",
+    "test:api:admin:majors": "tsx scripts/test-admin-majors-api.ts",
+    "test:api:admin:classes": "tsx scripts/test-admin-classes-api.ts",
+    "test:api:admin:teachers": "tsx scripts/test-admin-teachers-api.ts",
+    "test:api:admin:students": "tsx scripts/test-admin-students-api.ts",
+    "test:api:admin:accounts": "tsx scripts/test-admin-accounts-api.ts",
+    "test:api:admin": "npm run test:api:admin:faculties && npm run test:api:admin:departments && npm run test:api:admin:majors && npm run test:api:admin:classes && npm run test:api:admin:teachers && npm run test:api:admin:students && npm run test:api:admin:accounts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.4.1",

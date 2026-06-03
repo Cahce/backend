@@ -10,6 +10,7 @@ import type { BibliographyService } from "../../bibliography/application/Bibliog
 import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
 import { mapOpenAlexWorkToBibEntry } from "../domain/Mapping.js";
 import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
+import { normalizeDoi } from "../../bibliography/domain/DuplicateDetection.js";
 
 /**
  * Command to import works to .bib file
@@ -19,6 +20,7 @@ export interface ImportToBibFileCommand {
   projectId: string;
   openAlexIds: string[];
   targetBibPath: string;
+  conflictMode?: "skip" | "replace" | "rename";
 }
 
 /**
@@ -42,7 +44,13 @@ export class ImportToBibFile {
   ) {}
 
   async execute(command: ImportToBibFileCommand): Promise<ImportToBibFileResult> {
-    const { userId, projectId, openAlexIds, targetBibPath } = command;
+    const {
+      userId,
+      projectId,
+      openAlexIds,
+      targetBibPath,
+      conflictMode = "skip",
+    } = command;
 
     // Verify project access
     await this.projectAccess.requireProjectAccess(projectId, userId);
@@ -55,26 +63,33 @@ export class ImportToBibFile {
 
     // Check for duplicates first
     const toImport: string[] = [];
+    const existingImportKeys = new Map<string, string>();
     for (const openAlexId of openAlexIds) {
       const existing = await this.importLogRepo.findByProjectAndOpenAlexId(projectId, openAlexId);
       if (existing) {
-        result.skippedDuplicate.push({
-          openAlexId,
-          existingKey: existing.citationKey,
-        });
-        
-        // Log the skip
-        await this.importLogRepo.create({
-          userId,
-          projectId,
-          openAlexId,
-          citationKey: existing.citationKey,
-          targetBibPath,
-          doi: existing.doi,
-          title: existing.title,
-          year: existing.year,
-          status: "skipped_duplicate",
-        });
+        existingImportKeys.set(openAlexId, existing.citationKey);
+
+        if (conflictMode === "skip") {
+          result.skippedDuplicate.push({
+            openAlexId,
+            existingKey: existing.citationKey,
+          });
+          
+          // Log the skip
+          await this.importLogRepo.create({
+            userId,
+            projectId,
+            openAlexId,
+            citationKey: existing.citationKey,
+            targetBibPath,
+            doi: existing.doi,
+            title: existing.title,
+            year: existing.year,
+            status: "skipped_duplicate",
+          });
+        } else {
+          toImport.push(openAlexId);
+        }
       } else {
         toImport.push(openAlexId);
       }
@@ -88,6 +103,11 @@ export class ImportToBibFile {
     // Read existing .bib file
     const existing = await this.bibliography.readBibFile(projectId, targetBibPath);
     const existingKeys = new Set(existing.map(e => e.key));
+    const existingByDoi = new Map<string, string>();
+    for (const entry of existing) {
+      const doi = normalizeDoi(entry.fields.doi);
+      if (doi) existingByDoi.set(doi, entry.key);
+    }
 
     // Fetch and process works
     const newEntries = [];
@@ -95,10 +115,40 @@ export class ImportToBibFile {
       try {
         const work = await this.apiClient.getWorkById(openAlexId);
         const entry = mapOpenAlexWorkToBibEntry(work);
-        
-        // Dedupe citation key
-        entry.key = dedupeKey(entry.key, existingKeys);
+        const doi = normalizeDoi(work.doi);
+        const existingKey =
+          existingImportKeys.get(openAlexId) ||
+          (doi ? existingByDoi.get(doi) : undefined) ||
+          (existingKeys.has(entry.key) ? entry.key : undefined);
+
+        if (existingKey && conflictMode === "skip") {
+          result.skippedDuplicate.push({
+            openAlexId,
+            existingKey,
+          });
+
+          await this.importLogRepo.create({
+            userId,
+            projectId,
+            openAlexId,
+            citationKey: existingKey,
+            targetBibPath,
+            doi: work.doi,
+            title: work.title,
+            year: work.publication_year,
+            status: "skipped_duplicate",
+          });
+
+          continue;
+        }
+
+        if (existingKey && conflictMode === "replace") {
+          entry.key = existingKey;
+        } else {
+          entry.key = dedupeKey(entry.key, existingKeys);
+        }
         existingKeys.add(entry.key);
+        if (doi) existingByDoi.set(doi, entry.key);
         
         newEntries.push({ work, entry });
         

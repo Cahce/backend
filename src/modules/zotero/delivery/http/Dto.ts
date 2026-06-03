@@ -132,6 +132,14 @@ export const ListItemsQuerySchema = z.object({
   collectionKey: z.string().optional().openapi({ description: "Filter by collection key" }),
   start: z.coerce.number().int().min(0).default(0).openapi({ description: "Pagination start" }),
   limit: z.coerce.number().int().min(1).max(100).default(100).openapi({ description: "Pagination limit" }),
+  sort: z
+    .enum(["dateAdded", "dateModified", "title", "creator", "date"])
+    .optional()
+    .openapi({ description: "Sort field (e.g. dateAdded for most recently saved)" }),
+  direction: z
+    .enum(["asc", "desc"])
+    .optional()
+    .openapi({ description: "Sort direction" }),
 });
 
 export type ListItemsQuery = z.infer<typeof ListItemsQuerySchema>;
@@ -160,6 +168,10 @@ export const SyncToBibFileBodySchema = z.object({
   syncType: z.enum(["full", "incremental"]).openapi({
     description: "Sync type",
     example: "full",
+  }),
+  conflictMode: z.enum(["skip", "replace", "rename"]).optional().default("skip").openapi({
+    description: "How to handle bibliography conflicts",
+    example: "skip",
   }),
 });
 

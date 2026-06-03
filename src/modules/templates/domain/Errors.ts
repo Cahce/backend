@@ -80,6 +80,14 @@ export const TemplateErrors = {
     code: 'UNAUTHORIZED',
     message: 'Không có quyền truy cập',
   },
+
+  /**
+   * Template has no source project to publish from.
+   */
+  SOURCE_PROJECT_MISSING: {
+    code: 'SOURCE_PROJECT_MISSING',
+    message: 'Mẫu chưa có project nguồn để phát hành phiên bản',
+  },
 } as const;
 
 /**

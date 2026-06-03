@@ -71,6 +71,13 @@ describe('FileKindPolicy', () => {
       assert.strictEqual(detectKindFromPath('structure.xml'), FileKind.Data);
     });
 
+    it('should detect csl citation styles as data (compilation input, no migration)', () => {
+      assert.strictEqual(detectKindFromPath('ieee.csl'), FileKind.Data);
+      assert.strictEqual(detectKindFromPath('styles/tlu-thesis.csl'), FileKind.Data);
+      assert.strictEqual(isCompilationInput(FileKind.Data), true);
+      assert.strictEqual(isBinaryKind(FileKind.Data), false);
+    });
+
     it('should detect text files', () => {
       assert.strictEqual(detectKindFromPath('notes.txt'), FileKind.Text);
       assert.strictEqual(detectKindFromPath('LICENSE.txt'), FileKind.Text);
@@ -200,6 +207,10 @@ describe('FileKindPolicy', () => {
       assert.strictEqual(getMimeTypeForKind(FileKind.Data, 'csv'), 'text/csv');
       assert.strictEqual(getMimeTypeForKind(FileKind.Data, 'tsv'), 'text/tab-separated-values');
       assert.strictEqual(getMimeTypeForKind(FileKind.Data, 'xml'), 'application/xml');
+      assert.strictEqual(
+        getMimeTypeForKind(FileKind.Data, 'csl'),
+        'application/vnd.citationstyles.style+xml',
+      );
       assert.strictEqual(getMimeTypeForKind(FileKind.Data), 'application/xml'); // default
     });
 

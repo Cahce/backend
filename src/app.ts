@@ -18,6 +18,8 @@ import { teacherManagementRoutes } from "./modules/admin/delivery/http/TeacherMa
 import { studentManagementRoutes } from "./modules/admin/delivery/http/StudentManagement/Routes.js";
 import { accountRoutes } from "./modules/admin/delivery/http/Account/Routes.js";
 import { projectRoutes } from "./modules/projects/delivery/http/Project/Routes.js";
+import { adminProjectRoutes } from "./modules/projects/delivery/http/AdminProject/Routes.js";
+import { adminCompileRoutes } from "./modules/compile/delivery/http/AdminRoutes.js";
 import { projectFileRoutes } from "./modules/project-files/delivery/http/ProjectFile/Routes.js";
 import { projectSettingsRoutes } from "./modules/projects/delivery/http/ProjectSettings/Routes.js";
 import { ProjectsContainer } from "./modules/projects/Container.js";
@@ -27,13 +29,19 @@ import { teacherProfileRoutes } from "./modules/teachers/delivery/http/Profile/R
 import { compileRoutes } from "./modules/compile/delivery/http/Routes.js";
 import { buildCompileContainer } from "./modules/compile/Container.js";
 import { createTemplatesContainer } from "./modules/templates/Container.js";
+import type { SourceProjectGateway } from "./modules/templates/domain/Ports.js";
 import { registerAdminTemplateRoutes, registerPublicTemplateRoutes } from "./modules/templates/delivery/http/Routes.js";
 import { BibliographyService } from "./modules/bibliography/application/BibliographyService.js";
+import { BibliographyContainer } from "./modules/bibliography/Container.js";
+import { bibliographyRoutes } from "./modules/bibliography/delivery/http/Routes.js";
 import { SecretCipher } from "./shared/crypto/SecretCipher.js";
 import { ZoteroContainer } from "./modules/zotero/Container.js";
 import { zoteroRoutes } from "./modules/zotero/delivery/http/Routes.js";
 import { OpenAlexContainer } from "./modules/openalex/Container.js";
 import { openalexRoutes } from "./modules/openalex/delivery/http/Routes.js";
+import { CaptureContainer } from "./modules/capture/Container.js";
+import { captureRoutes } from "./modules/capture/delivery/http/Routes.js";
+import type { LibraryWriterPort } from "./modules/capture/domain/Ports.js";
 import type { ProjectAccessPolicy } from "./modules/compile/domain/Policies.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -172,6 +180,62 @@ export async function buildApp(): Promise<FastifyInstance> {
     // Same lazy-wire pattern for the zip portability flow (export + import).
     projectsContainer.wireZipPortability(app.storage, projectAccessPolicy);
 
+    // Wire template "source project" authoring: lets the templates module
+    // author content inside a real admin-owned project (reusing projects +
+    // project-files) and publish versions from it. Composed here because the
+    // gateway depends on the projects/project-files containers built above.
+    const sourceProjectGateway: SourceProjectGateway = {
+        async createSourceProject({ title, category, ownerId, templateVersionId }) {
+            const result = await projectsContainer.createProjectUseCase.execute({
+                title,
+                category,
+                userId: ownerId,
+                templateVersionId: templateVersionId ?? undefined,
+            });
+            if (!result.success) {
+                throw Object.assign(new Error(result.error.message), {
+                    code: result.error.code,
+                });
+            }
+            return { projectId: result.data.id };
+        },
+        async importSourceProject({ ownerId, zipBuffer }) {
+            if (!projectsContainer.importProjectUseCase) {
+                throw new Error("IMPORT_NOT_WIRED");
+            }
+            const result = await projectsContainer.importProjectUseCase.execute({
+                userId: ownerId,
+                zipBuffer,
+            });
+            if (!result.success) {
+                throw Object.assign(new Error(result.error.message), {
+                    code: result.error.code,
+                });
+            }
+            return { projectId: result.data.project.id };
+        },
+        async readSourceProjectFiles(projectId) {
+            const [allFiles, settings] = await Promise.all([
+                projectFilesContainer.getFileRepo().listByProjectId(projectId),
+                projectsContainer.getSettingsRepo().findOrCreate(projectId),
+            ]);
+            // Text-only: inline files carry `textContent`; binary files (stored in
+            // blob storage) have null content and are skipped (matches the
+            // text-only template materialization contract).
+            const files = allFiles
+                .filter((f) => f.textContent !== null)
+                .map((f) => ({ path: f.path, content: f.textContent as string }));
+            return { files, entryPath: settings.mainPath };
+        },
+    };
+    templatesContainer.wireSourceProjectAuthoring(sourceProjectGateway);
+
+    // Build bibliography container
+    const bibliographyContainer = new BibliographyContainer(
+        bibliographyService,
+        projectAccessPolicy,
+    );
+
     // Build Zotero container
     const secretCipher = new SecretCipher(app.config.auth.jwtSecret);
     const zoteroContainer = new ZoteroContainer(
@@ -188,6 +252,20 @@ export async function buildApp(): Promise<FastifyInstance> {
         bibliographyService,
         projectAccessPolicy,
         app.config.bibliography.openalexMailto,
+    );
+
+    // Build Capture container (web capture + cite). Writes to the user's Zotero
+    // library through an adapter over the zotero module's SaveItemsToLibrary use
+    // case, so the capture module never touches zotero infra directly.
+    const zoteroLibraryWriter: LibraryWriterPort = {
+        saveItems: (userId, items) =>
+            zoteroContainer.saveItemsToLibrary.execute({ userId, items }),
+    };
+    const captureContainer = new CaptureContainer(
+        bibliographyService,
+        projectAccessPolicy,
+        zoteroLibraryWriter,
+        app.config.bibliography.translationServerUrl,
     );
 
     // 9. Register routes (after containers are ready)
@@ -226,12 +304,26 @@ export async function buildApp(): Promise<FastifyInstance> {
         await compileRoutes(instance, compileContainer);
     }, { prefix: "/api/v1" });
 
+    // Register admin project oversight routes (admin only)
+    await app.register(async (instance) => {
+        await adminProjectRoutes(instance, projectsContainer);
+    }, { prefix: "/api/v1/admin" });
+    await app.register(async (instance) => {
+        await adminCompileRoutes(instance, compileContainer);
+    }, { prefix: "/api/v1/admin" });
+
     // Register bibliography integration routes
+    await app.register(async (instance) => {
+        await bibliographyRoutes(instance, bibliographyContainer);
+    }, { prefix: "/api/v1" });
     await app.register(async (instance) => {
         await zoteroRoutes(instance, zoteroContainer);
     }, { prefix: "/api/v1" });
     await app.register(async (instance) => {
         await openalexRoutes(instance, openalexContainer);
+    }, { prefix: "/api/v1" });
+    await app.register(async (instance) => {
+        await captureRoutes(instance, captureContainer);
     }, { prefix: "/api/v1" });
 
     return app;

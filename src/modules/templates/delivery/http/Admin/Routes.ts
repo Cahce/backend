@@ -6,14 +6,21 @@ import {
   UpdateTemplateRequestSchema,
   ListTemplatesQuerySchema,
   UpdateTemplateVersionRequestSchema,
+  CreateSourceProjectRequestSchema,
+  PublishVersionFromSourceRequestSchema,
   type CreateTemplateRequestDto,
   type UpdateTemplateRequestDto,
   type ListTemplatesQueryDto,
   type UpdateTemplateVersionRequestDto,
+  type CreateSourceProjectRequestDto,
+  type PublishVersionFromSourceRequestDto,
   CreateTemplateBodyJsonSchema,
   UpdateTemplateBodyJsonSchema,
   ListTemplatesQueryJsonSchema,
   UpdateTemplateVersionBodyJsonSchema,
+  CreateSourceProjectBodyJsonSchema,
+  PublishVersionFromSourceBodyJsonSchema,
+  SourceProjectResponseJsonSchema,
   TemplateResponseJsonSchema,
   TemplateVersionResponseJsonSchema,
   ListTemplatesResponseJsonSchema,
@@ -90,6 +97,7 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
           isActive: result.data.isActive,
           createdAt: result.data.createdAt.toISOString(),
           updatedAt: result.data.updatedAt.toISOString(),
+          sourceProjectId: result.data.sourceProjectId ?? null,
         });
       }
 
@@ -167,6 +175,7 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
             createdAt: t.createdAt.toISOString(),
             updatedAt: t.updatedAt.toISOString(),
             usageCount: t.usageCount,
+            sourceProjectId: t.sourceProjectId ?? null,
           })),
           total: result.data.total,
           page: result.data.page,
@@ -238,6 +247,7 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
           createdAt: result.data.createdAt.toISOString(),
           updatedAt: result.data.updatedAt.toISOString(),
           usageCount: result.data.usageCount,
+          sourceProjectId: result.data.sourceProjectId ?? null,
         });
       }
 
@@ -326,6 +336,7 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
           isActive: result.data.isActive,
           createdAt: result.data.createdAt.toISOString(),
           updatedAt: result.data.updatedAt.toISOString(),
+          sourceProjectId: result.data.sourceProjectId ?? null,
         });
       }
 
@@ -744,6 +755,200 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
       return reply.send(result.data.buffer);
     },
   );
+
+  // POST /api/v1/admin/templates/:id/source-project
+  //   Create (or reuse) the template's editable source project. The frontend
+  //   then opens it in the workspace via `/workspace/:sourceProjectId?templateId=`.
+  app.post<{ Params: { id: string }; Body: CreateSourceProjectRequestDto }>(
+    '/templates/:id/source-project',
+    {
+      preHandler: app.auth.requireAdmin,
+      schema: {
+        description: 'Tạo (hoặc lấy lại) project nguồn để soạn nội dung mẫu trong workspace',
+        tags: ['admin-templates'],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', description: 'ID của mẫu' } },
+        },
+        body: CreateSourceProjectBodyJsonSchema,
+        response: {
+          201: { description: 'Đã tạo/lấy project nguồn', ...SourceProjectResponseJsonSchema },
+          400: { description: 'Dữ liệu không hợp lệ', ...ErrorResponseJsonSchema },
+          401: { description: 'Chưa đăng nhập', ...ErrorResponseJsonSchema },
+          403: { description: 'Không có quyền truy cập (chỉ admin)', ...ErrorResponseJsonSchema },
+          404: { description: 'Không tìm thấy mẫu', ...ErrorResponseJsonSchema },
+          500: { description: 'Lỗi hệ thống', ...ErrorResponseJsonSchema },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!container.createTemplateSourceProject) {
+        return reply.code(500).send({
+          error: { code: 'INTERNAL_ERROR', message: 'Lỗi hệ thống' },
+        });
+      }
+
+      const parseResult = CreateSourceProjectRequestSchema.safeParse(
+        request.body ?? {},
+      );
+      if (!parseResult.success) {
+        const firstError = parseResult.error.issues[0];
+        return reply.code(400).send({
+          error: { code: 'VALIDATION_ERROR', message: firstError.message },
+        });
+      }
+
+      const result = await container.createTemplateSourceProject.execute({
+        templateId: request.params.id,
+        ownerId: request.user.sub,
+        seed: parseResult.data.seed,
+      });
+
+      if (result.success) {
+        return reply.code(201).send({ sourceProjectId: result.data.sourceProjectId });
+      }
+      return reply.code(getStatusCodeForError(result.error.code)).send({
+        error: result.error,
+      });
+    },
+  );
+
+  // POST /api/v1/admin/templates/:id/source-project/import (multipart)
+  //   Create the template's source project seeded from an uploaded .zip.
+  app.post<{ Params: { id: string } }>(
+    '/templates/:id/source-project/import',
+    {
+      preHandler: app.auth.requireAdmin,
+      schema: {
+        description: 'Tạo project nguồn từ tệp .zip để soạn nội dung mẫu',
+        tags: ['admin-templates'],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', description: 'ID của mẫu' } },
+        },
+        consumes: ['multipart/form-data'],
+        response: {
+          201: { description: 'Đã tạo project nguồn', ...SourceProjectResponseJsonSchema },
+          400: { description: 'Dữ liệu không hợp lệ', ...ErrorResponseJsonSchema },
+          401: { description: 'Chưa đăng nhập', ...ErrorResponseJsonSchema },
+          403: { description: 'Không có quyền truy cập (chỉ admin)', ...ErrorResponseJsonSchema },
+          404: { description: 'Không tìm thấy mẫu', ...ErrorResponseJsonSchema },
+          413: { description: 'Tệp quá lớn', ...ErrorResponseJsonSchema },
+          500: { description: 'Lỗi hệ thống', ...ErrorResponseJsonSchema },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!container.importTemplateSourceProject) {
+        return reply.code(500).send({
+          error: { code: 'INTERNAL_ERROR', message: 'Lỗi hệ thống' },
+        });
+      }
+
+      try {
+        const data = await request.file();
+        if (!data) {
+          return reply.code(400).send({
+            error: { code: 'VALIDATION_ERROR', message: 'Thiếu tệp tải lên' },
+          });
+        }
+        if (!data.filename.toLowerCase().endsWith('.zip')) {
+          return reply.code(400).send({
+            error: { code: 'VALIDATION_ERROR', message: 'Chỉ hỗ trợ tệp .zip' },
+          });
+        }
+
+        const zipBuffer = await data.toBuffer();
+
+        const result = await container.importTemplateSourceProject.execute({
+          templateId: request.params.id,
+          ownerId: request.user.sub,
+          zipBuffer,
+        });
+
+        if (result.success) {
+          return reply.code(201).send({ sourceProjectId: result.data.sourceProjectId });
+        }
+        return reply.code(getStatusCodeForError(result.error.code)).send({
+          error: result.error,
+        });
+      } catch (error) {
+        return reply.code(500).send({
+          error: { code: 'INTERNAL_ERROR', message: 'Lỗi hệ thống' },
+        });
+      }
+    },
+  );
+
+  // POST /api/v1/admin/templates/:id/versions/from-source
+  //   Publish a new immutable version by snapshotting the source project files.
+  app.post<{ Params: { id: string }; Body: PublishVersionFromSourceRequestDto }>(
+    '/templates/:id/versions/from-source',
+    {
+      preHandler: app.auth.requireAdmin,
+      schema: {
+        description: 'Phát hành phiên bản mẫu từ nội dung project nguồn',
+        tags: ['admin-templates'],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', description: 'ID của mẫu' } },
+        },
+        body: PublishVersionFromSourceBodyJsonSchema,
+        response: {
+          201: { description: 'Phát hành phiên bản thành công', ...TemplateVersionResponseJsonSchema },
+          400: { description: 'Dữ liệu không hợp lệ', ...ErrorResponseJsonSchema },
+          401: { description: 'Chưa đăng nhập', ...ErrorResponseJsonSchema },
+          403: { description: 'Không có quyền truy cập (chỉ admin)', ...ErrorResponseJsonSchema },
+          404: { description: 'Không tìm thấy mẫu', ...ErrorResponseJsonSchema },
+          409: { description: 'Phiên bản đã tồn tại hoặc mẫu chưa có project nguồn', ...ErrorResponseJsonSchema },
+          500: { description: 'Lỗi hệ thống', ...ErrorResponseJsonSchema },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!container.publishTemplateVersionFromSource) {
+        return reply.code(500).send({
+          error: { code: 'INTERNAL_ERROR', message: 'Lỗi hệ thống' },
+        });
+      }
+
+      const parseResult = PublishVersionFromSourceRequestSchema.safeParse(
+        request.body,
+      );
+      if (!parseResult.success) {
+        const firstError = parseResult.error.issues[0];
+        return reply.code(400).send({
+          error: { code: 'VALIDATION_ERROR', message: firstError.message },
+        });
+      }
+
+      const result = await container.publishTemplateVersionFromSource.execute({
+        templateId: request.params.id,
+        versionNumber: parseResult.data.versionNumber,
+        changelog: parseResult.data.changelog ?? null,
+      });
+
+      if (result.success) {
+        return reply.code(201).send({
+          id: result.data.id,
+          templateId: result.data.templateId,
+          versionNumber: result.data.versionNumber,
+          changelog: result.data.changelog,
+          isActive: result.data.isActive,
+          createdAt: result.data.createdAt.toISOString(),
+        });
+      }
+      return reply.code(getStatusCodeForError(result.error.code)).send({
+        error: result.error,
+      });
+    },
+  );
 }
 
 /**
@@ -762,6 +967,7 @@ function getStatusCodeForError(errorCode: string): number {
       return 404;
     case 'TEMPLATE_IN_USE':
     case 'VERSION_EXISTS':
+    case 'SOURCE_PROJECT_MISSING':
       return 409;
     case 'FILE_TOO_LARGE':
       return 413;

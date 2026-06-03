@@ -15,6 +15,7 @@ import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
 import { ZoteroNotConnectedError } from "../domain/Errors.js";
 import { mapZoteroItemToBibEntry } from "../domain/Mapping.js";
 import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
+import { normalizeDoi } from "../../bibliography/domain/DuplicateDetection.js";
 
 /**
  * Command to sync Zotero items to .bib file
@@ -26,6 +27,7 @@ export interface SyncToBibFileCommand {
   syncType: "full" | "incremental";
   collectionKeys?: string[];
   itemKeys?: string[];
+  conflictMode?: "skip" | "replace" | "rename";
 }
 
 /**
@@ -55,7 +57,15 @@ export class SyncToBibFile {
   ) {}
 
   async execute(command: SyncToBibFileCommand): Promise<SyncToBibFileResult> {
-    const { userId, projectId, targetBibPath, syncType, collectionKeys, itemKeys } = command;
+    const {
+      userId,
+      projectId,
+      targetBibPath,
+      syncType,
+      collectionKeys,
+      itemKeys,
+      conflictMode = "skip",
+    } = command;
 
     // Verify project access
     await this.projectAccess.requireProjectAccess(projectId, userId);
@@ -92,7 +102,7 @@ export class SyncToBibFile {
       // duplicate.
       const existingByDoi = new Map<string, string>();
       for (const e of existing) {
-        const doi = (e.fields.doi || "").trim().toLowerCase();
+        const doi = normalizeDoi(e.fields.doi);
         if (doi) existingByDoi.set(doi, e.key);
       }
 
@@ -103,19 +113,53 @@ export class SyncToBibFile {
         [];
 
       for (const item of items) {
-        const doi = (item.DOI || "").trim().toLowerCase();
+        const doi = normalizeDoi(item.DOI);
         if (doi && existingByDoi.has(doi)) {
-          // Same paper already in bib — reuse its key, do NOT write a new
-          // entry (would silently overwrite user edits via mergeEntries).
+          const existingKey = existingByDoi.get(doi)!;
+
+          if (conflictMode === "skip") {
+            // Same paper already in bib: reuse its key and avoid silently
+            // overwriting user edits.
+            entryMapping.push({
+              zoteroItemKey: item.key,
+              citationKey: existingKey,
+            });
+            continue;
+          }
+
+          const entry = mapZoteroItemToBibEntry(item);
+          if (conflictMode === "replace") {
+            entry.key = existingKey;
+          } else {
+            entry.key = dedupeKey(entry.key, existingKeys);
+            existingKeys.add(entry.key);
+          }
+
+          existingByDoi.set(doi, entry.key);
+          newEntries.push(entry);
           entryMapping.push({
             zoteroItemKey: item.key,
-            citationKey: existingByDoi.get(doi)!,
+            citationKey: entry.key,
           });
           continue;
         }
 
         const entry = mapZoteroItemToBibEntry(item);
-        entry.key = dedupeKey(entry.key, existingKeys);
+        if (existingKeys.has(entry.key)) {
+          if (conflictMode === "skip") {
+            entryMapping.push({
+              zoteroItemKey: item.key,
+              citationKey: entry.key,
+            });
+            continue;
+          }
+
+          if (conflictMode === "rename") {
+            entry.key = dedupeKey(entry.key, existingKeys);
+          }
+        } else {
+          entry.key = dedupeKey(entry.key, existingKeys);
+        }
         existingKeys.add(entry.key);
         if (doi) existingByDoi.set(doi, entry.key);
         newEntries.push(entry);

@@ -15,6 +15,7 @@ import {
   ZoteroTimeoutError,
   ZoteroInvalidCredentialsError,
 } from "../domain/Errors.js";
+import { randomBytes } from "node:crypto";
 
 /**
  * Configuration for ZoteroApiClient
@@ -215,8 +216,10 @@ export class ZoteroApiClient implements ZoteroApiPort {
     collectionKey?: string;
     start?: number;
     limit?: number;
+    sort?: string;
+    direction?: "asc" | "desc";
   }): Promise<{ items: ZoteroItem[]; total: number }> {
-    const { libraryType, libraryId, apiKey, collectionKey, start = 0, limit = 100 } = args;
+    const { libraryType, libraryId, apiKey, collectionKey, start = 0, limit = 100, sort, direction } = args;
 
     // Build URL
     let url = `${this.baseUrl}/${libraryType}s/${libraryId}/items`;
@@ -230,6 +233,12 @@ export class ZoteroApiClient implements ZoteroApiPort {
       limit: limit.toString(),
       format: "json",
     });
+    if (sort) {
+      params.set("sort", sort);
+    }
+    if (direction) {
+      params.set("direction", direction);
+    }
     url += `?${params.toString()}`;
 
     try {
@@ -294,6 +303,116 @@ export class ZoteroApiClient implements ZoteroApiPort {
       }
       throw new ZoteroSyncError(`Không thể lấy item: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Create items in a Zotero library (write). Requires a write-enabled API key.
+   * Sends an idempotency `Zotero-Write-Token` header.
+   */
+  async createItems(
+    libraryType: "user" | "group",
+    libraryId: string,
+    apiKey: string,
+    items: ZoteroItem[]
+  ): Promise<{ successKeys: string[]; failed: { index: number; message: string }[] }> {
+    const url = `${this.baseUrl}/${libraryType}s/${libraryId}/items`;
+    const payload = items.map((item) => this.toWritePayload(item));
+
+    try {
+      const response = await this.fetchWithRetry(url, {
+        method: "POST",
+        headers: {
+          ...this.buildHeaders(apiKey),
+          "Content-Type": "application/json",
+          "Zotero-Write-Token": randomBytes(16).toString("hex"),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw await this.handleErrorResponse(response);
+      }
+
+      const data = (await response.json()) as {
+        successful?: Record<string, { key?: string }>;
+        success?: Record<string, string>;
+        failed?: Record<string, { code?: number; message?: string }>;
+      };
+
+      const successKeys: string[] = [];
+      if (data.successful && Object.keys(data.successful).length > 0) {
+        for (const entry of Object.values(data.successful)) {
+          if (entry?.key) successKeys.push(entry.key);
+        }
+      } else if (data.success) {
+        successKeys.push(...Object.values(data.success));
+      }
+
+      const failed = data.failed
+        ? Object.entries(data.failed).map(([index, f]) => ({
+            index: Number.parseInt(index, 10),
+            message: f?.message ?? `Zotero error ${f?.code ?? ""}`.trim(),
+          }))
+        : [];
+
+      return { successKeys, failed };
+    } catch (error) {
+      if (
+        error instanceof ZoteroAuthError ||
+        error instanceof ZoteroLibraryNotFoundError ||
+        error instanceof ZoteroRateLimitError
+      ) {
+        throw error;
+      }
+      throw new ZoteroSyncError(
+        `Không thể ghi item vào Zotero: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
+   * Build a Zotero write payload from a domain item: `itemType` + defined
+   * fields only. Excludes server-managed (`key`/`version`) and
+   * source-library-specific (`collections`/`relations`) fields so the new item
+   * validates in the target library.
+   */
+  private toWritePayload(item: ZoteroItem): Record<string, unknown> {
+    const payload: Record<string, unknown> = { itemType: item.itemType };
+    const set = (key: string, value: unknown) => {
+      if (value !== undefined && value !== null && value !== "") {
+        payload[key] = value;
+      }
+    };
+    set("title", item.title);
+    set("creators", item.creators);
+    set("date", item.date);
+    set("publicationTitle", item.publicationTitle);
+    set("volume", item.volume);
+    set("issue", item.issue);
+    set("pages", item.pages);
+    set("DOI", item.DOI);
+    set("ISSN", item.ISSN);
+    set("publisher", item.publisher);
+    set("place", item.place);
+    set("edition", item.edition);
+    set("numPages", item.numPages);
+    set("ISBN", item.ISBN);
+    set("proceedingsTitle", item.proceedingsTitle);
+    set("conferenceName", item.conferenceName);
+    set("university", item.university);
+    set("thesisType", item.thesisType);
+    set("institution", item.institution);
+    set("reportNumber", item.reportNumber);
+    set("reportType", item.reportType);
+    set("url", item.url);
+    set("accessDate", item.accessDate);
+    set("websiteTitle", item.websiteTitle);
+    set("abstractNote", item.abstractNote);
+    set("language", item.language);
+    set("rights", item.rights);
+    set("extra", item.extra);
+    set("tags", item.tags);
+    return payload;
   }
 
   /**

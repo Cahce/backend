@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import fastifyJwt from "@fastify/jwt";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { UserRole } from "../shared/auth/Types.js";
+import { roleHasPermission, type Permission } from "../shared/auth/Permissions.js";
 import { LruTokenRevocationCache } from "../shared/auth/LruTokenRevocationCache.js";
 
 export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
@@ -115,10 +116,38 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
         return requireRoles(["admin"])(req, reply);
     }
 
+    /**
+     * Require a specific RBAC permission.
+     * First verifies JWT, then checks the user's role grants `permission`
+     * (capability derived from role via shared/auth/Permissions).
+     * Returns 401 if unauthenticated, 403 (FORBIDDEN) if the permission is missing.
+     */
+    function requirePermission(permission: Permission) {
+        return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+            await verify(req, reply);
+
+            // If verify sent a response, stop here
+            if (reply.sent) {
+                return;
+            }
+
+            const userRole = req.user?.role;
+            if (!userRole || !roleHasPermission(userRole, permission)) {
+                return reply.code(403).send({
+                    error: {
+                        code: "FORBIDDEN",
+                        message: "Không có quyền truy cập",
+                    },
+                });
+            }
+        };
+    }
+
     app.decorate("auth", {
         verify,
         requireAdmin,
         requireRoles,
+        requirePermission,
     });
 });
 

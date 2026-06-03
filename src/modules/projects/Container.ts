@@ -19,6 +19,11 @@ import { GetProjectSettings } from './application/GetProjectSettings.js';
 import { UpdateProjectSettings } from './application/UpdateProjectSettings.js';
 import { ExportProjectUseCase } from './application/ExportProjectUseCase.js';
 import { ImportProjectUseCase } from './application/ImportProjectUseCase.js';
+import { AdminProjectRepoPrisma } from './infra/AdminProjectRepoPrisma.js';
+import type { AdminProjectRepo } from './domain/Project/AdminProjectPorts.js';
+import { ListAdminProjectsUseCase } from './application/ListAdminProjectsUseCase.js';
+import { GetAdminProjectDetailUseCase } from './application/GetAdminProjectDetailUseCase.js';
+import { GetAdminProjectStatsUseCase } from './application/GetAdminProjectStatsUseCase.js';
 import type { FileRepo } from '../project-files/domain/ProjectFile/Ports.js';
 import type { MaterializeTemplate } from './domain/MaterializeTemplate.js';
 import type { BlobStorage } from '../../shared/storage/BlobStorage.js';
@@ -46,6 +51,15 @@ export class ProjectsContainer {
   public exportProjectUseCase: ExportProjectUseCase | null = null;
   /** Wired by {@link wireZipPortability}. */
   public importProjectUseCase: ImportProjectUseCase | null = null;
+
+  // Admin oversight (read-only across all owners)
+  public listAdminProjectsUseCase: ListAdminProjectsUseCase;
+  public getAdminProjectDetailUseCase: GetAdminProjectDetailUseCase;
+  public getAdminProjectStatsUseCase: GetAdminProjectStatsUseCase;
+  /** Admin .zip export (bypasses owner/member policy). Wired in {@link wireZipPortability}. */
+  public adminExportProjectUseCase: ExportProjectUseCase | null = null;
+  private readonly adminProjectRepo: AdminProjectRepo;
+
   /** Keep around to construct zip use cases on demand. */
   private readonly fileRepo: FileRepo;
 
@@ -76,6 +90,12 @@ export class ProjectsContainer {
       this.projectRepo,
       fileRepo,
     );
+
+    // Admin oversight use cases (read-only; auth enforced at route via requireAdmin)
+    this.adminProjectRepo = new AdminProjectRepoPrisma(prisma);
+    this.listAdminProjectsUseCase = new ListAdminProjectsUseCase(this.adminProjectRepo);
+    this.getAdminProjectDetailUseCase = new GetAdminProjectDetailUseCase(this.adminProjectRepo);
+    this.getAdminProjectStatsUseCase = new GetAdminProjectStatsUseCase(this.adminProjectRepo);
   }
 
   /**
@@ -84,6 +104,15 @@ export class ProjectsContainer {
    */
   getProjectRepo(): ProjectRepo {
     return this.projectRepo;
+  }
+
+  /**
+   * Get the project-settings repository instance.
+   * Used for cross-module composition (e.g. reading `mainPath` when publishing
+   * a template version from a source project).
+   */
+  getSettingsRepo(): ProjectSettingsRepository {
+    return this.settingsRepo;
   }
 
   /**
@@ -104,6 +133,22 @@ export class ProjectsContainer {
     this.importProjectUseCase = new ImportProjectUseCase(
       this.projectRepo,
       this.fileRepo,
+      blobStorage,
+      this.settingsRepo,
+    );
+
+    // Admin export reuses ExportProjectUseCase with an allow-all access policy
+    // — the route is already guarded by requireAdmin, and a missing project
+    // still resolves to PROJECT_NOT_FOUND inside the use case.
+    const adminBypassAccess: ProjectAccessPolicy = {
+      async requireProjectAccess(): Promise<void> {
+        /* admin already authorized at route level */
+      },
+    };
+    this.adminExportProjectUseCase = new ExportProjectUseCase(
+      this.projectRepo,
+      this.fileRepo,
+      adminBypassAccess,
       blobStorage,
     );
   }

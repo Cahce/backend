@@ -94,3 +94,15 @@ export class ZoteroAlreadyConnectedError extends ZoteroError {
     this.name = "ZoteroAlreadyConnectedError";
   }
 }
+
+/**
+ * Connected Zotero API key does not have write permission.
+ */
+export class ZoteroWriteForbiddenError extends ZoteroError {
+  constructor(
+    message: string = "API key Zotero của bạn không có quyền ghi (write). Hãy tạo API key có quyền ghi rồi kết nối lại."
+  ) {
+    super(message);
+    this.name = "ZoteroWriteForbiddenError";
+  }
+}

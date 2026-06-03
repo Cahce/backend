@@ -16,6 +16,8 @@ export interface ListItemsCommand {
   collectionKey?: string;
   start?: number;
   limit?: number;
+  sort?: string;
+  direction?: "asc" | "desc";
 }
 
 /**
@@ -36,7 +38,7 @@ export class ListItems {
   ) {}
 
   async execute(command: ListItemsCommand): Promise<ListItemsResult> {
-    const { userId, collectionKey, start = 0, limit = 100 } = command;
+    const { userId, collectionKey, start = 0, limit = 100, sort, direction } = command;
 
     // Load connection
     const conn = await this.connRepo.getByUserId(userId);
@@ -52,6 +54,8 @@ export class ListItems {
       collectionKey,
       start,
       limit,
+      sort,
+      direction,
     });
 
     return result;

@@ -25,6 +25,8 @@ export const LoginResponseSchema = z.object({
         id: z.string(),
         email: z.string(),
         role: z.enum(["admin", "student", "teacher"]),
+        permissions: z.array(z.string()).describe("Danh sách quyền (RBAC) suy ra từ vai trò"),
+        mustChangePassword: z.boolean().describe("Bắt buộc đổi mật khẩu trước khi sử dụng"),
     }),
 });
 
@@ -36,6 +38,8 @@ export const GetCurrentUserResponseSchema = z.object({
         id: z.string(),
         email: z.string(),
         role: z.enum(["admin", "student", "teacher"]),
+        permissions: z.array(z.string()).describe("Danh sách quyền (RBAC) suy ra từ vai trò"),
+        mustChangePassword: z.boolean().describe("Bắt buộc đổi mật khẩu trước khi sử dụng"),
     }),
 });
 

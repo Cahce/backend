@@ -55,6 +55,12 @@ export interface TemplateRepo {
   delete(id: string): Promise<void>;
 
   /**
+   * Link a template to its editable "source project" (admin authoring copy).
+   * Pass-through update of `Template.sourceProjectId`.
+   */
+  setSourceProject(templateId: string, projectId: string): Promise<void>;
+
+  /**
    * Count projects using this template or any of its versions
    */
   countProjectsUsing(id: string): Promise<number>;
@@ -125,6 +131,23 @@ export interface TemplateStorageGateway {
   }): Promise<{ storageKey: string; fileCount: number; entryPath: string }>;
 
   /**
+   * Write a set of already-materialized text files as a new version directory.
+   *
+   * Used when publishing a template version from an edited "source project":
+   * the files are in-memory text (not an uploaded archive). Mirrors the
+   * `writeArchive` storage layout (`{templateId}/{versionId}`).
+   *
+   * @throws Error('INVALID_ARCHIVE') if a path is unsafe (absolute / traversal)
+   *   or `entryPath` is not present among `files`.
+   */
+  writeFiles(input: {
+    templateId: string;
+    versionId: string;
+    files: { path: string; content: string }[];
+    entryPath: string;
+  }): Promise<{ storageKey: string; fileCount: number; entryPath: string }>;
+
+  /**
    * Read all files from storage
    *
    * @param storageKey - Storage key (relative path)
@@ -159,3 +182,46 @@ export interface TemplateStorageGateway {
  * This is the cross-module interface.
  */
 export type MaterializeTemplate = (versionId: string) => Promise<MaterializedFile[]>;
+
+/**
+ * Source-project gateway (cross-module).
+ *
+ * Lets the templates module author template content inside a real, admin-owned
+ * "source project" (reusing the projects + project-files modules) without
+ * importing their infra directly. Wired in `app.ts` from the projects and
+ * project-files containers — mirroring how `MaterializeTemplate` is injected
+ * the other direction.
+ *
+ * Implementations may throw an `Error` carrying a `code` property on failure
+ * (e.g. `ZIP_MALFORMED`); the calling use case maps it to a template error.
+ */
+export interface SourceProjectGateway {
+  /**
+   * Create a source project owned by `ownerId`. When `templateVersionId` is
+   * provided, the project is seeded from that version's files; otherwise a
+   * blank Typst project is scaffolded.
+   */
+  createSourceProject(input: {
+    title: string;
+    category: string;
+    ownerId: string;
+    templateVersionId?: string | null;
+  }): Promise<{ projectId: string }>;
+
+  /**
+   * Create a source project owned by `ownerId` seeded from an uploaded .zip.
+   */
+  importSourceProject(input: {
+    ownerId: string;
+    zipBuffer: Buffer;
+  }): Promise<{ projectId: string }>;
+
+  /**
+   * Read a source project's current text files plus its entry path
+   * (`ProjectSettings.mainPath`) so they can be published as a version.
+   */
+  readSourceProjectFiles(projectId: string): Promise<{
+    files: { path: string; content: string }[];
+    entryPath: string;
+  }>;
+}

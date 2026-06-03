@@ -251,10 +251,16 @@ model Template {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   versions    TemplateVersion[]
-  projects    Project[]
+  projects    Project[]          @relation("ProjectTemplate")
+
+  // Editable "source project" (admin-owned working copy) used to author this
+  // template's content in the workspace, then publish versions from it.
+  sourceProjectId String?
+  sourceProject   Project?       @relation("TemplateSourceProject", fields: [sourceProjectId], references: [id], onDelete: SetNull)
 
   @@index([category])
   @@index([isOfficial, isActive])
+  @@index([sourceProjectId])
 }
 
 model TemplateVersion {
@@ -365,10 +371,12 @@ model Project {
   
   // Template relationship
   templateId        String?
-  template          Template?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  template          Template?        @relation("ProjectTemplate", fields: [templateId], references: [id], onDelete: SetNull)
   templateVersionId String?
   templateVersion   TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
-  
+  // Templates that use this project as their editable source (authoring copy)
+  templateSources   Template[]       @relation("TemplateSourceProject")
+
   settings     ProjectSettings?
   members      ProjectMember[]
   shareLinks   ProjectShareLink[]

@@ -125,6 +125,52 @@ export type UpdateTemplateVersionRequestDto = z.infer<
   typeof UpdateTemplateVersionRequestSchema
 >;
 
+// Create Source Project Request
+//
+// Used by POST /admin/templates/:id/source-project to create (or reuse) the
+// admin-owned editable working copy. `seed` decides initial content: 'blank'
+// scaffolds an empty Typst project; 'latest' seeds from the template's most
+// recent active version.
+export const CreateSourceProjectRequestSchema = z
+  .object({
+    seed: z.enum(['blank', 'latest']).default('blank').openapi({
+      description: "Nguồn khởi tạo: 'blank' (rỗng) hoặc 'latest' (từ phiên bản mới nhất)",
+      example: 'blank',
+    }),
+  })
+  .openapi('CreateSourceProjectRequest');
+
+export type CreateSourceProjectRequestDto = z.infer<
+  typeof CreateSourceProjectRequestSchema
+>;
+
+// Publish Version From Source Request
+//
+// Used by POST /admin/templates/:id/versions/from-source to snapshot the
+// source project's current files into a new immutable version.
+export const PublishVersionFromSourceRequestSchema = z
+  .object({
+    versionNumber: z
+      .string()
+      .trim()
+      .regex(/^v?\d+\.\d+\.\d+$/, 'Định dạng phải là v1.0.0 hoặc 1.0.0')
+      .openapi({ description: 'Số phiên bản', example: 'v1.0.0' }),
+    changelog: z
+      .string()
+      .max(2000, 'Ghi chú thay đổi tối đa 2000 ký tự')
+      .nullable()
+      .optional()
+      .openapi({
+        description: 'Ghi chú thay đổi',
+        example: 'Phiên bản đầu tiên',
+      }),
+  })
+  .openapi('PublishVersionFromSourceRequest');
+
+export type PublishVersionFromSourceRequestDto = z.infer<
+  typeof PublishVersionFromSourceRequestSchema
+>;
+
 // List Templates Query Parameters
 export const ListTemplatesQuerySchema = z
   .object({
@@ -224,6 +270,11 @@ export const TemplateResponseSchema = z
       description:
         'Số project đang dùng mẫu này (bất kỳ phiên bản nào). Chỉ trả về cho các endpoint admin list/detail; có thể vắng mặt ở các response khác.',
       example: 0,
+    }),
+    sourceProjectId: z.string().nullable().optional().openapi({
+      description:
+        'ID project nguồn (bản nháp admin dùng để soạn nội dung mẫu trong workspace). null nếu mẫu chưa có project nguồn.',
+      example: null,
     }),
   })
   .openapi('TemplateResponse');
@@ -330,6 +381,19 @@ export const MessageResponseSchema = z
 
 export type MessageResponseDto = z.infer<typeof MessageResponseSchema>;
 
+// Source Project Response — returns the id of the template's editable working
+// copy so the frontend can navigate to `/workspace/:id?templateId=...`.
+export const SourceProjectResponseSchema = z
+  .object({
+    sourceProjectId: z.string().openapi({
+      description: 'ID project nguồn của mẫu',
+      example: 'cmnztabnn0000e8vmyzb8gqtn',
+    }),
+  })
+  .openapi('SourceProjectResponse');
+
+export type SourceProjectResponseDto = z.infer<typeof SourceProjectResponseSchema>;
+
 /**
  * =========================
  * Fastify JSON Schemas
@@ -388,4 +452,22 @@ export const ErrorResponseJsonSchema = unwrapJsonSchema(
 
 export const MessageResponseJsonSchema = unwrapJsonSchema(
   zodToJsonSchema(MessageResponseSchema as any, 'MessageResponse'),
+);
+
+export const CreateSourceProjectBodyJsonSchema = unwrapJsonSchema(
+  zodToJsonSchema(
+    CreateSourceProjectRequestSchema as any,
+    'CreateSourceProjectRequest',
+  ),
+);
+
+export const PublishVersionFromSourceBodyJsonSchema = unwrapJsonSchema(
+  zodToJsonSchema(
+    PublishVersionFromSourceRequestSchema as any,
+    'PublishVersionFromSourceRequest',
+  ),
+);
+
+export const SourceProjectResponseJsonSchema = unwrapJsonSchema(
+  zodToJsonSchema(SourceProjectResponseSchema as any, 'SourceProjectResponse'),
 );

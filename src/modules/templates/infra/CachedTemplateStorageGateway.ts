@@ -59,6 +59,14 @@ export class CachedTemplateStorageGateway implements TemplateStorageGateway {
     return this.inner.writeArchive(input);
   }
 
+  async writeFiles(
+    input: Parameters<TemplateStorageGateway['writeFiles']>[0],
+  ): ReturnType<TemplateStorageGateway['writeFiles']> {
+    // Like writeArchive: a published version writes to a fresh storageKey, so
+    // there's nothing cached to invalidate. Just delegate.
+    return this.inner.writeFiles(input);
+  }
+
   async readFiles(storageKey: string): Promise<MaterializedFile[]> {
     const cached = this.cache.get(storageKey);
     if (cached) {

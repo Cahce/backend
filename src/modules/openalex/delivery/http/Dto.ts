@@ -101,6 +101,10 @@ export const ImportToBibFileBodySchema = z.object({
         "Target bibliography file path in project. `.bib` writes BibTeX; `.yml`/`.yaml` writes Hayagriva YAML.",
       example: "bibliography.bib",
     }),
+  conflictMode: z.enum(["skip", "replace", "rename"]).optional().default("skip").openapi({
+    description: "How to handle bibliography conflicts",
+    example: "skip",
+  }),
 });
 
 export type ImportToBibFileBody = z.infer<typeof ImportToBibFileBodySchema>;

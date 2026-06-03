@@ -10,6 +10,7 @@ export interface UserDto {
     role: UserRole;
     passwordHash: string;
     isActive: boolean;
+    mustChangePassword: boolean;
 }
 
 export interface IUserRepository {

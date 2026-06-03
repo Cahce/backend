@@ -46,6 +46,7 @@ function makeArtifactRepo(): CompileArtifactRepository {
     create: async (data) => makeArtifact(data.jobId),
     findById: async () => null,
     findByJobId: async () => null,
+    findLatestByProjectId: async () => null,
   };
 }
 
@@ -145,6 +146,7 @@ describe('ProcessCompileJob', () => {
       },
       findById: async () => null,
       findByJobId: async () => null,
+      findLatestByProjectId: async () => null,
     };
 
     const useCase = new ProcessCompileJob(

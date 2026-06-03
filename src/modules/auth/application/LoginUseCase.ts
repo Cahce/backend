@@ -10,6 +10,7 @@ import {
     InvalidCredentialsError,
 } from "../domain/AuthErrors.js";
 import { EmailPolicy } from "../domain/EmailPolicy.js";
+import { getPermissionsForRole } from "../../../shared/auth/Permissions.js";
 import type { LoginCommand, LoginResponse } from "./Types.js";
 
 /**
@@ -65,6 +66,8 @@ export class LoginUseCase {
                     id: user.id,
                     email: user.email,
                     role: user.role,
+                    permissions: getPermissionsForRole(user.role),
+                    mustChangePassword: user.mustChangePassword,
                 },
             };
         } catch (error) {

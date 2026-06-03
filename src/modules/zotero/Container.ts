@@ -23,6 +23,7 @@ import { ListCollections } from "./application/ListCollections.js";
 import { ListItems } from "./application/ListItems.js";
 import { SyncToBibFile } from "./application/SyncToBibFile.js";
 import { GetSyncLogs } from "./application/GetSyncLogs.js";
+import { SaveItemsToLibrary } from "./application/SaveItemsToLibrary.js";
 
 /**
  * Zotero Module Container
@@ -37,6 +38,7 @@ export class ZoteroContainer {
   public readonly listItems: ListItems;
   public readonly syncToBibFile: SyncToBibFile;
   public readonly getSyncLogs: GetSyncLogs;
+  public readonly saveItemsToLibrary: SaveItemsToLibrary;
 
   constructor(
     prisma: PrismaClient,
@@ -67,5 +69,6 @@ export class ZoteroContainer {
       projectAccess
     );
     this.getSyncLogs = new GetSyncLogs(logRepo, projectAccess);
+    this.saveItemsToLibrary = new SaveItemsToLibrary(connRepo, apiClient);
   }
 }

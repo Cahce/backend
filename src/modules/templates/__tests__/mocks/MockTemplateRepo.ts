@@ -182,6 +182,14 @@ export class MockTemplateRepo implements TemplateRepo {
     }
   }
 
+  async setSourceProject(templateId: string, projectId: string): Promise<void> {
+    const template = this.templates.get(templateId);
+    if (!template) {
+      throw new Error('TEMPLATE_NOT_FOUND');
+    }
+    this.templates.set(templateId, { ...template, sourceProjectId: projectId });
+  }
+
   async countProjectsUsing(templateId: string): Promise<number> {
     return this.projectUsageCount.get(templateId) || 0;
   }

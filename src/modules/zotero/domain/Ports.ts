@@ -79,6 +79,8 @@ export interface ZoteroApiPort {
     collectionKey?: string;
     start?: number;
     limit?: number;
+    sort?: string;
+    direction?: "asc" | "desc";
   }): Promise<{ items: ZoteroItem[]; total: number }>;
 
   /**
@@ -90,6 +92,17 @@ export interface ZoteroApiPort {
     itemKey: string,
     apiKey: string
   ): Promise<ZoteroItem>;
+
+  /**
+   * Create one or more items in a library (write). Requires a write-enabled
+   * API key. Returns the keys of items created successfully plus any failures.
+   */
+  createItems(
+    libraryType: "user" | "group",
+    libraryId: string,
+    apiKey: string,
+    items: ZoteroItem[]
+  ): Promise<{ successKeys: string[]; failed: { index: number; message: string }[] }>;
 }
 
 /**

@@ -88,6 +88,63 @@ export class TemplateStorageFs implements TemplateStorageGateway {
   }
 
   /**
+   * Write a set of already-materialized text files as a new version directory.
+   *
+   * Validates every path up front (reject absolute / traversal) and requires
+   * `entryPath` to be present, then writes UTF-8 content. Cleans up the target
+   * directory on any failure so a partial write never lingers.
+   */
+  async writeFiles(input: {
+    templateId: string;
+    versionId: string;
+    files: { path: string; content: string }[];
+    entryPath: string;
+  }): Promise<{ storageKey: string; fileCount: number; entryPath: string }> {
+    const storageKey = `${input.templateId}/${input.versionId}`;
+    const targetDir = path.join(this.storageRoot, storageKey);
+
+    // Require the entry file to exist among the provided files.
+    if (!input.files.some((f) => f.path === input.entryPath)) {
+      throw new Error('INVALID_ARCHIVE');
+    }
+
+    // Validate all paths BEFORE writing anything (fail fast, no partial dir).
+    const resolvedRoot = path.resolve(targetDir);
+    for (const file of input.files) {
+      if (!file.path || path.isAbsolute(file.path)) {
+        throw new Error('INVALID_ARCHIVE');
+      }
+      const normalized = path.normalize(file.path);
+      if (normalized.startsWith('..') || normalized.includes(`..${path.sep}`)) {
+        throw new Error('INVALID_ARCHIVE');
+      }
+      // Defense in depth: resolved target must stay inside the version dir.
+      const resolvedTarget = path.resolve(targetDir, file.path);
+      if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(resolvedRoot + path.sep)) {
+        throw new Error('INVALID_ARCHIVE');
+      }
+    }
+
+    await fs.mkdir(targetDir, { recursive: true });
+    try {
+      for (const file of input.files) {
+        const targetPath = path.join(targetDir, file.path);
+        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.writeFile(targetPath, file.content, 'utf-8');
+      }
+    } catch (error) {
+      await fs.rm(targetDir, { recursive: true, force: true });
+      throw error;
+    }
+
+    return {
+      storageKey,
+      fileCount: input.files.length,
+      entryPath: input.entryPath,
+    };
+  }
+
+  /**
    * Extract ZIP archive with security validations
    */
   private async extractZipArchive(

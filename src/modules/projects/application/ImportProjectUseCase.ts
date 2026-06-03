@@ -33,6 +33,8 @@ import {
 } from '../../project-files/domain/FileKindPolicy.js';
 import type { BlobStorage } from '../../../shared/storage/BlobStorage.js';
 import { ProjectErrors } from '../domain/Project/Errors.js';
+import { ProjectSettings } from '../domain/ProjectSettings.js';
+import type { ProjectSettingsRepository } from '../domain/ProjectSettingsRepository.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
@@ -72,6 +74,15 @@ function isUnsafePath(entryPath: string): boolean {
   return false;
 }
 
+function decodeUtf8(data: Buffer): string | null {
+  try {
+    const text = data.toString('utf-8');
+    return text.includes('\uFFFD') ? null : text;
+  } catch {
+    return null;
+  }
+}
+
 function pickTitleFromToml(toml: string | null): string | null {
   if (!toml) return null;
   // Very small parse: look for a top-level `name = "..."` line.
@@ -79,11 +90,103 @@ function pickTitleFromToml(toml: string | null): string | null {
   return match?.[1]?.trim() || null;
 }
 
+function pickEntryFromToml(toml: string | null): string | null {
+  if (!toml) return null;
+  const match = toml.match(/^\s*entry\s*=\s*"([^"\n]+)"/m);
+  const raw = match?.[1]?.trim();
+  if (!raw || isUnsafePath(raw)) return null;
+  const normalised = path.posix.normalize(raw.replace(/\\/g, '/')).replace(/^\/+/, '');
+  if (!normalised || normalised === '.' || normalised === '..') return null;
+  return normalised;
+}
+
+interface PendingEntry {
+  path: string;
+  data: Buffer;
+}
+
+interface ArchiveRootNormalization {
+  entries: PendingEntry[];
+  strippedRoot: string | null;
+}
+
+function isTypstSource(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith('.typ');
+}
+
+function hasTypstProjectMarker(paths: string[]): boolean {
+  const pathSet = new Set(paths);
+  if (pathSet.has('project.toml')) return true;
+  if (pathSet.has('typst.toml')) return true;
+  if (pathSet.has('main.typ')) return true;
+
+  // A single Typst file is a valid tiny project root, even without metadata.
+  return paths.filter(isTypstSource).length === 1;
+}
+
+export function normalizeArchiveRoot(entries: PendingEntry[]): ArchiveRootNormalization {
+  if (entries.length === 0) {
+    return { entries, strippedRoot: null };
+  }
+
+  const segments = entries.map((entry) => entry.path.split('/'));
+  if (!segments.every((parts) => parts.length > 1)) {
+    return { entries, strippedRoot: null };
+  }
+
+  const roots = new Set(segments.map((parts) => parts[0]));
+  if (roots.size !== 1) {
+    return { entries, strippedRoot: null };
+  }
+
+  const [commonRoot] = Array.from(roots);
+  const stripped = entries.map((entry) => ({
+    ...entry,
+    path: entry.path.slice(commonRoot.length + 1),
+  }));
+
+  if (
+    stripped.some((entry) => !entry.path || entry.path === '.' || entry.path === '..') ||
+    !hasTypstProjectMarker(stripped.map((entry) => entry.path))
+  ) {
+    return { entries, strippedRoot: null };
+  }
+
+  return { entries: stripped, strippedRoot: commonRoot };
+}
+
+function readProjectToml(entries: PendingEntry[]): string | null {
+  const projectToml = entries.find(
+    (entry) => entry.path === 'project.toml' || entry.path.endsWith('/project.toml'),
+  );
+  return projectToml ? decodeUtf8(projectToml.data) : null;
+}
+
+function pickMainPath(entries: PendingEntry[], projectToml: string | null): string | null {
+  const pathSet = new Set(entries.map((entry) => entry.path));
+  const declaredEntry = pickEntryFromToml(projectToml);
+  if (declaredEntry && pathSet.has(declaredEntry)) {
+    return declaredEntry;
+  }
+
+  if (pathSet.has('main.typ')) {
+    return 'main.typ';
+  }
+
+  const firstTypst = entries
+    .map((entry) => entry.path)
+    .filter(isTypstSource)
+    .sort((a, b) => a.localeCompare(b))[0];
+
+  return firstTypst ?? null;
+}
+
 export class ImportProjectUseCase {
   constructor(
     private readonly projectRepo: ProjectRepo,
     private readonly fileRepo: FileRepo,
     private readonly blobStorage: BlobStorage,
+    private readonly settingsRepo?: ProjectSettingsRepository,
     private readonly maxExpandedBytes: number = DEFAULT_MAX_EXPANDED,
     private readonly maxPerFileBytes: number = DEFAULT_MAX_PER_FILE,
   ) {}
@@ -103,13 +206,8 @@ export class ImportProjectUseCase {
     }
 
     const entries = zip.getEntries();
-    interface PendingEntry {
-      path: string;
-      data: Buffer;
-    }
-    const pending: PendingEntry[] = [];
+    let pending: PendingEntry[] = [];
     let totalExpanded = 0;
-    let tomlContent: string | null = null;
 
     for (const entry of entries) {
       if (entry.isDirectory) continue;
@@ -149,15 +247,13 @@ export class ImportProjectUseCase {
       }
 
       pending.push({ path: normalised, data });
-
-      if (normalised === 'project.toml' || normalised.endsWith('/project.toml')) {
-        try {
-          tomlContent = data.toString('utf-8');
-        } catch {
-          // Non-UTF-8 toml is unusual; ignore.
-        }
-      }
     }
+
+    const normalisedArchive = normalizeArchiveRoot(pending);
+    pending = normalisedArchive.entries;
+
+    const tomlContent = readProjectToml(pending);
+    const mainPath = pickMainPath(pending, tomlContent);
 
     // --- Create project ------------------------------------------------------
     const title =
@@ -239,6 +335,19 @@ export class ImportProjectUseCase {
             });
           }
         }
+      }
+
+      if (this.settingsRepo && mainPath) {
+        const settings = await this.settingsRepo.findOrCreate(project.id);
+        await this.settingsRepo.update(
+          new ProjectSettings(
+            settings.projectId,
+            mainPath,
+            settings.compileOptions,
+            settings.zoteroConfig,
+            new Date(),
+          ),
+        );
       }
     } catch (err) {
       console.error('[ImportProject] failed mid-import:', err);

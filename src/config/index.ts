@@ -19,6 +19,8 @@ const EnvSchema = z.object({
     // Bibliography Integration
     ZOTERO_API_BASE: z.string().default("https://api.zotero.org"),
     OPENALEX_MAILTO: z.string().default(""),
+    // Zotero translation-server (self-hosted metadata extractor) base URL.
+    TRANSLATION_SERVER_URL: z.string().default("http://localhost:1969"),
     // Binary File Upload
     MAX_UPLOAD_SIZE_BYTES: z.coerce.number().default(10 * 1024 * 1024), // 10 MB
 });
@@ -54,6 +56,7 @@ export const config = {
     bibliography: {
         zoteroApiBase: env.ZOTERO_API_BASE,
         openalexMailto: env.OPENALEX_MAILTO,
+        translationServerUrl: env.TRANSLATION_SERVER_URL,
     },
     upload: {
         maxBytes: env.MAX_UPLOAD_SIZE_BYTES,

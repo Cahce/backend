@@ -16,6 +16,7 @@ export class UserRepoPrisma implements IUserRepository {
                 role: true,
                 passwordHash: true,
                 isActive: true,
+                mustChangePassword: true,
             },
         });
 
@@ -29,6 +30,7 @@ export class UserRepoPrisma implements IUserRepository {
             role: user.role,
             passwordHash: user.passwordHash,
             isActive: user.isActive,
+            mustChangePassword: user.mustChangePassword,
         };
     }
 
@@ -41,6 +43,7 @@ export class UserRepoPrisma implements IUserRepository {
                 role: true,
                 passwordHash: true,
                 isActive: true,
+                mustChangePassword: true,
             },
         });
 
@@ -54,13 +57,19 @@ export class UserRepoPrisma implements IUserRepository {
             role: user.role,
             passwordHash: user.passwordHash,
             isActive: user.isActive,
+            mustChangePassword: user.mustChangePassword,
         };
     }
 
     async updatePassword(userId: string, newPasswordHash: string): Promise<void> {
         await this.prisma.user.update({
             where: { id: userId },
-            data: { passwordHash: newPasswordHash },
+            data: {
+                passwordHash: newPasswordHash,
+                // After a successful change the forced-change requirement is satisfied.
+                mustChangePassword: false,
+                passwordChangedAt: new Date(),
+            },
         });
     }
 }

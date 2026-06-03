@@ -11,6 +11,7 @@ import { EnqueueCompileJob } from './application/EnqueueCompileJob.js';
 import { ListCompileJobs } from './application/ListCompileJobs.js';
 import { GetCompileJob } from './application/GetCompileJob.js';
 import { GetLatestArtifact } from './application/GetLatestArtifact.js';
+import { GetLatestProjectArtifactForAdmin } from './application/GetLatestProjectArtifactForAdmin.js';
 import { ProcessCompileJob } from './application/ProcessCompileJob.js';
 import { PrismaCompileJobRepository } from './infra/PrismaCompileJobRepository.js';
 import { PrismaCompileArtifactRepository } from './infra/PrismaCompileArtifactRepository.js';
@@ -27,6 +28,7 @@ export interface CompileContainer {
   listCompileJobs: ListCompileJobs;
   getCompileJob: GetCompileJob;
   getLatestArtifact: GetLatestArtifact;
+  getLatestProjectArtifactForAdmin: GetLatestProjectArtifactForAdmin;
   getMainPath(projectId: string): Promise<string>;
   toResponse(job: CompileJob): CompileJobResponse;
 }
@@ -52,9 +54,12 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
     app.log,
   );
 
-  // Queue
+  // Queue. Respect the validated config (defaults to true) rather than reading
+  // the raw env var — otherwise an unset COMPILE_WORKER_ENABLED leaves the
+  // worker off even though config.compile.workerEnabled defaults to true,
+  // which would make admin compile-on-demand silently time out.
   const queue = new InProcessCompileQueue(processJob, {
-    enabled: process.env.COMPILE_WORKER_ENABLED === 'true',
+    enabled: app.config.compile.workerEnabled,
     log: app.log,
   });
 
@@ -88,6 +93,14 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
   const listCompileJobs = new ListCompileJobs(jobs, accessPolicy);
   const getCompileJob = new GetCompileJob(jobs, accessPolicy);
   const getLatestArtifact = new GetLatestArtifact(jobs, artifacts, accessPolicy, app.storage);
+  const getLatestProjectArtifactForAdmin = new GetLatestProjectArtifactForAdmin(
+    jobs,
+    artifacts,
+    queue,
+    app.storage,
+    getMainPath,
+    Number(process.env.COMPILE_TIMEOUT_MS ?? 60000) + 15000,
+  );
 
   // Helper to get main path from settings
   async function getMainPath(projectId: string): Promise<string> {
@@ -116,6 +129,7 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
     listCompileJobs,
     getCompileJob,
     getLatestArtifact,
+    getLatestProjectArtifactForAdmin,
     getMainPath,
     toResponse,
   };
