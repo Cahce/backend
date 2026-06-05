@@ -8,7 +8,7 @@
 
 import type { BibliographyService } from "../bibliography/application/BibliographyService.js";
 import type { ProjectAccessPolicy } from "../compile/domain/Policies.js";
-import type { LibraryWriterPort } from "./domain/Ports.js";
+import type { LibraryWriterPort, IdentifierFallbackPort } from "./domain/Ports.js";
 
 import { TranslationServerClient } from "./infra/TranslationServerClient.js";
 import { ResolveReference } from "./application/ResolveReference.js";
@@ -22,18 +22,20 @@ export class CaptureContainer {
     bibliography: BibliographyService,
     projectAccess: ProjectAccessPolicy,
     libraryWriter: LibraryWriterPort,
-    translationServerUrl?: string
+    translationServerUrl?: string,
+    identifierFallback?: IdentifierFallbackPort | null
   ) {
     const translation = new TranslationServerClient({
       baseUrl: translationServerUrl,
     });
 
-    this.resolveReference = new ResolveReference(translation);
+    this.resolveReference = new ResolveReference(translation, identifierFallback);
     this.captureToProject = new CaptureToProject(
       translation,
       bibliography,
       projectAccess,
-      libraryWriter
+      libraryWriter,
+      identifierFallback
     );
   }
 }

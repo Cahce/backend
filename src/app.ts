@@ -42,6 +42,8 @@ import { openalexRoutes } from "./modules/openalex/delivery/http/Routes.js";
 import { CaptureContainer } from "./modules/capture/Container.js";
 import { captureRoutes } from "./modules/capture/delivery/http/Routes.js";
 import type { LibraryWriterPort } from "./modules/capture/domain/Ports.js";
+import { OpenAlexApiClient } from "./modules/openalex/infra/OpenAlexApiClient.js";
+import { OpenAlexIdentifierFallback } from "./modules/capture/infra/OpenAlexIdentifierFallback.js";
 import type { ProjectAccessPolicy } from "./modules/compile/domain/Policies.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -261,11 +263,17 @@ export async function buildApp(): Promise<FastifyInstance> {
         saveItems: (userId, items) =>
             zoteroContainer.saveItemsToLibrary.execute({ userId, items }),
     };
+    // OpenAlex-backed fallback so DOI/arXiv capture works even without a
+    // running translation-server (no Docker required for the common case).
+    const captureIdentifierFallback = new OpenAlexIdentifierFallback(
+        new OpenAlexApiClient({ mailto: app.config.bibliography.openalexMailto }),
+    );
     const captureContainer = new CaptureContainer(
         bibliographyService,
         projectAccessPolicy,
         zoteroLibraryWriter,
         app.config.bibliography.translationServerUrl,
+        captureIdentifierFallback,
     );
 
     // 9. Register routes (after containers are ready)

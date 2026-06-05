@@ -25,3 +25,14 @@ export interface TranslationServerPort {
 export interface LibraryWriterPort {
   saveItems(userId: string, items: CaptureItem[]): Promise<{ keys: string[] }>;
 }
+
+/**
+ * Optional fallback resolver for identifiers (DOI / arXiv) when the
+ * translation-server is unavailable or returns nothing. Implemented over the
+ * OpenAlex module so DOI/arXiv capture works without a self-hosted
+ * translation-server (no Docker required).
+ */
+export interface IdentifierFallbackPort {
+  /** Resolve a DOI/arXiv identifier to an item, or null if it can't. */
+  resolveIdentifier(identifier: string): Promise<CaptureItem | null>;
+}

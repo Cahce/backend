@@ -8,7 +8,11 @@
  * Mirrors the dedupe/merge/write flow of `openalex/ImportToBibFile`.
  */
 
-import type { TranslationServerPort, LibraryWriterPort } from "../domain/Ports.js";
+import type {
+  TranslationServerPort,
+  LibraryWriterPort,
+  IdentifierFallbackPort,
+} from "../domain/Ports.js";
 import type { CaptureItem } from "../domain/Types.js";
 import type { BibliographyService } from "../../bibliography/application/BibliographyService.js";
 import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
@@ -16,7 +20,7 @@ import {
   CaptureInvalidInputError,
   TranslationNoResultError,
 } from "../domain/Errors.js";
-import { assertPublicHttpUrl } from "../domain/UrlSafety.js";
+import { resolveReferenceItems } from "./resolveItems.js";
 import { mapZoteroItemToBibEntry } from "../../zotero/domain/Mapping.js";
 import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
 import { normalizeDoi } from "../../bibliography/domain/DuplicateDetection.js";
@@ -45,7 +49,8 @@ export class CaptureToProject {
     private readonly translation: TranslationServerPort,
     private readonly bibliography: BibliographyService,
     private readonly projectAccess: ProjectAccessPolicy,
-    private readonly libraryWriter: LibraryWriterPort
+    private readonly libraryWriter: LibraryWriterPort,
+    private readonly fallback?: IdentifierFallbackPort | null
   ) {}
 
   async execute(
@@ -125,18 +130,10 @@ export class CaptureToProject {
       return command.item;
     }
 
-    const url = command.url?.trim();
-    const identifier = command.identifier?.trim();
-    const provided = [url, identifier].filter((v) => !!v).length;
-    if (provided !== 1) {
-      throw new CaptureInvalidInputError(
-        "Cần cung cấp đúng một trong: url, identifier hoặc item"
-      );
-    }
-
-    const items = url
-      ? await this.translation.web(assertPublicHttpUrl(url).toString())
-      : await this.translation.search(identifier as string);
+    const items = await resolveReferenceItems(this.translation, this.fallback, {
+      url: command.url,
+      identifier: command.identifier,
+    });
 
     const first = items[0];
     if (!first) {
