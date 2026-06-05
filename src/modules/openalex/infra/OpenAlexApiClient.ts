@@ -146,6 +146,44 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
   }
 
   /**
+   * Get a single work by DOI. Accepts bare DOI, `doi:` prefix, or a doi.org URL.
+   */
+  async getWorkByDoi(doi: string): Promise<OpenAlexWork> {
+    const clean = doi
+      .trim()
+      .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
+      .replace(/^doi:\s*/i, "");
+
+    const params = new URLSearchParams();
+    if (this.mailto) {
+      params.append("mailto", this.mailto);
+    }
+    const qs = params.toString();
+    const url = `${this.baseUrl}/works/doi:${encodeURIComponent(clean)}${qs ? `?${qs}` : ""}`;
+
+    try {
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw await this.handleErrorResponse(response);
+      }
+
+      return (await response.json()) as OpenAlexWork;
+    } catch (error) {
+      if (
+        error instanceof OpenAlexNotFoundError ||
+        error instanceof OpenAlexRateLimitError ||
+        error instanceof OpenAlexTimeoutError
+      ) {
+        throw error;
+      }
+      throw new OpenAlexUpstreamError(
+        `Không thể lấy work theo DOI: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
    * Fetch with timeout
    */
   private async fetchWithTimeout(url: string): Promise<Response> {

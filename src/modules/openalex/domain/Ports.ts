@@ -27,6 +27,12 @@ export interface OpenAlexApiPort {
    * Get a single work by ID
    */
   getWorkById(id: string): Promise<OpenAlexWork>;
+
+  /**
+   * Get a single work by DOI (bare form, e.g. "10.1038/nphys1170"). Used as a
+   * Docker-free fallback for capture identifier resolution.
+   */
+  getWorkByDoi(doi: string): Promise<OpenAlexWork>;
 }
 
 /**
