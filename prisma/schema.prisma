@@ -8,6 +8,12 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "../docs/diagrams/class/database-erd.svg"
+  theme    = "neutral"
+}
+
 datasource db {
   provider = "postgresql"
 }
@@ -91,6 +97,12 @@ enum OpenAlexImportStatus {
   failed
 }
 
+enum Gender {
+  male
+  female
+  other
+}
+
 /**
  * =========================
  * Users
@@ -118,6 +130,7 @@ model User {
   createdShareLinks   ProjectShareLink[]
   quota               UserQuota?
   invalidTokens       InvalidToken[]
+  refreshTokens       RefreshToken[]
   zoteroConnections   ZoteroConnection[]
   openAlexImportLogs  OpenAlexImportLog[]
 }
@@ -203,6 +216,9 @@ model Teacher {
   academicRank   String
   academicDegree String
   phone          String?
+  gender         Gender?
+  dateOfBirth    DateTime?
+  address        String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   
@@ -227,6 +243,9 @@ model Student {
   classId     String
   class       Class    @relation(fields: [classId], references: [id], onDelete: Restrict)
   phone       String?
+  gender      Gender?
+  dateOfBirth DateTime?
+  address     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -622,4 +641,30 @@ model InvalidToken {
 
   @@index([expiresAt])
   @@index([userId])
+}
+
+/**
+ * =========================
+ * Refresh tokens (rotating)
+ * =========================
+ * Only the SHA-256 hash of the opaque refresh token is stored. Each successful
+ * refresh rotates the token (old row gets `revokedAt` + `replacedBy`). Reuse of
+ * a revoked token is treated as theft and burns the whole `familyId`.
+ */
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  familyId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+  userAgent  String?
+  ip         String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([familyId])
 }
