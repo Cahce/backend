@@ -56,6 +56,7 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
         const { projectId } = request.params;
         const body = enqueueCompileBodySchema.parse(request.body ?? {});
         const userId = request.user.sub;
+        const userRole = request.user.role;
 
         // Get main path from settings if not provided
         const entryPath = body.entryPath ?? (await container.getMainPath(projectId));
@@ -63,6 +64,7 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
         const job = await container.enqueueCompileJob.execute({
           projectId,
           userId,
+          userRole,
           entryPath,
           format: body.format ?? 'pdf',
           engine: body.engine ?? 'node',
@@ -276,9 +278,12 @@ function getStatusCodeForError(errorCode: string): number {
   switch (errorCode) {
     case 'INVALID_TRANSITION':
       return 400;
+    case 'PROJECT_ACCESS_DENIED':
+      return 403;
     case 'COMPILE_JOB_NOT_FOUND':
     case 'COMPILE_ARTIFACT_NOT_READY':
     case 'STORAGE_NOT_FOUND':
+    case 'PROJECT_NOT_FOUND':
       return 404;
     case 'COMPILE_TIMEOUT':
       return 408;

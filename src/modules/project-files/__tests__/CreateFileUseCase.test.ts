@@ -118,7 +118,7 @@ describe('CreateFileUseCase', () => {
     }
   });
 
-  it('should allow admin to create file in any project', async () => {
+  it('should deny admin creating a file in a project they do not own (oversight is read-only)', async () => {
     const command = {
       projectId: 'project-1',
       path: 'main.typ',
@@ -130,7 +130,10 @@ describe('CreateFileUseCase', () => {
 
     const result = await useCase.execute(command);
 
-    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(result.error.code, FileErrors.UNAUTHORIZED.code);
+    }
   });
 
   it('should return FILE_ALREADY_EXISTS when file exists at path', async () => {

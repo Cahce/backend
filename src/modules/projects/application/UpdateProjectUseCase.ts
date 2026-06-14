@@ -8,6 +8,7 @@ import type { ProjectRepo } from '../domain/Project/Ports.js';
 import type { Project, UpdateProjectData } from '../domain/Project/Types.js';
 import { ProjectErrors } from '../domain/Project/Errors.js';
 import { ProjectAuthPolicy, type AuthContext } from '../domain/Project/Policies.js';
+import { buildProjectAuthContext } from './ProjectAuthContext.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
@@ -39,11 +40,13 @@ export class UpdateProjectUseCase {
         return failure(ProjectErrors.PROJECT_NOT_FOUND.code, ProjectErrors.PROJECT_NOT_FOUND.message);
       }
 
-      // Enforce authorization
-      const authContext: AuthContext = {
-        userId: command.userId,
-        role: command.userRole,
-      };
+      // Enforce authorization (resolves ProjectMember / advisor relations).
+      const authContext: AuthContext = await buildProjectAuthContext(
+        this.projectRepo,
+        project,
+        command.userId,
+        command.userRole,
+      );
 
       if (!ProjectAuthPolicy.canWrite(project, authContext)) {
         return failure(ProjectErrors.UNAUTHORIZED.code, ProjectErrors.UNAUTHORIZED.message);

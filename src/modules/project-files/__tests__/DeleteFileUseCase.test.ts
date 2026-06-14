@@ -119,7 +119,7 @@ describe('DeleteFileUseCase', () => {
     }
   });
 
-  it('should allow admin to delete file in any project', async () => {
+  it('should deny admin deleting a file in a project they do not own (oversight is read-only)', async () => {
     const command = {
       projectId: 'project-1',
       path: 'main.typ',
@@ -129,11 +129,14 @@ describe('DeleteFileUseCase', () => {
 
     const result = await useCase.execute(command);
 
-    assert.strictEqual(result.success, true);
-    
-    // Verify file is deleted
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(result.error.code, FileErrors.UNAUTHORIZED.code);
+    }
+
+    // Verify file was NOT deleted
     const files = await mockFileRepo.listByProjectId('project-1');
-    assert.strictEqual(files.length, 0);
+    assert.ok(files.some((f) => f.path === 'main.typ'));
   });
 
   it('should not affect other files when deleting one file', async () => {

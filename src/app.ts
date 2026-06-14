@@ -44,7 +44,7 @@ import { captureRoutes } from "./modules/capture/delivery/http/Routes.js";
 import type { LibraryWriterPort } from "./modules/capture/domain/Ports.js";
 import { OpenAlexApiClient } from "./modules/openalex/infra/OpenAlexApiClient.js";
 import { OpenAlexIdentifierFallback } from "./modules/capture/infra/OpenAlexIdentifierFallback.js";
-import type { ProjectAccessPolicy } from "./modules/compile/domain/Policies.js";
+import type { ProjectAccessPolicy, ProjectWriteAccessPolicy } from "./modules/compile/domain/Policies.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
     const app = Fastify({
@@ -152,8 +152,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     // Build bibliography service (shared by Zotero and OpenAlex)
     const bibliographyService = new BibliographyService(projectFilesContainer.getFileRepo());
 
-    // Build project access policy (shared by Zotero and OpenAlex)
-    const projectAccessPolicy: ProjectAccessPolicy = {
+    // Build project access policy (shared by binary upload, Zotero, OpenAlex,
+    // Capture, and zip export). Implements both the read policy (owner or any
+    // member) and the write policy (owner or editor member) so content-mutating
+    // surfaces deny viewer-members and admin oversight, consistent with the
+    // projects-module ProjectAuthPolicy.
+    const projectAccessPolicy: ProjectAccessPolicy & ProjectWriteAccessPolicy = {
+        // READ: owner or any member.
         async requireProjectAccess(projectId: string, userId: string): Promise<void> {
             const project = await app.prisma.project.findUnique({
                 where: { id: projectId },
@@ -169,6 +174,25 @@ export async function buildApp(): Promise<FastifyInstance> {
             const isMember = project.members.some(m => m.userId === userId);
 
             if (!isOwner && !isMember) {
+                throw new Error("PROJECT_ACCESS_DENIED");
+            }
+        },
+
+        // WRITE: owner or editor member only (viewers + admin oversight denied).
+        async requireWriteAccess(projectId: string, userId: string): Promise<void> {
+            const project = await app.prisma.project.findUnique({
+                where: { id: projectId },
+                include: { members: { where: { userId } } },
+            });
+
+            if (!project) {
+                throw new Error("PROJECT_NOT_FOUND");
+            }
+
+            const isOwner = project.ownerId === userId;
+            const isEditor = project.members.some(m => m.role === "editor");
+
+            if (!isOwner && !isEditor) {
                 throw new Error("PROJECT_ACCESS_DENIED");
             }
         },

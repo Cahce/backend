@@ -47,7 +47,7 @@ describe('DeleteProjectUseCase', () => {
     assert.strictEqual(deletedProject, null);
   });
 
-  it('should allow admin to delete any project', async () => {
+  it('should deny admin deleting a project they do not own (oversight is read-only)', async () => {
     const project: Project = {
       id: 'project-1',
       title: 'User Project',
@@ -69,11 +69,14 @@ describe('DeleteProjectUseCase', () => {
 
     const result = await useCase.execute(command);
 
-    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(result.error.code, ProjectErrors.UNAUTHORIZED.code);
+    }
 
-    // Verify project was deleted
-    const deletedProject = await mockRepo.findById('project-1');
-    assert.strictEqual(deletedProject, null);
+    // Verify project was NOT deleted
+    const stillThere = await mockRepo.findById('project-1');
+    assert.notStrictEqual(stillThere, null);
   });
 
   it('should return PROJECT_NOT_FOUND when project does not exist', async () => {

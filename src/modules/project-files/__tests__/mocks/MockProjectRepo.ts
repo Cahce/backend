@@ -49,4 +49,11 @@ export class MockProjectRepo implements ProjectRepo {
   async delete(_projectId: string): Promise<void> {
     throw new Error('Not implemented in mock');
   }
+
+  async getEffectiveAccess(
+    _projectId: string,
+    _userId: string,
+  ): Promise<{ membershipRole: 'editor' | 'viewer' | null; isAdvisor: boolean }> {
+    return { membershipRole: null, isAdvisor: false };
+  }
 }

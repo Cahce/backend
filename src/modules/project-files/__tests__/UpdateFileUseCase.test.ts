@@ -170,7 +170,7 @@ describe('UpdateFileUseCase', () => {
     }
   });
 
-  it('should allow admin to update file in any project', async () => {
+  it('should deny admin updating a file in a project they do not own (oversight is read-only)', async () => {
     const command = {
       projectId: 'project-1',
       path: 'main.typ',
@@ -181,9 +181,9 @@ describe('UpdateFileUseCase', () => {
 
     const result = await useCase.execute(command);
 
-    assert.strictEqual(result.success, true);
-    if (result.success) {
-      assert.strictEqual(result.data.textContent, 'admin updated content');
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(result.error.code, FileErrors.UNAUTHORIZED.code);
     }
   });
 

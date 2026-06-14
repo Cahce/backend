@@ -112,6 +112,33 @@ export class ProjectRepoPrisma implements ProjectRepo {
   }
 
   /**
+   * Resolve the caller's project-scoped access relations (membership + advisor).
+   * One query each for ProjectMember (compound-unique lookup) and ProjectAdvisor
+   * (joined through Teacher.accountId, since advisors are linked by Teacher id).
+   */
+  async getEffectiveAccess(
+    projectId: string,
+    userId: string,
+  ): Promise<{ membershipRole: 'editor' | 'viewer' | null; isAdvisor: boolean }> {
+    const [member, advisor] = await Promise.all([
+      this.prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId, userId } },
+        select: { role: true },
+      }),
+      this.prisma.projectAdvisor.findFirst({
+        where: { projectId, teacher: { accountId: userId } },
+        select: { id: true },
+      }),
+    ]);
+
+    // Narrow the Prisma enum to the policy's union explicitly (no cast).
+    const membershipRole: 'editor' | 'viewer' | null =
+      member?.role === 'editor' || member?.role === 'viewer' ? member.role : null;
+
+    return { membershipRole, isAdvisor: advisor !== null };
+  }
+
+  /**
    * Map Prisma Project model to domain Project type
    */
   private mapToProject(prismaProject: {
