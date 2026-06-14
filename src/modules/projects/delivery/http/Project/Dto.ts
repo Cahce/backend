@@ -106,6 +106,22 @@ export const ProjectResponseSchema = z
       description: 'Thời gian chỉnh sửa cuối (ISO 8601)',
       example: '2024-01-15T10:30:00.000Z',
     }),
+    // Caller's capabilities on this project. Returned by the detail endpoint
+    // (GET /projects/:id) so the workspace can render read-only vs editable.
+    // Backend remains the authoritative enforcer of every mutation.
+    access: z
+      .object({
+        level: z.enum(['owner', 'editor', 'viewer', 'advisor', 'adminOversight']).openapi({
+          description: 'Mức truy cập của người gọi đối với dự án',
+          example: 'owner',
+        }),
+        canEdit: z.boolean().openapi({ description: 'Được sửa file / thông tin dự án' }),
+        canDelete: z.boolean().openapi({ description: 'Được xóa dự án' }),
+        canManageSettings: z.boolean().openapi({ description: 'Được đổi thiết lập dự án' }),
+        canCompileOfficial: z.boolean().openapi({ description: 'Được biên dịch/xuất bản chính thức' }),
+      })
+      .optional()
+      .openapi({ description: 'Quyền của người gọi (có trên endpoint chi tiết dự án)' }),
   })
   .openapi('ProjectResponse');
 

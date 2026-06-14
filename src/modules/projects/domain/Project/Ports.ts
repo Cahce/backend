@@ -50,4 +50,18 @@ export interface ProjectRepo {
    * @param projectId - Project ID
    */
   delete(projectId: string): Promise<void>;
+
+  /**
+   * Resolve the caller's project-scoped access relations: their `ProjectMember`
+   * role (if any) and whether they are an assigned advisor (`ProjectAdvisor`).
+   * Used to build the `AuthContext` for the access policy so editor/viewer
+   * collaborators and teacher advisors resolve to the correct access level.
+   *
+   * @param projectId - Project ID
+   * @param userId - User ID of the caller
+   */
+  getEffectiveAccess(
+    projectId: string,
+    userId: string,
+  ): Promise<{ membershipRole: 'editor' | 'viewer' | null; isAdvisor: boolean }>;
 }

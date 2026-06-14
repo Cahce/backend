@@ -183,12 +183,41 @@ describe('UpdateProjectUseCase', () => {
     }
   });
 
-  it('should allow admin to update any project', async () => {
+  it('should deny admin updating a project they do not own (oversight is read-only)', async () => {
     const project: Project = {
       id: 'project-1',
       title: 'User Project',
       category: TemplateCategory.Thesis,
       ownerId: 'user-123',
+      templateId: null,
+      templateVersionId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastEditedAt: null,
+    };
+    mockRepo.setProjects([project]);
+
+    const command = {
+      projectId: 'project-1',
+      title: 'Admin Updated',
+      userId: 'admin-456',
+      userRole: 'admin' as const,
+    };
+
+    const result = await useCase.execute(command);
+
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(result.error.code, ProjectErrors.UNAUTHORIZED.code);
+    }
+  });
+
+  it('should allow admin to update a project they own (e.g. template source project)', async () => {
+    const project: Project = {
+      id: 'project-1',
+      title: 'Admin Template Source',
+      category: TemplateCategory.Thesis,
+      ownerId: 'admin-456',
       templateId: null,
       templateVersionId: null,
       createdAt: new Date(),

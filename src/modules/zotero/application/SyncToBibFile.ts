@@ -11,7 +11,7 @@ import type {
   ZoteroSyncLogRepo,
 } from "../domain/Ports.js";
 import type { BibliographyService } from "../../bibliography/application/BibliographyService.js";
-import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
 import { ZoteroNotConnectedError } from "../domain/Errors.js";
 import { mapZoteroItemToBibEntry } from "../domain/Mapping.js";
 import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
@@ -53,7 +53,7 @@ export class SyncToBibFile {
     private readonly apiClient: ZoteroApiPort,
     private readonly bibliography: BibliographyService,
     private readonly logRepo: ZoteroSyncLogRepo,
-    private readonly projectAccess: ProjectAccessPolicy
+    private readonly projectAccess: ProjectWriteAccessPolicy
   ) {}
 
   async execute(command: SyncToBibFileCommand): Promise<SyncToBibFileResult> {
@@ -67,8 +67,8 @@ export class SyncToBibFile {
       conflictMode = "skip",
     } = command;
 
-    // Verify project access
-    await this.projectAccess.requireProjectAccess(projectId, userId);
+    // Verify write access (owner or editor member; viewers/admin-oversight denied)
+    await this.projectAccess.requireWriteAccess(projectId, userId);
 
     // Load connection
     const conn = await this.connRepo.getByUserId(userId);

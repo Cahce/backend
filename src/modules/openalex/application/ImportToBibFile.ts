@@ -7,7 +7,7 @@
 
 import type { OpenAlexApiPort, OpenAlexImportLogRepo } from "../domain/Ports.js";
 import type { BibliographyService } from "../../bibliography/application/BibliographyService.js";
-import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
 import { mapOpenAlexWorkToBibEntry } from "../domain/Mapping.js";
 import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
 import { normalizeDoi } from "../../bibliography/domain/DuplicateDetection.js";
@@ -39,7 +39,7 @@ export class ImportToBibFile {
   constructor(
     private readonly apiClient: OpenAlexApiPort,
     private readonly bibliography: BibliographyService,
-    private readonly projectAccess: ProjectAccessPolicy,
+    private readonly projectAccess: ProjectWriteAccessPolicy,
     private readonly importLogRepo: OpenAlexImportLogRepo
   ) {}
 
@@ -52,8 +52,8 @@ export class ImportToBibFile {
       conflictMode = "skip",
     } = command;
 
-    // Verify project access
-    await this.projectAccess.requireProjectAccess(projectId, userId);
+    // Verify write access (owner or editor member; viewers/admin-oversight denied)
+    await this.projectAccess.requireWriteAccess(projectId, userId);
 
     const result: ImportToBibFileResult = {
       imported: [],

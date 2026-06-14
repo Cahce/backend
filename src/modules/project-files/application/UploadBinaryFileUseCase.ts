@@ -22,7 +22,7 @@ import {
   hasForbiddenExtension,
 } from "../domain/AllowedMimeTypes.js";
 import { validateProjectFilePath, InvalidPathError } from "../domain/PathValidator.js";
-import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -82,14 +82,14 @@ export class UploadBinaryFileUseCase {
   constructor(
     private readonly fileRepo: FileRepo,
     private readonly blobStorage: BlobStorage,
-    private readonly projectAccess: ProjectAccessPolicy,
+    private readonly projectAccess: ProjectWriteAccessPolicy,
   ) {}
 
   async execute(cmd: UploadBinaryFileCommand): Promise<UploadBinaryFileResult> {
     // 1. Authorization. The compile module's policy throws on denial — we
     //    re-wrap into our typed error so the HTTP layer maps to 403 cleanly.
     try {
-      await this.projectAccess.requireProjectAccess(cmd.projectId, cmd.userId);
+      await this.projectAccess.requireWriteAccess(cmd.projectId, cmd.userId);
     } catch (err) {
       // Bubble up project-not-found unchanged; map access-denied to typed.
       const message = err instanceof Error ? err.message : String(err);

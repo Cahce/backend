@@ -81,4 +81,11 @@ export class MockProjectRepo implements ProjectRepo {
   async delete(projectId: string): Promise<void> {
     this.projects.delete(projectId);
   }
+
+  async getEffectiveAccess(
+    _projectId: string,
+    _userId: string,
+  ): Promise<{ membershipRole: 'editor' | 'viewer' | null; isAdvisor: boolean }> {
+    return { membershipRole: null, isAdvisor: false };
+  }
 }

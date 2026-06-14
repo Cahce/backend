@@ -19,7 +19,7 @@ import { GetFilesForCompilationUseCase } from './application/GetFilesForCompilat
 import { CreateFilesFromTemplateUseCase } from './application/CreateFilesFromTemplateUseCase.js';
 import { UploadBinaryFileUseCase } from './application/UploadBinaryFileUseCase.js';
 import type { BlobStorage } from '../../shared/storage/BlobStorage.js';
-import type { ProjectAccessPolicy } from '../compile/domain/Policies.js';
+import type { ProjectWriteAccessPolicy } from '../compile/domain/Policies.js';
 
 /**
  * Project Files Module Container
@@ -66,7 +66,7 @@ export class ProjectFilesContainer {
    * become available later in `app.ts` after their respective plugins register.
    * Call once from app.ts after both deps are ready.
    */
-  wireBinaryUpload(blobStorage: BlobStorage, projectAccess: ProjectAccessPolicy): void {
+  wireBinaryUpload(blobStorage: BlobStorage, projectAccess: ProjectWriteAccessPolicy): void {
     this.uploadBinaryFileUseCase = new UploadBinaryFileUseCase(
       this.fileRepo,
       blobStorage,

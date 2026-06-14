@@ -8,6 +8,7 @@ import type { FileRepo } from '../domain/ProjectFile/Ports.js';
 import type { ProjectRepo } from '../../projects/domain/Project/Ports.js';
 import { FileErrors } from '../domain/ProjectFile/Errors.js';
 import { ProjectAuthPolicy, type AuthContext } from '../../projects/domain/Project/Policies.js';
+import { buildProjectAuthContext } from '../../projects/application/ProjectAuthContext.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
@@ -42,11 +43,13 @@ export class DeleteFileUseCase {
         return failure(FileErrors.PROJECT_NOT_FOUND.code, FileErrors.PROJECT_NOT_FOUND.message);
       }
 
-      // Enforce authorization
-      const authContext: AuthContext = {
-        userId: command.userId,
-        role: command.userRole,
-      };
+      // Enforce authorization (resolves ProjectMember / advisor relations).
+      const authContext: AuthContext = await buildProjectAuthContext(
+        this.ProjectRepo,
+        project,
+        command.userId,
+        command.userRole,
+      );
 
       if (!ProjectAuthPolicy.canWrite(project, authContext)) {
         return failure(FileErrors.UNAUTHORIZED.code, FileErrors.UNAUTHORIZED.message);

@@ -5,7 +5,7 @@
  */
 
 import type { BibliographyService } from "../bibliography/application/BibliographyService.js";
-import type { ProjectAccessPolicy } from "../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../compile/domain/Policies.js";
 
 // Infrastructure
 import { OpenAlexApiClient } from "./infra/OpenAlexApiClient.js";
@@ -28,7 +28,7 @@ export class OpenAlexContainer {
   constructor(
     prisma: any,
     bibliography: BibliographyService,
-    projectAccess: ProjectAccessPolicy,
+    projectAccess: ProjectWriteAccessPolicy,
     openalexMailto?: string
   ) {
     // Initialize infrastructure

@@ -27,7 +27,7 @@ function makeBib(existing: any[] = []) {
   };
 }
 
-const allowAccess = { requireProjectAccess: async () => {} };
+const allowAccess = { requireWriteAccess: async () => {} };
 const translation = {
   web: async () => [sampleItem],
   search: async () => [sampleItem],

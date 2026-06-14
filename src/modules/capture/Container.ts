@@ -7,7 +7,7 @@
  */
 
 import type { BibliographyService } from "../bibliography/application/BibliographyService.js";
-import type { ProjectAccessPolicy } from "../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../compile/domain/Policies.js";
 import type { LibraryWriterPort, IdentifierFallbackPort } from "./domain/Ports.js";
 
 import { TranslationServerClient } from "./infra/TranslationServerClient.js";
@@ -20,7 +20,7 @@ export class CaptureContainer {
 
   constructor(
     bibliography: BibliographyService,
-    projectAccess: ProjectAccessPolicy,
+    projectAccess: ProjectWriteAccessPolicy,
     libraryWriter: LibraryWriterPort,
     translationServerUrl?: string,
     identifierFallback?: IdentifierFallbackPort | null

@@ -15,7 +15,7 @@ import type {
 } from "../domain/Ports.js";
 import type { CaptureItem } from "../domain/Types.js";
 import type { BibliographyService } from "../../bibliography/application/BibliographyService.js";
-import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
 import {
   CaptureInvalidInputError,
   TranslationNoResultError,
@@ -48,7 +48,7 @@ export class CaptureToProject {
   constructor(
     private readonly translation: TranslationServerPort,
     private readonly bibliography: BibliographyService,
-    private readonly projectAccess: ProjectAccessPolicy,
+    private readonly projectAccess: ProjectWriteAccessPolicy,
     private readonly libraryWriter: LibraryWriterPort,
     private readonly fallback?: IdentifierFallbackPort | null
   ) {}
@@ -65,7 +65,7 @@ export class CaptureToProject {
       conflictMode = "skip",
     } = command;
 
-    await this.projectAccess.requireProjectAccess(projectId, userId);
+    await this.projectAccess.requireWriteAccess(projectId, userId);
 
     if (!saveToBib && !saveToZotero) {
       throw new CaptureInvalidInputError(

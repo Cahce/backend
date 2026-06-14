@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EnqueueCompileJob } from '../EnqueueCompileJob.js';
 import { CompileJob } from '../../domain/CompileJob.js';
 import type { CompileJobRepository } from '../../domain/CompileJobRepository.js';
-import type { ProjectAccessPolicy } from '../../domain/Policies.js';
+import type { OfficialCompileAccessPolicy } from '../../domain/Policies.js';
 import type { CompileQueue } from '../../domain/CompileQueue.js';
 
 function makeJob(id: string, status: 'queued' | 'running' = 'queued'): CompileJob {
@@ -21,12 +21,12 @@ function makeRepo(overrides: Partial<CompileJobRepository> = {}): CompileJobRepo
   };
 }
 
-const allowAll: ProjectAccessPolicy = {
-  requireProjectAccess: async () => {},
+const allowAll: OfficialCompileAccessPolicy = {
+  requireOfficialCompileAccess: async () => {},
 };
 
-const denyAll: ProjectAccessPolicy = {
-  requireProjectAccess: async () => {
+const denyAll: OfficialCompileAccessPolicy = {
+  requireOfficialCompileAccess: async () => {
     throw new Error('PROJECT_ACCESS_DENIED');
   },
 };
@@ -47,6 +47,7 @@ describe('EnqueueCompileJob', () => {
     const job = await useCase.execute({
       projectId: 'proj-1',
       userId: 'user-1',
+      userRole: 'student',
       entryPath: 'main.typ',
       format: 'pdf',
       engine: 'node',
@@ -66,6 +67,7 @@ describe('EnqueueCompileJob', () => {
     const job = await useCase.execute({
       projectId: 'proj-1',
       userId: 'user-1',
+      userRole: 'student',
       entryPath: 'main.typ',
       format: 'pdf',
       engine: 'node',
@@ -79,7 +81,7 @@ describe('EnqueueCompileJob', () => {
     const useCase = new EnqueueCompileJob(makeRepo(), denyAll, makeQueue());
 
     await assert.rejects(
-      () => useCase.execute({ projectId: 'proj-1', userId: 'user-1', entryPath: 'main.typ', format: 'pdf', engine: 'node' }),
+      () => useCase.execute({ projectId: 'proj-1', userId: 'user-1', userRole: 'student', entryPath: 'main.typ', format: 'pdf', engine: 'node' }),
       /PROJECT_ACCESS_DENIED/,
     );
   });

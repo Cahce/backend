@@ -179,7 +179,7 @@ describe('RenameFileUseCase', () => {
     }
   });
 
-  it('should allow admin to rename file in any project', async () => {
+  it('should deny admin renaming a file in a project they do not own (oversight is read-only)', async () => {
     const command = {
       projectId: 'project-1',
       oldPath: 'old-name.typ',
@@ -190,9 +190,9 @@ describe('RenameFileUseCase', () => {
 
     const result = await useCase.execute(command);
 
-    assert.strictEqual(result.success, true);
-    if (result.success) {
-      assert.strictEqual(result.data.path, 'admin-renamed.typ');
+    assert.strictEqual(result.success, false);
+    if (!result.success) {
+      assert.strictEqual(result.error.code, FileErrors.UNAUTHORIZED.code);
     }
   });
 
