@@ -1,6 +1,8 @@
 // Domain types for Student profile management
 // No framework dependencies - pure TypeScript
 
+export type Gender = 'male' | 'female' | 'other';
+
 export type StudentProfile = {
   id: string;
   accountId: string | null;
@@ -8,6 +10,9 @@ export type StudentProfile = {
   fullName: string;
   classId: string;
   phone: string | null;
+  gender: Gender | null;
+  dateOfBirth: Date | null;
+  address: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -43,6 +48,9 @@ export type CreateStudentData = {
   fullName: string;
   classId: string;
   phone?: string;
+  gender?: Gender;
+  dateOfBirth?: string; // YYYY-MM-DD; repo converts to Date
+  address?: string;
   accountId?: string; // Optional account linking during creation
 };
 
@@ -51,6 +59,9 @@ export type UpdateStudentData = {
   fullName?: string;
   classId?: string;
   phone?: string | null;
+  gender?: Gender | null;
+  dateOfBirth?: string | null; // YYYY-MM-DD; repo converts to Date
+  address?: string | null;
 };
 
 export type StudentFilters = {
@@ -69,6 +80,9 @@ export type StudentImportRow = {
   fullName: string;
   classCode: string;
   phone?: string;
+  gender?: Gender;
+  dateOfBirth?: string;
+  address?: string;
   email?: string;
   createAccount?: boolean;
 };

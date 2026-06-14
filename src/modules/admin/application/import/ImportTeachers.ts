@@ -5,6 +5,8 @@ import { ImportService, type ImportResult, type GeneratedPassword } from "./Impo
 import { EnvEmailPolicy } from "../../domain/AccountManagement/Policies.js";
 import {
   normalizeRow,
+  parseImportDate,
+  parseImportGender,
   SequentialCodeGenerator,
   type HeaderMap,
 } from "./HeaderMap.js";
@@ -19,6 +21,10 @@ const TeacherImportRowSchema = z.object({
   academicRank: z.string().default(""),
   academicDegree: z.string().default(""),
   phone: z.string().optional(),
+  // Kept loose; normalized via parseImportGender / parseImportDate at create time.
+  gender: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  address: z.string().optional(),
   accountEmail: z.string().optional(),
   accountPassword: z.string().optional(),
 });
@@ -33,12 +39,15 @@ type TeacherImportRow = z.infer<typeof TeacherImportRowSchema>;
 const TEACHER_HEADER_MAP: HeaderMap = {
   "Mã GV": "teacherCode",
   "Họ và Tên": "fullName",
+  "Ngày sinh": "dateOfBirth",
+  "Giới tính": "gender",
   "Học hàm": "academicRank",
   "Học vị": "academicDegree",
   "Bộ Môn": "departmentCode",
+  "Số điện thoại": "phone",
+  "Địa chỉ": "address",
   Email: "accountEmail",
   "Mật Khẩu": "accountPassword",
-  "Số điện thoại": "phone",
 };
 
 /**
@@ -205,6 +214,7 @@ export class ImportTeachers {
           }
 
           // Create teacher
+          const dob = parseImportDate(row.dateOfBirth);
           return this.prisma.teacher.create({
             data: {
               teacherCode: row.teacherCode,
@@ -213,6 +223,9 @@ export class ImportTeachers {
               academicRank: row.academicRank || "",
               academicDegree: row.academicDegree || "",
               phone: row.phone,
+              gender: parseImportGender(row.gender) ?? null,
+              dateOfBirth: dob ? new Date(dob) : null,
+              address: row.address ?? null,
               accountId,
             },
           });

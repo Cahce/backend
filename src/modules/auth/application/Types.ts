@@ -20,6 +20,7 @@ export interface AuthUserView {
 export interface LoginResult {
     success: true;
     accessToken: string;
+    refreshToken: string;
     user: AuthUserView;
 }
 
@@ -32,3 +33,24 @@ export interface LoginFailure {
 }
 
 export type LoginResponse = LoginResult | LoginFailure;
+
+export interface RefreshCommand {
+    refreshToken: string;
+}
+
+export interface RefreshResult {
+    success: true;
+    accessToken: string;
+    refreshToken: string;
+    user: AuthUserView;
+}
+
+export interface RefreshFailure {
+    success: false;
+    error: {
+        code: string;
+        message: string;
+    };
+}
+
+export type RefreshResponse = RefreshResult | RefreshFailure;

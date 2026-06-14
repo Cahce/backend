@@ -92,6 +92,29 @@ export const CreateStudentRequestSchema = z
                 description: "Số điện thoại",
                 example: "0912345678",
             }),
+        gender: z
+            .enum(["male", "female", "other"])
+            .optional()
+            .openapi({
+                description: "Giới tính",
+                example: "male",
+            }),
+        dateOfBirth: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày sinh phải có định dạng YYYY-MM-DD")
+            .optional()
+            .openapi({
+                description: "Ngày sinh (YYYY-MM-DD)",
+                example: "2004-08-15",
+            }),
+        address: z
+            .string()
+            .trim()
+            .optional()
+            .openapi({
+                description: "Địa chỉ",
+                example: "Số 1 Đại Cồ Việt, Hà Nội",
+            }),
         accountId: z
             .string()
             .trim()
@@ -145,6 +168,32 @@ export const UpdateStudentRequestSchema = z
             .openapi({
                 description: "Số điện thoại",
                 example: "0912345678",
+            }),
+        gender: z
+            .enum(["male", "female", "other"])
+            .nullable()
+            .optional()
+            .openapi({
+                description: "Giới tính",
+                example: "male",
+            }),
+        dateOfBirth: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày sinh phải có định dạng YYYY-MM-DD")
+            .nullable()
+            .optional()
+            .openapi({
+                description: "Ngày sinh (YYYY-MM-DD)",
+                example: "2004-08-15",
+            }),
+        address: z
+            .string()
+            .trim()
+            .nullable()
+            .optional()
+            .openapi({
+                description: "Địa chỉ",
+                example: "Số 1 Đại Cồ Việt, Hà Nội",
             }),
     })
     .openapi("UpdateStudentRequest");
@@ -266,6 +315,18 @@ export const StudentResponseSchema = z
         phone: z.string().nullable().openapi({
             description: "Số điện thoại",
             example: "0912345678",
+        }),
+        gender: z.enum(["male", "female", "other"]).nullable().openapi({
+            description: "Giới tính",
+            example: "male",
+        }),
+        dateOfBirth: z.string().nullable().openapi({
+            description: "Ngày sinh (ISO 8601)",
+            example: "2004-08-15T00:00:00.000Z",
+        }),
+        address: z.string().nullable().openapi({
+            description: "Địa chỉ",
+            example: "Số 1 Đại Cồ Việt, Hà Nội",
         }),
         class: z.object({
             id: z.string(),

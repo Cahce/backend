@@ -3,7 +3,12 @@ import bcrypt from "bcrypt";
 import type { PrismaClient } from "../../../../generated/prisma/index.js";
 import { ImportService, type ImportResult, type GeneratedPassword } from "./ImportTypes.js";
 import { EnvEmailPolicy } from "../../domain/AccountManagement/Policies.js";
-import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
+import {
+  normalizeRow,
+  parseImportDate,
+  parseImportGender,
+  type HeaderMap,
+} from "./HeaderMap.js";
 
 /**
  * Student import row schema
@@ -13,6 +18,10 @@ const StudentImportRowSchema = z.object({
   fullName: z.string().min(1, "Tên sinh viên không được để trống"),
   classCode: z.string().min(1, "Mã lớp không được để trống"),
   phone: z.string().optional(),
+  // Kept loose; normalized via parseImportGender / parseImportDate at create time.
+  gender: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  address: z.string().optional(),
   accountEmail: z.string().optional(),
   accountPassword: z.string().optional(),
 });
@@ -25,10 +34,13 @@ type StudentImportRow = z.infer<typeof StudentImportRowSchema>;
 const STUDENT_HEADER_MAP: HeaderMap = {
   "Mã sinh viên": "studentCode",
   "Họ và Tên": "fullName",
+  "Ngày sinh": "dateOfBirth",
+  "Giới tính": "gender",
+  "Số điện thoại": "phone",
   "Lớp": "classCode",
+  "Địa chỉ": "address",
   Email: "accountEmail",
   "Mật Khẩu": "accountPassword",
-  "Số điện thoại": "phone",
 };
 
 /**
@@ -172,12 +184,16 @@ export class ImportStudents {
           }
 
           // Create student
+          const dob = parseImportDate(row.dateOfBirth);
           return this.prisma.student.create({
             data: {
               studentCode: row.studentCode,
               fullName: row.fullName,
               classId: resolvedKeys.classId,
               phone: row.phone,
+              gender: parseImportGender(row.gender) ?? null,
+              dateOfBirth: dob ? new Date(dob) : null,
+              address: row.address ?? null,
               accountId,
             },
           });

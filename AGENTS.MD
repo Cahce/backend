@@ -147,20 +147,22 @@ prisma/
 
 auth
 admin
+teachers
 projects
 project-files
 templates
 compile
-artifacts
+bibliography
 zotero
-health
+openalex
+capture
 
-Planned / future modules may include:
+health lives at src/api/health.ts (not a module).
 
-student
-teacher
+Empty placeholder directories (no code yet): student, teacher, artifacts.
+The live teacher profile is the `teachers` module; artifacts are served by `compile`.
 
-Do not assume planned modules already exist unless explicitly asked to create them.
+Do not assume an empty/placeholder module implements behavior unless you have just created it.
 
 5. Module Responsibility Hints
 auth: authentication, password/token flow, auth introspection

@@ -15,6 +15,7 @@
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import type { BlobStorage } from '../../../shared/storage/BlobStorage.js';
+import { getCompilationKinds } from '../../project-files/domain/FileKindPolicy.js';
 import {
   SnapshotTooLargeError,
   type ProjectFileSnapshot,
@@ -45,7 +46,14 @@ export class PrismaProjectFileSnapshotAdapter implements ProjectFileSnapshotPort
     const files = await this.prisma.file.findMany({
       where: {
         projectId,
-        kind: { in: ['typst', 'bib', 'image', 'data'] },
+        // Mirror the canonical compilation-input set
+        // (typst/bib/image/vector/font/data/config). The previous hardcoded
+        // subset omitted `vector` (SVG figures), `font` (bundled .ttf/.otf),
+        // and `config` (typst.toml/.yaml) — so multi-file templates that the
+        // client preview (which loads every file) renders fine would fail the
+        // server compile with "file not found", surfacing as a 422 on the
+        // admin PDF download / read-only export.
+        kind: { in: getCompilationKinds() },
       },
       select: {
         path: true,

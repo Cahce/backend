@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ProjectsContainer } from '../../../Container.js';
+import { TemplateCategory } from '../../../domain/Project/Types.js';
 import {
   CreateProjectRequestSchema,
   UpdateProjectRequestSchema,
@@ -329,15 +330,25 @@ export async function projectRoutes(
   // POST /api/v1/projects/import - create a new project from an uploaded .zip
   // Body: `multipart/form-data` with single field `file`. Cap 50 MB on the
   // compressed size; the use case caps expanded bytes too.
-  app.post(
+  app.post<{ Querystring: { category?: string } }>(
     '/projects/import',
     {
       preHandler: app.auth.verify,
       schema: {
-        description: 'Tạo dự án mới từ file .zip',
+        description: 'Tạo dự án mới từ tệp nén (.zip, .7z, .rar, .tar, .tar.gz)',
         tags: ['projects'],
         security: [{ bearerAuth: [] }],
         // multipart body — schema validation handled in handler.
+        querystring: {
+          type: 'object',
+          properties: {
+            category: {
+              type: 'string',
+              enum: Object.values(TemplateCategory),
+              description: 'Loại dự án (mặc định: other)',
+            },
+          },
+        },
         response: {
           201: {
             description: 'Tạo dự án thành công',
@@ -402,9 +413,13 @@ export async function projectRoutes(
         });
       }
 
+      // Querystring schema (enum) has already rejected invalid values with a
+      // 400, so `category` here is a valid TemplateCategory or undefined.
       const result = await container.importProjectUseCase.execute({
         userId: request.user.sub,
         zipBuffer,
+        filename: part.filename,
+        category: request.query.category as TemplateCategory | undefined,
       });
       if (!result.success) {
         const status = getStatusCodeForError(result.error.code) as
@@ -512,6 +527,7 @@ function getStatusCodeForError(errorCode: string): number {
     case 'INVALID_TEMPLATE_VERSION':
     case 'ZIP_PATH_TRAVERSAL':
     case 'ZIP_MALFORMED':
+    case 'UNSUPPORTED_ARCHIVE':
     case 'MISSING_FILE':
       return 400;
     case 'UNAUTHORIZED':

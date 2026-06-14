@@ -1,11 +1,16 @@
 import "dotenv/config";
 import { z } from "zod";
+import { parseDurationMs } from "../shared/time/Duration.js";
 
 const EnvSchema = z.object({
     PORT: z.coerce.number().default(3000),
     HOST: z.string().default("0.0.0.0"),
     DATABASE_URL: z.string().min(1),
     JWT_SECRET: z.string().min(1),
+    // Access token lifetime (short-lived; silently refreshed by the client).
+    JWT_ACCESS_TTL: z.string().default("15m"),
+    // Refresh token lifetime (the real "force re-login after" window).
+    JWT_REFRESH_TTL: z.string().default("1d"),
     SWAGGER_ROUTE_PREFIX: z.string().default("/docs"),
     // Blob Storage
     BLOB_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
@@ -37,6 +42,10 @@ export const config = {
     },
     auth: {
         jwtSecret: env.JWT_SECRET,
+        accessTtl: env.JWT_ACCESS_TTL,
+        refreshTtl: env.JWT_REFRESH_TTL,
+        accessTtlMs: parseDurationMs(env.JWT_ACCESS_TTL),
+        refreshTtlMs: parseDurationMs(env.JWT_REFRESH_TTL),
     },
     swagger: {
         routePrefix: env.SWAGGER_ROUTE_PREFIX,

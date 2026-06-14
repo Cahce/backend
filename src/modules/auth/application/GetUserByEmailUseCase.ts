@@ -34,6 +34,9 @@ export interface UserWithProfile {
     studentCode: string;
     fullName: string;
     phone: string | null;
+    gender: 'male' | 'female' | 'other' | null;
+    dateOfBirth: string | null;
+    address: string | null;
     class: {
       id: string;
       name: string;
@@ -57,6 +60,9 @@ export interface UserWithProfile {
     teacherCode: string;
     fullName: string;
     phone: string | null;
+    gender: 'male' | 'female' | 'other' | null;
+    dateOfBirth: string | null;
+    address: string | null;
     academicRank: string;
     academicDegree: string;
     department: {
@@ -141,6 +147,9 @@ export class GetUserByEmailUseCase {
               studentCode: true,
               fullName: true,
               phone: true,
+              gender: true,
+              dateOfBirth: true,
+              address: true,
               class: {
                 select: {
                   id: true,
@@ -170,6 +179,9 @@ export class GetUserByEmailUseCase {
               teacherCode: true,
               fullName: true,
               phone: true,
+              gender: true,
+              dateOfBirth: true,
+              address: true,
               academicRank: true,
               academicDegree: true,
               department: {
@@ -218,6 +230,11 @@ export class GetUserByEmailUseCase {
           studentCode: completeUser.student.studentCode,
           fullName: completeUser.student.fullName,
           phone: completeUser.student.phone,
+          gender: completeUser.student.gender,
+          dateOfBirth: completeUser.student.dateOfBirth
+            ? completeUser.student.dateOfBirth.toISOString()
+            : null,
+          address: completeUser.student.address,
           class: completeUser.student.class,
         };
       }
@@ -229,6 +246,11 @@ export class GetUserByEmailUseCase {
           teacherCode: completeUser.teacher.teacherCode,
           fullName: completeUser.teacher.fullName,
           phone: completeUser.teacher.phone,
+          gender: completeUser.teacher.gender,
+          dateOfBirth: completeUser.teacher.dateOfBirth
+            ? completeUser.teacher.dateOfBirth.toISOString()
+            : null,
+          address: completeUser.teacher.address,
           academicRank: completeUser.teacher.academicRank,
           academicDegree: completeUser.teacher.academicDegree,
           department: completeUser.teacher.department,

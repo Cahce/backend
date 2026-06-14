@@ -1,6 +1,8 @@
 // Domain types for Teacher profile management
 // No framework dependencies - pure TypeScript
 
+export type Gender = 'male' | 'female' | 'other';
+
 export type TeacherProfile = {
   id: string;
   accountId: string | null;
@@ -10,6 +12,9 @@ export type TeacherProfile = {
   academicRank: string;
   academicDegree: string;
   phone: string | null;
+  gender: Gender | null;
+  dateOfBirth: Date | null;
+  address: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -41,6 +46,9 @@ export type CreateTeacherData = {
   academicRank: string;
   academicDegree: string;
   phone?: string;
+  gender?: Gender;
+  dateOfBirth?: string; // YYYY-MM-DD; repo converts to Date
+  address?: string;
   accountId?: string; // Optional account linking during creation
 };
 
@@ -51,6 +59,9 @@ export type UpdateTeacherData = {
   academicRank?: string;
   academicDegree?: string;
   phone?: string | null;
+  gender?: Gender | null;
+  dateOfBirth?: string | null; // YYYY-MM-DD; repo converts to Date
+  address?: string | null;
 };
 
 export type TeacherFilters = {
@@ -70,6 +81,9 @@ export type TeacherImportRow = {
   academicRank: string;
   academicDegree: string;
   phone?: string;
+  gender?: Gender;
+  dateOfBirth?: string;
+  address?: string;
   email?: string;
   createAccount?: boolean;
 };

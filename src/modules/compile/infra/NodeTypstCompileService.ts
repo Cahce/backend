@@ -117,37 +117,44 @@ export class NodeTypstCompileService implements TypstCompileService {
     }
   }
 
-  private parseDiagnostics(typstDiagnostics: any[], workDir?: string): CompileDiagnostic[] {
+  private parseDiagnostics(typstDiagnostics: unknown, workDir?: string): CompileDiagnostic[] {
+    if (!Array.isArray(typstDiagnostics)) return [];
     return typstDiagnostics.map((diag) => {
       const diagnostic: CompileDiagnostic = {
-        severity: this.mapSeverity(diag.severity),
-        message: diag.message || 'Unknown error',
+        severity: this.mapSeverity(diag?.severity),
+        message: diag?.message || 'Unknown error',
       };
 
-      // Add file and range if available — normalize to project-relative path
-      if (diag.span) {
-        if (diag.span.path && workDir) {
-          const rel = relative(workDir, diag.span.path).replace(/\\/g, '/');
-          diagnostic.file = rel.startsWith('..') ? undefined : rel;
-        } else if (diag.span.path) {
-          diagnostic.file = diag.span.path;
-        }
-        if (diag.span.start && diag.span.end) {
-          diagnostic.range = {
-            start: {
-              line: diag.span.start.line || 1,
-              column: diag.span.start.column || 1,
-            },
-            end: {
-              line: diag.span.end.line || 1,
-              column: diag.span.end.column || 1,
-            },
-          };
-        }
+      // Normalize to a project-relative file path. typst-ts-node-compiler
+      // 0.7.x exposes `path` (+ `range`) on each short diagnostic; older
+      // builds used a nested `span` — accept either shape.
+      const rawPath: string | undefined = diag?.path ?? diag?.span?.path;
+      if (rawPath && workDir) {
+        const rel = relative(workDir, rawPath).replace(/\\/g, '/');
+        diagnostic.file = rel.startsWith('..') ? undefined : rel;
+      } else if (rawPath) {
+        diagnostic.file = rawPath;
+      }
+
+      // `range` may be null (no source location) or carry start/end with
+      // line/column. Guard every access so a successful compile is never
+      // turned into a failure by a malformed diagnostic.
+      const range = diag?.range ?? diag?.span;
+      if (range && range.start && range.end) {
+        diagnostic.range = {
+          start: {
+            line: range.start.line ?? 1,
+            column: range.start.column ?? 1,
+          },
+          end: {
+            line: range.end.line ?? 1,
+            column: range.end.column ?? 1,
+          },
+        };
       }
 
       // Add hints if available
-      if (diag.hints && Array.isArray(diag.hints)) {
+      if (diag?.hints && Array.isArray(diag.hints)) {
         diagnostic.hints = diag.hints;
       }
 
@@ -155,18 +162,43 @@ export class NodeTypstCompileService implements TypstCompileService {
     });
   }
 
-  private mapSeverity(severity: string | undefined): 'error' | 'warning' | 'hint' | 'info' {
-    switch (severity?.toLowerCase()) {
-      case 'error':
-        return 'error';
-      case 'warning':
-        return 'warning';
-      case 'hint':
-        return 'hint';
-      case 'info':
-        return 'info';
-      default:
-        return 'error';
+  /**
+   * Map a typst-ts diagnostic severity to our union. The compiler reports
+   * severity as an LSP-style **number** (1=error, 2=warning, 3=info, 4=hint);
+   * a string form is also tolerated. Anything unrecognized degrades to
+   * `error` so issues are never silently dropped. Must not throw — a thrown
+   * error here previously bubbled up and reported an otherwise-successful
+   * compile as failed (HTTP 422).
+   */
+  private mapSeverity(severity: unknown): 'error' | 'warning' | 'hint' | 'info' {
+    if (typeof severity === 'number') {
+      switch (severity) {
+        case 1:
+          return 'error';
+        case 2:
+          return 'warning';
+        case 3:
+          return 'info';
+        case 4:
+          return 'hint';
+        default:
+          return 'error';
+      }
     }
+    if (typeof severity === 'string') {
+      switch (severity.toLowerCase()) {
+        case 'error':
+          return 'error';
+        case 'warning':
+          return 'warning';
+        case 'hint':
+          return 'hint';
+        case 'info':
+          return 'info';
+        default:
+          return 'error';
+      }
+    }
+    return 'error';
   }
 }

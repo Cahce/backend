@@ -43,41 +43,38 @@ The overall platform is designed around a **hybrid editor**:
 
 ## Other Libraries
 
-- `bcryptjs` — password hashing
-- `ws` — WebSocket support
-- `y-websocket` — collaboration-related transport support
-- `xlsx` — spreadsheet parsing
+- `bcrypt` + `bcryptjs` — password hashing
+- `ws` — WebSocket support (collaboration transport; `y-websocket` is **not** installed yet)
+- `xlsx` + `csv-parse` — spreadsheet / CSV parsing (admin import)
+- `adm-zip` + `archiver` — project zip import/export
+- `lru-cache` — caching
+- `yaml` — YAML parsing
 - `dotenv` — environment variable loading
 
 ## Path Aliases
 
-**Important:** path aliases are **not currently configured in the uploaded `tsconfig.json`**.
+`tsconfig.json` **does** define these path aliases:
+- `@modules/*` → `src/modules/*`
+- `@shared/*` → `src/shared/*`
+- `@config` → `src/config/index.ts`
 
-That means Kiro should **not** assume these aliases exist yet:
-- `@modules/*`
-- `@shared/*`
-- `@config`
+Caveat: the default `npm run build` is plain `tsc`, which does **not** rewrite alias imports to relative paths, so alias imports would fail at runtime (NodeNext does not resolve `tsconfig` paths at runtime). A separate `npm run build:aliases` runs `tsc-alias` to rewrite them. The existing codebase mostly uses **relative imports with `.js` extensions**; prefer that unless you deliberately adopt the alias build.
 
-Only add them to steering after you actually configure them in `tsconfig.json`.
-
-## Current Commands (based on existing package.json)
+## Current Commands (from `package.json`)
 
 | Command | Description |
 |---|---|
 | `npm run dev` | Start dev server with hot reload (`tsx watch`) |
-| `npm run build` | Compile TypeScript to `dist/` |
+| `npm run build` | `tsc` compile to `dist/` + copy `src/generated` (Prisma client) |
+| `npm run build:aliases` | `tsc` + `tsc-alias` (resolves `@modules`/`@shared`/`@config`) |
 | `npm start` | Run compiled output from `dist/` |
-
-## Recommended Commands to add later
-
-These are recommended, but should not be treated as already existing until you add them to `package.json`:
-
-| Command | Description |
-|---|---|
-| `npm run prisma:generate` | Regenerate Prisma client |
-| `npm run prisma:migrate` | Run database migrations in development |
-| `npm run test:api:smoke` | Smoke-test backend API |
-| `npm run test:api:auth` | Smoke-test auth-related API flow |
+| `npm run prisma:generate` | Regenerate Prisma client (`prisma generate`) |
+| `npm run prisma:migrate` | `prisma migrate dev` (do **not** run automatically) |
+| `npm run seed:users` / `seed:admin` / `seed:projects` / `seed:templates` / `seed:all` | Seed scripts |
+| `npm run test:unit` | All unit tests (projects, project-files, compile, templates, zotero, capture) |
+| `npm run test:unit:<area>` | Focused unit tests for one module |
+| `npm run test:api:<area>` | API smoke tests (health, login, auth, projects, project-files, compile, templates, admin:*) — need a running server + DB |
+| `npm test` | `test:unit` + `test:api:stage1` |
 
 ## Environment Variables
 

@@ -126,4 +126,16 @@ export const AuthErrors = {
         code: 'NEW_PASSWORD_SAME_AS_OLD',
         message: 'Mật khẩu mới phải khác mật khẩu cũ',
     },
+    REFRESH_TOKEN_INVALID: {
+        code: 'REFRESH_TOKEN_INVALID',
+        message: 'Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại',
+    },
+    REFRESH_TOKEN_EXPIRED: {
+        code: 'REFRESH_TOKEN_EXPIRED',
+        message: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại',
+    },
+    TOKEN_REUSE_DETECTED: {
+        code: 'TOKEN_REUSE_DETECTED',
+        message: 'Phát hiện token bị tái sử dụng, phiên đã bị thu hồi',
+    },
 } as const;

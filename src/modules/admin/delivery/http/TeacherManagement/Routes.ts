@@ -599,23 +599,29 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
             const headers = [
                 "STT",
                 "Họ và Tên",
+                "Ngày sinh",
+                "Giới tính",
+                "Số điện thoại",
                 "Học hàm",
                 "Học vị",
                 "Bộ Môn",
+                "Địa chỉ",
                 "Email",
                 "Mật Khẩu",
-                "Số điện thoại",
             ];
 
             const exampleRow = {
                 STT: "1",
                 "Họ và Tên": "Kiều Tuấn Dũng",
+                "Ngày sinh": "1985-03-20",
+                "Giới tính": "Nam",
+                "Số điện thoại": "987654321",
                 "Học hàm": "Không",
                 "Học vị": "Thạc sĩ",
                 "Bộ Môn": "KTPM",
+                "Địa chỉ": "Số 1 Đại Cồ Việt, Hà Nội",
                 Email: "kieutuandung@tlu.edu.vn",
                 "Mật Khẩu": "123456",
-                "Số điện thoại": "987654321",
             };
 
             if (format === "xlsx") {

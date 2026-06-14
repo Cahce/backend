@@ -197,6 +197,32 @@ describe('ImportProjectUseCase', () => {
     assert.strictEqual(settingsRepo.getSettings(result.data.project.id)?.mainPath, 'src/document.typ');
   });
 
+  it('detects the document root of a multi-folder project via the include graph', async () => {
+    // UniTyLab-shaped: the real entry includes every part; no project.toml entry
+    // and no root main.typ. The legacy heuristic would wrongly pick the
+    // alphabetically-first file, 00-Title/00-Title.typ.
+    const zipBuffer = createZip({
+      'Template-Import.typ': '#let format-doc-general = none\n',
+      '90-Document/90-Document.typ':
+        '#import "../Template-Import.typ": *\n' +
+        '#include "../00-Title/00-Title.typ"\n' +
+        '#include "../80-Structure/82-struct-main.typ"\n',
+      '00-Title/00-Title.typ': '= Title\n',
+      '80-Structure/82-struct-main.typ': '#include "../30-Chapters/Chapter1.typ"\n',
+      '30-Chapters/Chapter1.typ': '= Chuong 1\n',
+    });
+
+    const result = await useCase.execute({ userId: 'user-1', zipBuffer });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+
+    assert.strictEqual(
+      settingsRepo.getSettings(result.data.project.id)?.mainPath,
+      '90-Document/90-Document.typ',
+    );
+  });
+
   it('preserves an ambiguous single top-level folder when no Typst marker exists', async () => {
     const zipBuffer = createZip({
       'docs/readme.txt': 'plain notes\n',

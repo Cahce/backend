@@ -527,6 +527,9 @@ export class ZoteroApiClient implements ZoteroApiPort {
       version: item.version,
       name: item.data?.name || item.name || "",
       parentCollection: item.data?.parentCollection || item.parentCollection || false,
+      // Zotero Web API v3 returns the item count under `meta.numItems`.
+      numItems:
+        typeof item.meta?.numItems === "number" ? item.meta.numItems : undefined,
       data: item.data,
       relations: item.relations,
     }));

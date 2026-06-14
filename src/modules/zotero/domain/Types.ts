@@ -79,7 +79,9 @@ export interface ZoteroCollection {
   version: number;
   name: string;
   parentCollection?: string | false;  // false means top-level
-  
+  /** Number of items directly in this collection (Zotero API `meta.numItems`). */
+  numItems?: number;
+
   // Metadata
   data?: {
     key: string;

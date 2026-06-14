@@ -252,7 +252,9 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
           key: c.key,
           name: c.name,
           parentKey: c.parentCollection === false ? null : (c.parentCollection || null),
-          numItems: 0, // Zotero API doesn't provide this in collection list
+          // Zotero returns the real count in `meta.numItems` (parsed in
+          // ZoteroApiClient); fall back to 0 only if the field is absent.
+          numItems: c.numItems ?? 0,
         }));
 
         return reply.send({ collections: dtos });

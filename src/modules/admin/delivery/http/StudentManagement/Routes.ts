@@ -598,20 +598,26 @@ export async function studentManagementRoutes(app: FastifyInstance) {
                 "STT",
                 "Mã sinh viên",
                 "Họ và Tên",
+                "Ngày sinh",
+                "Giới tính",
+                "Số điện thoại",
                 "Lớp",
+                "Địa chỉ",
                 "Email",
                 "Mật Khẩu",
-                "Số điện thoại",
             ];
 
             const exampleRow = {
                 STT: "1",
                 "Mã sinh viên": "2251172560",
                 "Họ và Tên": "Nguyễn Văn A",
+                "Ngày sinh": "2004-08-15",
+                "Giới tính": "Nam",
+                "Số điện thoại": "901234567",
                 "Lớp": "62TH1",
+                "Địa chỉ": "Số 1 Đại Cồ Việt, Hà Nội",
                 Email: "2251172560@e.tlu.edu.vn",
                 "Mật Khẩu": "123456",
-                "Số điện thoại": "901234567",
             };
 
             if (format === "xlsx") {

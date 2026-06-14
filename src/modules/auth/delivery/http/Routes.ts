@@ -3,18 +3,22 @@ import { LoginUseCase } from "../../application/LoginUseCase.js";
 import { GetCurrentUserUseCase } from "../../application/GetCurrentUserUseCase.js";
 import { GetUserByEmailUseCase } from "../../application/GetUserByEmailUseCase.js";
 import { LogoutUseCase } from "../../application/LogoutUseCase.js";
+import { RefreshTokenUseCase } from "../../application/RefreshTokenUseCase.js";
 import { ChangePasswordUseCase } from "../../application/ChangePasswordUseCase.js";
 import { UserRepoPrisma } from "../../infra/UserRepoPrisma.js";
 import { PasswordHasherBcrypt } from "../../infra/PasswordHasherBcrypt.js";
 import { JwtTokenServiceFastify } from "../../infra/JwtTokenServiceFastify.js";
 import { TokenRevocationRepoPrisma } from "../../infra/TokenRevocationRepoPrisma.js";
+import { RefreshTokenRepoPrisma } from "../../infra/RefreshTokenRepoPrisma.js";
 import {
     LoginRequestSchema,
     ChangePasswordRequestSchema,
     GetUserByEmailParamsSchema,
+    RefreshRequestSchema,
     type LoginRequestDto,
     type ChangePasswordRequestDto,
     type GetUserByEmailParamsDto,
+    type RefreshRequestDto,
 } from "./Dto.js";
 
 /**
@@ -44,8 +48,13 @@ const schemas = {
         properties: {
             accessToken: {
                 type: "string",
-                description: "JWT access token",
+                description: "JWT access token ngắn hạn",
                 examples: ["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."],
+            },
+            refreshToken: {
+                type: "string",
+                description: "Refresh token để làm mới access token",
+                examples: ["dGhpcy1pcy1hLXJlZnJlc2gtdG9rZW4..."],
             },
             user: {
                 type: "object",
@@ -75,6 +84,49 @@ const schemas = {
                         examples: [false],
                     },
                 },
+            },
+        },
+    },
+    refreshRequest: {
+        type: "object",
+        required: ["refreshToken"],
+        properties: {
+            refreshToken: {
+                type: "string",
+                description: "Refresh token hiện tại",
+                examples: ["dGhpcy1pcy1hLXJlZnJlc2gtdG9rZW4..."],
+            },
+        },
+    },
+    refreshResponse: {
+        type: "object",
+        properties: {
+            accessToken: {
+                type: "string",
+                description: "JWT access token ngắn hạn mới",
+            },
+            refreshToken: {
+                type: "string",
+                description: "Refresh token mới (token cũ đã bị thu hồi)",
+            },
+            user: {
+                type: "object",
+                properties: {
+                    id: { type: "string" },
+                    email: { type: "string" },
+                    role: { type: "string", enum: ["admin", "student", "teacher"] },
+                    permissions: { type: "array", items: { type: "string" } },
+                    mustChangePassword: { type: "boolean" },
+                },
+            },
+        },
+    },
+    logoutRequest: {
+        type: "object",
+        properties: {
+            refreshToken: {
+                type: "string",
+                description: "Refresh token của phiên cần thu hồi (tùy chọn)",
             },
         },
     },
@@ -159,6 +211,9 @@ const schemas = {
                     studentCode: { type: "string" },
                     fullName: { type: "string" },
                     phone: { type: "string", nullable: true },
+                    gender: { type: "string", enum: ["male", "female", "other"], nullable: true },
+                    dateOfBirth: { type: "string", nullable: true },
+                    address: { type: "string", nullable: true },
                     class: {
                         type: "object",
                         properties: {
@@ -192,6 +247,9 @@ const schemas = {
                     teacherCode: { type: "string" },
                     fullName: { type: "string" },
                     phone: { type: "string", nullable: true },
+                    gender: { type: "string", enum: ["male", "female", "other"], nullable: true },
+                    dateOfBirth: { type: "string", nullable: true },
+                    address: { type: "string", nullable: true },
                     academicRank: { type: "string" },
                     academicDegree: { type: "string" },
                     department: {
@@ -246,11 +304,19 @@ export async function authRoutes(app: FastifyInstance) {
     const passwordHasher = new PasswordHasherBcrypt();
     const tokenService = new JwtTokenServiceFastify(app);
     const tokenRevocationRepo = new TokenRevocationRepoPrisma(app.prisma);
+    const refreshTokenRepo = new RefreshTokenRepoPrisma(app.prisma);
 
-    const loginUseCase = new LoginUseCase(userRepo, passwordHasher, tokenService);
+    const loginUseCase = new LoginUseCase(userRepo, passwordHasher, tokenService, refreshTokenRepo);
     const getCurrentUserUseCase = new GetCurrentUserUseCase(userRepo);
     const getUserByEmailUseCase = new GetUserByEmailUseCase(userRepo, app.prisma);
-    const logoutUseCase = new LogoutUseCase(tokenRevocationRepo, app.tokenRevocationCache);
+    const refreshTokenUseCase = new RefreshTokenUseCase(userRepo, tokenService, refreshTokenRepo);
+    const logoutUseCase = new LogoutUseCase(
+        tokenRevocationRepo,
+        refreshTokenRepo,
+        tokenService,
+        app.config.auth.accessTtlMs,
+        app.tokenRevocationCache,
+    );
     const changePasswordUseCase = new ChangePasswordUseCase(userRepo, passwordHasher);
 
     // POST /api/v1/auth/login
@@ -291,11 +357,59 @@ export async function authRoutes(app: FastifyInstance) {
             if (result.success) {
                 return reply.code(200).send({
                     accessToken: result.accessToken,
+                    refreshToken: result.refreshToken,
                     user: result.user,
                 });
             }
 
             // Map error codes to HTTP status codes
+            const statusCode = getStatusCodeForError(result.error.code);
+            return reply.code(statusCode).send({
+                error: result.error,
+            });
+        },
+    );
+
+    // POST /api/v1/auth/refresh
+    app.post<{ Body: RefreshRequestDto }>(
+        "/refresh",
+        {
+            // No `verify` preHandler: the access token may be expired/absent. This
+            // endpoint authenticates via the refresh token in the body.
+            schema: {
+                description: "Làm mới access token bằng refresh token (có xoay vòng token)",
+                tags: ["auth"],
+                body: schemas.refreshRequest,
+                response: {
+                    200: schemas.refreshResponse,
+                    400: schemas.errorResponse,
+                    401: schemas.errorResponse,
+                    500: schemas.errorResponse,
+                },
+            },
+        },
+        async (request, reply) => {
+            const parseResult = RefreshRequestSchema.safeParse(request.body);
+            if (!parseResult.success) {
+                const firstError = parseResult.error.issues[0];
+                return reply.code(400).send({
+                    error: {
+                        code: "VALIDATION_ERROR",
+                        message: firstError.message,
+                    },
+                });
+            }
+
+            const result = await refreshTokenUseCase.execute(parseResult.data);
+
+            if (result.success) {
+                return reply.code(200).send({
+                    accessToken: result.accessToken,
+                    refreshToken: result.refreshToken,
+                    user: result.user,
+                });
+            }
+
             const statusCode = getStatusCodeForError(result.error.code);
             return reply.code(statusCode).send({
                 error: result.error,
@@ -409,14 +523,15 @@ export async function authRoutes(app: FastifyInstance) {
     );
 
     // POST /api/v1/auth/logout
-    app.post(
+    app.post<{ Body: { refreshToken?: string } }>(
         "/logout",
         {
             preHandler: app.auth.verify,
             schema: {
-                description: "Đăng xuất và vô hiệu hóa token hiện tại",
+                description: "Đăng xuất, thu hồi access token hiện tại và refresh token của phiên",
                 tags: ["auth"],
                 security: [{ bearerAuth: [] }],
+                body: schemas.logoutRequest,
                 response: {
                     200: schemas.messageResponse,
                     401: schemas.errorResponse,
@@ -427,9 +542,10 @@ export async function authRoutes(app: FastifyInstance) {
         async (request, reply) => {
             const jti = request.user.jti;
             const userId = request.user.sub;
+            const refreshToken = request.body?.refreshToken;
 
             // Execute use case
-            const result = await logoutUseCase.execute({ jti, userId });
+            const result = await logoutUseCase.execute({ jti, userId, refreshToken });
 
             // Map result to HTTP response
             if (result.success) {
@@ -518,6 +634,9 @@ function getStatusCodeForError(errorCode: string): number {
             return 400;
         case "INVALID_CREDENTIALS":
         case "UNAUTHORIZED":
+        case "REFRESH_TOKEN_INVALID":
+        case "REFRESH_TOKEN_EXPIRED":
+        case "TOKEN_REUSE_DETECTED":
             return 401;
         case "ACCOUNT_INACTIVE":
             return 403;

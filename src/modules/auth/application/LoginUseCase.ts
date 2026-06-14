@@ -1,5 +1,6 @@
 import type {
     IPasswordHasher,
+    IRefreshTokenRepository,
     ITokenService,
     IUserRepository,
 } from "../domain/Ports.js";
@@ -11,6 +12,7 @@ import {
 } from "../domain/AuthErrors.js";
 import { EmailPolicy } from "../domain/EmailPolicy.js";
 import { getPermissionsForRole } from "../../../shared/auth/Permissions.js";
+import { randomUUID } from "crypto";
 import type { LoginCommand, LoginResponse } from "./Types.js";
 
 /**
@@ -22,6 +24,7 @@ export class LoginUseCase {
         private readonly userRepo: IUserRepository,
         private readonly passwordHasher: IPasswordHasher,
         private readonly tokenService: ITokenService,
+        private readonly refreshTokenRepo: IRefreshTokenRepository,
     ) {}
 
     async execute(command: LoginCommand): Promise<LoginResponse> {
@@ -51,17 +54,27 @@ export class LoginUseCase {
                 throw new InvalidCredentialsError();
             }
 
-            // 5. Generate JWT token
-            const accessToken = await this.tokenService.generate({
+            // 5. Generate a short-lived access token
+            const access = await this.tokenService.generateAccessToken({
                 userId: user.id,
                 email: user.email,
                 role: user.role,
             });
 
-            // 6. Return success result
+            // 6. Mint + persist a rotating refresh token (new rotation family)
+            const refresh = this.tokenService.generateRefreshToken();
+            await this.refreshTokenRepo.persist({
+                tokenHash: this.tokenService.hashRefreshToken(refresh.token),
+                userId: user.id,
+                familyId: randomUUID(),
+                expiresAt: refresh.expiresAt,
+            });
+
+            // 7. Return success result
             return {
                 success: true,
-                accessToken,
+                accessToken: access.token,
+                refreshToken: refresh.token,
                 user: {
                     id: user.id,
                     email: user.email,

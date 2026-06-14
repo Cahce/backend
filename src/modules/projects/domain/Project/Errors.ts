@@ -57,7 +57,17 @@ export const ProjectErrors = {
    */
   ZIP_MALFORMED: {
     code: 'ZIP_MALFORMED',
-    message: 'Tệp .zip không hợp lệ hoặc bị hỏng',
+    message: 'Tệp nén không hợp lệ hoặc bị hỏng',
+  },
+
+  /**
+   * Uploaded file is not a recognized archive format.
+   * Mapped to HTTP 400.
+   */
+  UNSUPPORTED_ARCHIVE: {
+    code: 'UNSUPPORTED_ARCHIVE',
+    message:
+      'Định dạng tệp nén không được hỗ trợ. Hỗ trợ: .zip, .7z, .rar, .tar, .tar.gz',
   },
 
   /**

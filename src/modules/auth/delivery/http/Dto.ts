@@ -20,7 +20,8 @@ export const LoginRequestSchema = z.object({
 export type LoginRequestDto = z.infer<typeof LoginRequestSchema>;
 
 export const LoginResponseSchema = z.object({
-    accessToken: z.string().describe("JWT access token"),
+    accessToken: z.string().describe("JWT access token ngắn hạn"),
+    refreshToken: z.string().describe("Refresh token để làm mới access token"),
     user: z.object({
         id: z.string(),
         email: z.string(),
@@ -31,6 +32,27 @@ export const LoginResponseSchema = z.object({
 });
 
 export type LoginResponseDto = z.infer<typeof LoginResponseSchema>;
+
+// Refresh
+export const RefreshRequestSchema = z.object({
+    refreshToken: z.string().min(1, "Refresh token là bắt buộc").describe("Refresh token hiện tại"),
+});
+
+export type RefreshRequestDto = z.infer<typeof RefreshRequestSchema>;
+
+export const RefreshResponseSchema = z.object({
+    accessToken: z.string().describe("JWT access token ngắn hạn mới"),
+    refreshToken: z.string().describe("Refresh token mới (token cũ đã bị thu hồi)"),
+    user: z.object({
+        id: z.string(),
+        email: z.string(),
+        role: z.enum(["admin", "student", "teacher"]),
+        permissions: z.array(z.string()).describe("Danh sách quyền (RBAC) suy ra từ vai trò"),
+        mustChangePassword: z.boolean().describe("Bắt buộc đổi mật khẩu trước khi sử dụng"),
+    }),
+});
+
+export type RefreshResponseDto = z.infer<typeof RefreshResponseSchema>;
 
 // Get Current User
 export const GetCurrentUserResponseSchema = z.object({
@@ -108,6 +130,9 @@ export const UserWithProfileResponseSchema = z.object({
         studentCode: z.string(),
         fullName: z.string(),
         phone: z.string().nullable(),
+        gender: z.enum(["male", "female", "other"]).nullable(),
+        dateOfBirth: z.string().nullable(),
+        address: z.string().nullable(),
         class: z.object({
             id: z.string(),
             name: z.string(),
@@ -129,6 +154,9 @@ export const UserWithProfileResponseSchema = z.object({
         teacherCode: z.string(),
         fullName: z.string(),
         phone: z.string().nullable(),
+        gender: z.enum(["male", "female", "other"]).nullable(),
+        dateOfBirth: z.string().nullable(),
+        address: z.string().nullable(),
         academicRank: z.string(),
         academicDegree: z.string(),
         department: z.object({

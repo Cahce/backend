@@ -39,6 +39,9 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
           academicRank: data.academicRank,
           academicDegree: data.academicDegree,
           phone: data.phone ?? null,
+          gender: data.gender ?? null,
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+          address: data.address ?? null,
           accountId: data.accountId ?? null,
         },
       });
@@ -203,6 +206,11 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
           ...(data.academicRank !== undefined && { academicRank: data.academicRank }),
           ...(data.academicDegree !== undefined && { academicDegree: data.academicDegree }),
           ...(data.phone !== undefined && { phone: data.phone }),
+          ...(data.gender !== undefined && { gender: data.gender }),
+          ...(data.dateOfBirth !== undefined && {
+            dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+          }),
+          ...(data.address !== undefined && { address: data.address }),
         },
       });
 
@@ -341,6 +349,9 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     academicRank: string;
     academicDegree: string;
     phone: string | null;
+    gender: 'male' | 'female' | 'other' | null;
+    dateOfBirth: Date | null;
+    address: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): TeacherProfile {
@@ -353,6 +364,9 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
       academicRank: prismaTeacher.academicRank,
       academicDegree: prismaTeacher.academicDegree,
       phone: prismaTeacher.phone,
+      gender: prismaTeacher.gender,
+      dateOfBirth: prismaTeacher.dateOfBirth,
+      address: prismaTeacher.address,
       createdAt: prismaTeacher.createdAt,
       updatedAt: prismaTeacher.updatedAt,
     };
@@ -370,6 +384,9 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     academicRank: string;
     academicDegree: string;
     phone: string | null;
+    gender: 'male' | 'female' | 'other' | null;
+    dateOfBirth: Date | null;
+    address: string | null;
     createdAt: Date;
     updatedAt: Date;
     department: {
@@ -399,6 +416,9 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
       academicRank: prismaTeacher.academicRank,
       academicDegree: prismaTeacher.academicDegree,
       phone: prismaTeacher.phone,
+      gender: prismaTeacher.gender,
+      dateOfBirth: prismaTeacher.dateOfBirth,
+      address: prismaTeacher.address,
       createdAt: prismaTeacher.createdAt,
       updatedAt: prismaTeacher.updatedAt,
       department: {

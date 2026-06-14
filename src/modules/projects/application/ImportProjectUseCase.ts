@@ -1,17 +1,20 @@
 /**
  * Import Project Use Case
  *
- * Accepts a ZIP buffer (already loaded from multipart upload), validates its
- * shape, creates a new project owned by the caller, and persists every entry
- * as either an inline text file or a binary blob.
+ * Accepts an archive buffer (already loaded from multipart upload) — zip, 7z,
+ * rar, tar, or tar.gz — validates its shape, creates a new project owned by
+ * the caller, and persists every entry as either an inline text file or a
+ * binary blob. Format detection + decompression are delegated to
+ * {@link extractArchiveEntries} (`./extractArchive.ts`).
  *
- * Security & limits:
+ * Security & limits (enforced by the extractor, uniformly across formats):
  *   - Rejects path traversal (`..`, absolute paths).
  *   - Skips symlinks and directory entries.
  *   - Aborts with `ZIP_PAYLOAD_TOO_LARGE` if the **uncompressed** total exceeds
  *     `maxExpandedBytes` (default 200 MB) or any single entry exceeds
  *     `maxPerFileBytes` (default 20 MB). Defends against zip-bomb.
- *   - Rejects malformed archives (`ZIP_MALFORMED`).
+ *   - Rejects malformed archives (`ZIP_MALFORMED`) and unknown formats
+ *     (`UNSUPPORTED_ARCHIVE`).
  *
  * Atomicity: project is created first, then files are appended. On per-file
  * failure mid-flight the project is left in a partial state (the caller may
@@ -20,9 +23,7 @@
  * scope for the MVP; thesis-scale imports rarely fail mid-stream.
  */
 
-import AdmZip from 'adm-zip';
 import { createHash, randomUUID } from 'node:crypto';
-import path from 'node:path';
 
 import type { ProjectRepo } from '../domain/Project/Ports.js';
 import { TemplateCategory, type Project } from '../domain/Project/Types.js';
@@ -37,6 +38,12 @@ import { ProjectSettings } from '../domain/ProjectSettings.js';
 import type { ProjectSettingsRepository } from '../domain/ProjectSettingsRepository.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
+import { detectMainPath, isTypstSource } from './detectMainPath.js';
+import {
+  extractArchiveEntries,
+  ArchiveExtractionError,
+  type PendingEntry,
+} from './extractArchive.js';
 
 const DEFAULT_MAX_EXPANDED = 200 * 1024 * 1024; // 200 MB
 const DEFAULT_MAX_PER_FILE = 20 * 1024 * 1024; //  20 MB
@@ -57,21 +64,17 @@ const MIME_BY_EXT: Record<string, string> = {
 
 export interface ImportProjectCommand {
   userId: string;
+  /** Raw archive bytes (zip/7z/rar/tar/tar.gz); format detected from content. */
   zipBuffer: Buffer;
+  /** Original upload filename — used only as an extension fallback for format
+   *  detection when magic bytes are inconclusive. */
+  filename?: string;
+  /** Project category chosen by the user; defaults to `other` when omitted. */
+  category?: TemplateCategory;
 }
 
 export interface ImportProjectResult {
   project: Project;
-}
-
-function isUnsafePath(entryPath: string): boolean {
-  // Normalise to POSIX separators (zips commonly use `/`).
-  const normalised = entryPath.replace(/\\/g, '/');
-  if (normalised.startsWith('/')) return true;
-  if (/^[a-zA-Z]:[\\/]/.test(normalised)) return true; // Windows drive
-  const parts = normalised.split('/');
-  if (parts.includes('..')) return true;
-  return false;
 }
 
 function decodeUtf8(data: Buffer): string | null {
@@ -90,28 +93,9 @@ function pickTitleFromToml(toml: string | null): string | null {
   return match?.[1]?.trim() || null;
 }
 
-function pickEntryFromToml(toml: string | null): string | null {
-  if (!toml) return null;
-  const match = toml.match(/^\s*entry\s*=\s*"([^"\n]+)"/m);
-  const raw = match?.[1]?.trim();
-  if (!raw || isUnsafePath(raw)) return null;
-  const normalised = path.posix.normalize(raw.replace(/\\/g, '/')).replace(/^\/+/, '');
-  if (!normalised || normalised === '.' || normalised === '..') return null;
-  return normalised;
-}
-
-interface PendingEntry {
-  path: string;
-  data: Buffer;
-}
-
 interface ArchiveRootNormalization {
   entries: PendingEntry[];
   strippedRoot: string | null;
-}
-
-function isTypstSource(filePath: string): boolean {
-  return filePath.toLowerCase().endsWith('.typ');
 }
 
 function hasTypstProjectMarker(paths: string[]): boolean {
@@ -155,30 +139,11 @@ export function normalizeArchiveRoot(entries: PendingEntry[]): ArchiveRootNormal
   return { entries: stripped, strippedRoot: commonRoot };
 }
 
-function readProjectToml(entries: PendingEntry[]): string | null {
-  const projectToml = entries.find(
-    (entry) => entry.path === 'project.toml' || entry.path.endsWith('/project.toml'),
+function readToml(entries: PendingEntry[], name: string): string | null {
+  const entry = entries.find(
+    (item) => item.path === name || item.path.endsWith(`/${name}`),
   );
-  return projectToml ? decodeUtf8(projectToml.data) : null;
-}
-
-function pickMainPath(entries: PendingEntry[], projectToml: string | null): string | null {
-  const pathSet = new Set(entries.map((entry) => entry.path));
-  const declaredEntry = pickEntryFromToml(projectToml);
-  if (declaredEntry && pathSet.has(declaredEntry)) {
-    return declaredEntry;
-  }
-
-  if (pathSet.has('main.typ')) {
-    return 'main.typ';
-  }
-
-  const firstTypst = entries
-    .map((entry) => entry.path)
-    .filter(isTypstSource)
-    .sort((a, b) => a.localeCompare(b))[0];
-
-  return firstTypst ?? null;
+  return entry ? decodeUtf8(entry.data) : null;
 }
 
 export class ImportProjectUseCase {
@@ -194,77 +159,48 @@ export class ImportProjectUseCase {
   async execute(
     command: ImportProjectCommand,
   ): Promise<Result<ImportProjectResult>> {
-    // --- Parse + validate zip ------------------------------------------------
-    let zip: AdmZip;
+    // --- Extract + validate archive (zip/7z/rar/tar/tar.gz) ------------------
+    let pending: PendingEntry[];
     try {
-      zip = new AdmZip(command.zipBuffer);
-    } catch {
+      pending = extractArchiveEntries(
+        command.zipBuffer,
+        command.filename,
+        this.maxPerFileBytes,
+        this.maxExpandedBytes,
+      );
+    } catch (err) {
+      if (err instanceof ArchiveExtractionError) {
+        return failure(err.code, err.message);
+      }
       return failure(
         ProjectErrors.ZIP_MALFORMED.code,
         ProjectErrors.ZIP_MALFORMED.message,
       );
     }
 
-    const entries = zip.getEntries();
-    let pending: PendingEntry[] = [];
-    let totalExpanded = 0;
-
-    for (const entry of entries) {
-      if (entry.isDirectory) continue;
-      const rawName = entry.entryName;
-
-      // Symlink detection — adm-zip exposes the external file attributes via
-      // header. The upper 16 bits are UNIX mode; `0xA000` = symlink.
-      const unixMode = (entry.header.attr >>> 16) & 0xffff;
-      if ((unixMode & 0xf000) === 0xa000) {
-        // Skip silently — symlinks have no place in our editor.
-        continue;
-      }
-
-      if (isUnsafePath(rawName)) {
-        return failure(
-          ProjectErrors.ZIP_PATH_TRAVERSAL.code,
-          `${ProjectErrors.ZIP_PATH_TRAVERSAL.message}: ${rawName}`,
-        );
-      }
-
-      const normalised = path.posix.normalize(rawName).replace(/^\/+/, '');
-      if (!normalised || normalised === '.' || normalised === '..') continue;
-
-      const data = entry.getData();
-      if (data.length > this.maxPerFileBytes) {
-        return failure(
-          ProjectErrors.ZIP_PAYLOAD_TOO_LARGE.code,
-          `${ProjectErrors.ZIP_PAYLOAD_TOO_LARGE.message} (${normalised} > ${this.maxPerFileBytes} bytes)`,
-        );
-      }
-      totalExpanded += data.length;
-      if (totalExpanded > this.maxExpandedBytes) {
-        return failure(
-          ProjectErrors.ZIP_PAYLOAD_TOO_LARGE.code,
-          `${ProjectErrors.ZIP_PAYLOAD_TOO_LARGE.message} (tổng > ${this.maxExpandedBytes} bytes)`,
-        );
-      }
-
-      pending.push({ path: normalised, data });
-    }
-
     const normalisedArchive = normalizeArchiveRoot(pending);
     pending = normalisedArchive.entries;
 
-    const tomlContent = readProjectToml(pending);
-    const mainPath = pickMainPath(pending, tomlContent);
+    const projectToml = readToml(pending, 'project.toml');
+    const typstToml = readToml(pending, 'typst.toml');
+    const mainPath = detectMainPath(
+      pending.map((entry) => ({
+        path: entry.path,
+        content: isTypstSource(entry.path) ? decodeUtf8(entry.data) : null,
+      })),
+      { typstToml, projectToml },
+    );
 
     // --- Create project ------------------------------------------------------
     const title =
-      pickTitleFromToml(tomlContent) ??
+      pickTitleFromToml(projectToml) ??
       `Imported ${new Date().toISOString().slice(0, 10)}`;
 
     let project: Project;
     try {
       project = await this.projectRepo.create({
         title,
-        category: TemplateCategory.Other,
+        category: command.category ?? TemplateCategory.Other,
         ownerId: command.userId,
         templateId: null,
         templateVersionId: null,

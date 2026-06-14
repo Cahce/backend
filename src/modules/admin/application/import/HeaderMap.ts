@@ -46,6 +46,62 @@ export function normalizeRow(
 }
 
 /**
+ * Parse a gender cell from import files into the canonical enum value.
+ * Accepts Vietnamese ("Nam"/"Nữ"/"Khác") or English ("male"/"female"/"other"),
+ * case-insensitive. Returns undefined for empty/unrecognized values.
+ */
+export function parseImportGender(
+  value: unknown,
+): "male" | "female" | "other" | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim().toLowerCase();
+  if (v === "") return undefined;
+  if (v === "nam" || v === "male" || v === "m") return "male";
+  if (v === "nữ" || v === "nu" || v === "female" || v === "f") return "female";
+  if (v === "khác" || v === "khac" || v === "other" || v === "o") return "other";
+  return undefined;
+}
+
+/**
+ * Parse a date-of-birth cell into an ISO `YYYY-MM-DD` string.
+ * Accepts `YYYY-MM-DD` or `DD/MM/YYYY` (also `DD-MM-YYYY`, `D/M/YYYY`).
+ * Returns undefined for empty/invalid values.
+ */
+export function parseImportDate(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  if (v === "") return undefined;
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (iso) {
+    return isValidYmd(+iso[1], +iso[2], +iso[3])
+      ? `${iso[1]}-${iso[2]}-${iso[3]}`
+      : undefined;
+  }
+
+  const dmy = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v);
+  if (dmy) {
+    const day = +dmy[1];
+    const month = +dmy[2];
+    const year = +dmy[3];
+    if (!isValidYmd(year, month, day)) return undefined;
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  return undefined;
+}
+
+function isValidYmd(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return (
+    d.getUTCFullYear() === year &&
+    d.getUTCMonth() === month - 1 &&
+    d.getUTCDate() === day
+  );
+}
+
+/**
  * Extract the alphanumeric local-part of an email and lower-case it.
  * Used as fallback for teacher code generation when DB has no pattern yet.
  *

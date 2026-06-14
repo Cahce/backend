@@ -37,6 +37,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
           fullName: data.fullName,
           classId: data.classId,
           phone: data.phone ?? null,
+          gender: data.gender ?? null,
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+          address: data.address ?? null,
           accountId: data.accountId ?? null,
         },
       });
@@ -215,6 +218,11 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
           ...(data.fullName !== undefined && { fullName: data.fullName }),
           ...(data.classId !== undefined && { classId: data.classId }),
           ...(data.phone !== undefined && { phone: data.phone }),
+          ...(data.gender !== undefined && { gender: data.gender }),
+          ...(data.dateOfBirth !== undefined && {
+            dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+          }),
+          ...(data.address !== undefined && { address: data.address }),
         },
       });
 
@@ -339,6 +347,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
     fullName: string;
     classId: string;
     phone: string | null;
+    gender: 'male' | 'female' | 'other' | null;
+    dateOfBirth: Date | null;
+    address: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): StudentProfile {
@@ -349,6 +360,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
       fullName: prismaStudent.fullName,
       classId: prismaStudent.classId,
       phone: prismaStudent.phone,
+      gender: prismaStudent.gender,
+      dateOfBirth: prismaStudent.dateOfBirth,
+      address: prismaStudent.address,
       createdAt: prismaStudent.createdAt,
       updatedAt: prismaStudent.updatedAt,
     };
@@ -364,6 +378,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
     fullName: string;
     classId: string;
     phone: string | null;
+    gender: 'male' | 'female' | 'other' | null;
+    dateOfBirth: Date | null;
+    address: string | null;
     createdAt: Date;
     updatedAt: Date;
     class: {
@@ -397,6 +414,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
       fullName: prismaStudent.fullName,
       classId: prismaStudent.classId,
       phone: prismaStudent.phone,
+      gender: prismaStudent.gender,
+      dateOfBirth: prismaStudent.dateOfBirth,
+      address: prismaStudent.address,
       createdAt: prismaStudent.createdAt,
       updatedAt: prismaStudent.updatedAt,
       class: {

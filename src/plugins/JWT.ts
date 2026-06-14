@@ -5,6 +5,22 @@ import type { UserRole } from "../shared/auth/Types.js";
 import { roleHasPermission, type Permission } from "../shared/auth/Permissions.js";
 import { LruTokenRevocationCache } from "../shared/auth/LruTokenRevocationCache.js";
 
+/**
+ * True when a `jwtVerify()` failure is specifically an EXPIRED token (vs a
+ * missing/malformed one). `@fastify/jwt` is backed by fast-jwt; expiry surfaces
+ * as `FAST_JWT_EXPIRED` (or `FST_JWT_AUTHORIZATION_TOKEN_EXPIRED`). We also fall
+ * back to a message check to stay robust across library versions.
+ */
+function isTokenExpiredError(err: unknown): boolean {
+    if (typeof err !== "object" || err === null) return false;
+    const e = err as { code?: string; message?: string };
+    return (
+        e.code === "FAST_JWT_EXPIRED" ||
+        e.code === "FST_JWT_AUTHORIZATION_TOKEN_EXPIRED" ||
+        (typeof e.message === "string" && /expired/i.test(e.message))
+    );
+}
+
 export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
     const secret = app.config.auth.jwtSecret;
 
@@ -29,7 +45,17 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
     async function verify(req: FastifyRequest, reply: FastifyReply): Promise<void> {
         try {
             await req.jwtVerify();
-        } catch {
+        } catch (err) {
+            // Distinguish an EXPIRED access token from a missing/malformed one so
+            // the client knows to silently refresh (TOKEN_EXPIRED) vs hard-logout.
+            if (isTokenExpiredError(err)) {
+                return reply.code(401).send({
+                    error: {
+                        code: "TOKEN_EXPIRED",
+                        message: "Phiên đăng nhập đã hết hạn",
+                    },
+                });
+            }
             return reply.code(401).send({
                 error: {
                     code: "UNAUTHENTICATED",
