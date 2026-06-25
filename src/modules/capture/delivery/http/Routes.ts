@@ -225,7 +225,7 @@ function handleError(error: unknown, reply: FastifyReply) {
     }
   }
 
-  console.error("Unhandled error in Capture routes:", error);
+  reply.log.error({ err: error }, "Unhandled error in Capture routes");
   return reply.code(500).send({
     error: {
       code: "INTERNAL_ERROR",

@@ -5,8 +5,7 @@
  * No framework dependencies.
  */
 
-import type { OpenAlexWork, OpenAlexSearchFilters, OpenAlexPaginationMeta } from "./Types.js";
-import type { OpenAlexImportStatus } from "../../../generated/prisma/index.js";
+import type { OpenAlexWork, OpenAlexSearchFilters, OpenAlexPaginationMeta, OpenAlexImportStatus } from "./Types.js";
 
 /**
  * OpenAlex API client port
@@ -54,24 +53,34 @@ export interface OpenAlexImportLogRecord {
 }
 
 /**
+ * Input for creating an OpenAlex import log entry.
+ */
+export interface OpenAlexImportLogCreateInput {
+  userId: string;
+  projectId: string;
+  openAlexId: string;
+  citationKey: string;
+  targetBibPath: string;
+  doi?: string | null;
+  title?: string | null;
+  year?: number | null;
+  status: OpenAlexImportStatus;
+  errorMessage?: string | null;
+}
+
+/**
  * OpenAlex Import Log repository port
  */
 export interface OpenAlexImportLogRepo {
   /**
    * Create a new import log entry
    */
-  create(data: {
-    userId: string;
-    projectId: string;
-    openAlexId: string;
-    citationKey: string;
-    targetBibPath: string;
-    doi?: string | null;
-    title?: string | null;
-    year?: number | null;
-    status: OpenAlexImportStatus;
-    errorMessage?: string | null;
-  }): Promise<OpenAlexImportLogRecord>;
+  create(data: OpenAlexImportLogCreateInput): Promise<OpenAlexImportLogRecord>;
+
+  /**
+   * Batch-create import log entries in a single round-trip.
+   */
+  createMany(rows: OpenAlexImportLogCreateInput[]): Promise<void>;
 
   /**
    * Find import log by project and OpenAlex ID
@@ -81,6 +90,16 @@ export interface OpenAlexImportLogRepo {
     projectId: string,
     openAlexId: string
   ): Promise<OpenAlexImportLogRecord | null>;
+
+  /**
+   * Batch lookup: returns all `imported`-status logs for the given OpenAlex IDs
+   * in one query (ordered newest-first). Used to dedupe an import batch without
+   * issuing one findFirst per ID.
+   */
+  findImportedByProjectAndOpenAlexIds(
+    projectId: string,
+    openAlexIds: string[]
+  ): Promise<OpenAlexImportLogRecord[]>;
 
   /**
    * List import logs for a project

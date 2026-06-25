@@ -1,8 +1,8 @@
 // Use case for creating a teacher profile
 // No framework dependencies
 
-import bcrypt from 'bcrypt';
 import type { Result } from '../Types.js';
+import type { PasswordHasher } from '../../domain/shared/PasswordHasher.js';
 import { success, failure } from '../Types.js';
 import type { TeacherProfile, CreateTeacherData } from '../../domain/TeacherManagement/Types.js';
 import type { TeacherProfileRepo } from '../../domain/TeacherManagement/Ports.js';
@@ -30,7 +30,8 @@ export class CreateTeacherProfileUseCase {
   constructor(
     private readonly teacherRepo: TeacherProfileRepo,
     private readonly departmentRepo: DepartmentRepo,
-    private readonly accountRepo: AdminAccountRepo
+    private readonly accountRepo: AdminAccountRepo,
+    private readonly passwordHasher: PasswordHasher
   ) {}
 
   async execute(data: CreateTeacherDataWithAccount): Promise<Result<TeacherProfile>> {
@@ -137,7 +138,7 @@ export class CreateTeacherProfileUseCase {
         if (existingEmailAccount) {
           return failure(AccountErrors.EMAIL_EXISTS.code, AccountErrors.EMAIL_EXISTS.message);
         }
-        const hashedPassword = await bcrypt.hash(account.password, 10);
+        const hashedPassword = await this.passwordHasher.hash(account.password);
         const newAccount = await this.accountRepo.create({
           email: normalizedEmail,
           passwordHash: hashedPassword,

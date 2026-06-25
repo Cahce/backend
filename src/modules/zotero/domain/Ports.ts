@@ -94,6 +94,17 @@ export interface ZoteroApiPort {
   ): Promise<ZoteroItem>;
 
   /**
+   * Batch-fetch items by key (chunked into ≤50 per request). Missing keys are
+   * simply absent from the result. Replaces N individual getItem round-trips.
+   */
+  getItemsByKeys(
+    libraryType: "user" | "group",
+    libraryId: string,
+    itemKeys: string[],
+    apiKey: string
+  ): Promise<ZoteroItem[]>;
+
+  /**
    * Create one or more items in a library (write). Requires a write-enabled
    * API key. Returns the keys of items created successfully plus any failures.
    */

@@ -1,12 +1,13 @@
 /**
  * Get User By Email Use Case
- * 
+ *
  * Retrieves user information by email including student/teacher profile data.
+ * Depends only on the IUserProfileQuery domain port — no Prisma in application.
  */
 
-import type { IUserRepository } from '../domain/Ports.js';
 import { AuthErrors } from '../domain/AuthErrors.js';
-import type { PrismaClient } from '../../../generated/prisma/index.js';
+import type { IUserProfileQuery, UserWithProfile } from '../domain/UserProfile.js';
+import type { UserRole } from '../../../shared/auth/Types.js';
 
 /**
  * Command for getting user by email
@@ -14,62 +15,7 @@ import type { PrismaClient } from '../../../generated/prisma/index.js';
 export interface GetUserByEmailCommand {
   email: string;
   requesterId: string;
-  requesterRole: 'admin' | 'teacher' | 'student';
-}
-
-/**
- * User information with profile data
- */
-export interface UserWithProfile {
-  id: string;
-  email: string;
-  role: 'admin' | 'teacher' | 'student';
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  
-  // Student profile (if role is student)
-  studentProfile?: {
-    id: string;
-    studentCode: string;
-    fullName: string;
-    phone: string | null;
-    class: {
-      id: string;
-      name: string;
-      code: string;
-      major: {
-        id: string;
-        name: string;
-        code: string;
-        faculty: {
-          id: string;
-          name: string;
-          code: string;
-        };
-      };
-    };
-  };
-  
-  // Teacher profile (if role is teacher)
-  teacherProfile?: {
-    id: string;
-    teacherCode: string;
-    fullName: string;
-    phone: string | null;
-    academicRank: string;
-    academicDegree: string;
-    department: {
-      id: string;
-      name: string;
-      code: string;
-      faculty: {
-        id: string;
-        name: string;
-        code: string;
-      };
-    };
-  };
+  requesterRole: UserRole;
 }
 
 export interface GetUserByEmailSuccess {
@@ -89,20 +35,16 @@ export type GetUserByEmailResponse = GetUserByEmailSuccess | GetUserByEmailFailu
 
 /**
  * Get User By Email Use Case
- * 
- * Retrieves complete user information including profile data.
+ *
+ * Retrieves complete user information including profile data in a single query.
  * Authorization: Admin can view all users, teachers/students can only view their own.
  */
 export class GetUserByEmailUseCase {
-  constructor(
-    private readonly userRepo: IUserRepository,
-    private readonly prisma: PrismaClient,
-  ) {}
+  constructor(private readonly userProfileQuery: IUserProfileQuery) {}
 
   async execute(command: GetUserByEmailCommand): Promise<GetUserByEmailResponse> {
     try {
-      // Find user by email
-      const user = await this.userRepo.findByEmail(command.email);
+      const user = await this.userProfileQuery.findByEmailWithProfile(command.email);
 
       if (!user) {
         return {
@@ -125,121 +67,11 @@ export class GetUserByEmailUseCase {
         };
       }
 
-      // Fetch complete user data with profile
-      const completeUser = await this.prisma.user.findUnique({
-        where: { id: user.id },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          student: {
-            select: {
-              id: true,
-              studentCode: true,
-              fullName: true,
-              phone: true,
-              class: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true,
-                  major: {
-                    select: {
-                      id: true,
-                      name: true,
-                      code: true,
-                      faculty: {
-                        select: {
-                          id: true,
-                          name: true,
-                          code: true,
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          teacher: {
-            select: {
-              id: true,
-              teacherCode: true,
-              fullName: true,
-              phone: true,
-              academicRank: true,
-              academicDegree: true,
-              department: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true,
-                  faculty: {
-                    select: {
-                      id: true,
-                      name: true,
-                      code: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!completeUser) {
-        return {
-          success: false,
-          error: {
-            code: AuthErrors.USER_NOT_FOUND.code,
-            message: AuthErrors.USER_NOT_FOUND.message,
-          },
-        };
-      }
-
-      // Build response with profile data
-      const response: UserWithProfile = {
-        id: completeUser.id,
-        email: completeUser.email,
-        role: completeUser.role,
-        isActive: completeUser.isActive,
-        createdAt: completeUser.createdAt,
-        updatedAt: completeUser.updatedAt,
-      };
-
-      // Add student profile if exists
-      if (completeUser.student) {
-        response.studentProfile = {
-          id: completeUser.student.id,
-          studentCode: completeUser.student.studentCode,
-          fullName: completeUser.student.fullName,
-          phone: completeUser.student.phone,
-          class: completeUser.student.class,
-        };
-      }
-
-      // Add teacher profile if exists
-      if (completeUser.teacher) {
-        response.teacherProfile = {
-          id: completeUser.teacher.id,
-          teacherCode: completeUser.teacher.teacherCode,
-          fullName: completeUser.teacher.fullName,
-          phone: completeUser.teacher.phone,
-          academicRank: completeUser.teacher.academicRank,
-          academicDegree: completeUser.teacher.academicDegree,
-          department: completeUser.teacher.department,
-        };
-      }
-
       return {
         success: true,
-        data: response,
+        data: user,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: {

@@ -28,6 +28,9 @@ build/
 # Local reference checkouts
 references/
 
+# Locally-cloned Zotero translation-server (web-to-cite capture; not committed)
+.translation-server/
+
 # Codex/Claude temporary worktrees
 .claude/worktrees/
 

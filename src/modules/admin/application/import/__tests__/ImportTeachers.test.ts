@@ -1,53 +1,62 @@
 import { describe, it, mock } from "node:test";
 import assert from "node:assert";
 import { ImportTeachers } from "../ImportTeachers.js";
-import type { PrismaClient } from "../../../../../generated/prisma/index.js";
+import type { DepartmentRepo } from "../../../domain/Department/Ports.js";
+import type { TeacherProfileRepo } from "../../../domain/TeacherManagement/Ports.js";
+import type { AdminAccountRepo } from "../../../domain/AccountManagement/Ports.js";
+import type { PasswordHasher } from "../../../domain/shared/PasswordHasher.js";
 
-function buildPrisma(opts: {
+/**
+ * Build an ImportTeachers wired to in-memory fakes of its domain ports.
+ * `teacherCreates` / `userCreates` capture the data passed to repo.create so
+ * tests can assert on the auto-generated teacherCodes.
+ */
+function buildUseCase(opts: {
   existingTeacherCodes?: string[];
-  teacherCreates?: any[];
-  userCreates?: any[];
-}): PrismaClient {
+  teacherCreates?: Record<string, unknown>[];
+  userCreates?: Record<string, unknown>[];
+}): ImportTeachers {
   const teacherCreates = opts.teacherCreates ?? [];
   const userCreates = opts.userCreates ?? [];
-  return {
-    teacher: {
-      findMany: mock.fn(async () =>
-        (opts.existingTeacherCodes ?? []).map((c) => ({ teacherCode: c })),
-      ),
-      findUnique: mock.fn(async () => null),
-      create: mock.fn(async (args: any) => {
-        teacherCreates.push(args.data);
-        return { id: `t-${teacherCreates.length}`, ...args.data };
-      }),
-    },
-    department: {
-      findUnique: mock.fn(async (args: any) => ({
-        id: `dept-${args.where.code}`,
-        code: args.where.code,
-      })),
-    },
-    user: {
-      findUnique: mock.fn(async () => null),
-      create: mock.fn(async (args: any) => {
-        userCreates.push(args.data);
-        return { id: `u-${userCreates.length}`, ...args.data };
-      }),
-    },
-  } as unknown as PrismaClient;
+
+  const departmentRepo = {
+    findByCode: mock.fn(async (code: string) => ({ id: `dept-${code}`, code })),
+  } as unknown as DepartmentRepo;
+
+  const teacherRepo = {
+    listAllTeacherCodes: mock.fn(async () => opts.existingTeacherCodes ?? []),
+    findByTeacherCode: mock.fn(async () => null),
+    findByAccountId: mock.fn(async () => null),
+    create: mock.fn(async (data: Record<string, unknown>) => {
+      teacherCreates.push(data);
+      return { id: `t-${teacherCreates.length}`, ...data };
+    }),
+  } as unknown as TeacherProfileRepo;
+
+  const accountRepo = {
+    findByEmail: mock.fn(async () => null),
+    create: mock.fn(async (data: Record<string, unknown>) => {
+      userCreates.push(data);
+      return { id: `u-${userCreates.length}`, ...data };
+    }),
+  } as unknown as AdminAccountRepo;
+
+  const passwordHasher = {
+    hash: mock.fn(async (plain: string) => `hashed:${plain}`),
+  } as unknown as PasswordHasher;
+
+  return new ImportTeachers(departmentRepo, teacherRepo, accountRepo, passwordHasher);
 }
 
 describe("ImportTeachers - Vietnamese headers + auto teacherCode", () => {
   it("accepts the Vietnamese template (no Mã GV column) and auto-generates teacher codes", async () => {
-    const teacherCreates: any[] = [];
-    const userCreates: any[] = [];
-    const prisma = buildPrisma({
+    const teacherCreates: Record<string, unknown>[] = [];
+    const userCreates: Record<string, unknown>[] = [];
+    const useCase = buildUseCase({
       existingTeacherCodes: ["GV001", "GV002"],
       teacherCreates,
       userCreates,
     });
-
-    const useCase = new ImportTeachers(prisma);
 
     const rows = [
       {
@@ -83,9 +92,8 @@ describe("ImportTeachers - Vietnamese headers + auto teacherCode", () => {
   });
 
   it("starts at GV001 when there are no existing teachers", async () => {
-    const teacherCreates: any[] = [];
-    const prisma = buildPrisma({ existingTeacherCodes: [], teacherCreates });
-    const useCase = new ImportTeachers(prisma);
+    const teacherCreates: Record<string, unknown>[] = [];
+    const useCase = buildUseCase({ existingTeacherCodes: [], teacherCreates });
 
     const result = await useCase.execute([
       {
@@ -103,12 +111,11 @@ describe("ImportTeachers - Vietnamese headers + auto teacherCode", () => {
   });
 
   it("preserves a teacherCode supplied via Mã GV and continues from there", async () => {
-    const teacherCreates: any[] = [];
-    const prisma = buildPrisma({
+    const teacherCreates: Record<string, unknown>[] = [];
+    const useCase = buildUseCase({
       existingTeacherCodes: ["GV001"],
       teacherCreates,
     });
-    const useCase = new ImportTeachers(prisma);
 
     const result = await useCase.execute([
       {

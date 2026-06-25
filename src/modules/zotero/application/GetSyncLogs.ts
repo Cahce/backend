@@ -6,7 +6,7 @@
 
 import type { ZoteroSyncLogRepo } from "../domain/Ports.js";
 import type { ZoteroSyncLogRecord } from "../domain/Types.js";
-import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
 
 /**
  * Command to get sync logs

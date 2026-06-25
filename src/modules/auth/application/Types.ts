@@ -20,6 +20,7 @@ export interface AuthUserView {
 export interface LoginResult {
     success: true;
     accessToken: string;
+    refreshToken: string;
     user: AuthUserView;
 }
 

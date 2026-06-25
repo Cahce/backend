@@ -19,7 +19,7 @@ import { GetFilesForCompilationUseCase } from './application/GetFilesForCompilat
 import { CreateFilesFromTemplateUseCase } from './application/CreateFilesFromTemplateUseCase.js';
 import { UploadBinaryFileUseCase } from './application/UploadBinaryFileUseCase.js';
 import type { BlobStorage } from '../../shared/storage/BlobStorage.js';
-import type { ProjectWriteAccessPolicy } from '../compile/domain/Policies.js';
+import type { ProjectWriteAccessPolicy } from '../projects/domain/access/ProjectAccessPolicies.js';
 
 /**
  * Project Files Module Container
@@ -42,7 +42,7 @@ export class ProjectFilesContainer {
   // Lazy: wired only when uploadBinary deps are supplied to wireBinaryUpload().
   public uploadBinaryFileUseCase: UploadBinaryFileUseCase | null = null;
 
-  constructor(prisma: PrismaClient, projectRepo: ProjectRepo) {
+  constructor(prisma: PrismaClient, private readonly projectRepo: ProjectRepo) {
     // Initialize repository
     this.fileRepo = new FileRepoPrisma(prisma);
 
@@ -71,6 +71,13 @@ export class ProjectFilesContainer {
       this.fileRepo,
       blobStorage,
       projectAccess,
+    );
+    // Re-wire delete with BlobStorage now that it is available, so deleting a
+    // binary file also removes its backing blob (no orphaned on-disk objects).
+    this.deleteFileUseCase = new DeleteFileUseCase(
+      this.fileRepo,
+      this.projectRepo,
+      blobStorage,
     );
   }
 

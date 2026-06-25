@@ -1,6 +1,9 @@
 import { z } from "zod";
-import bcrypt from "bcrypt";
-import type { PrismaClient } from "../../../../generated/prisma/index.js";
+import type { ClassRepo } from "../../domain/Class/Ports.js";
+import type { AdminAccountRepo } from "../../domain/AccountManagement/Ports.js";
+import type { StudentProfileRepo } from "../../domain/StudentManagement/Ports.js";
+import type { StudentProfile } from "../../domain/StudentManagement/Types.js";
+import type { PasswordHasher } from "../../domain/shared/PasswordHasher.js";
 import { ImportService, type ImportResult, type GeneratedPassword } from "./ImportTypes.js";
 import { EnvEmailPolicy } from "../../domain/AccountManagement/Policies.js";
 import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
@@ -32,12 +35,20 @@ const STUDENT_HEADER_MAP: HeaderMap = {
 };
 
 /**
- * Import students from CSV with optional account creation
+ * Import students from CSV with optional account creation.
+ *
+ * Application use case — depends only on domain ports (class/account/student
+ * repos + PasswordHasher), never on Prisma or bcrypt directly.
  */
 export class ImportStudents {
   private readonly emailPolicy = new EnvEmailPolicy();
 
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly classRepo: ClassRepo,
+    private readonly accountRepo: AdminAccountRepo,
+    private readonly studentRepo: StudentProfileRepo,
+    private readonly passwordHasher: PasswordHasher,
+  ) {}
 
   async execute(rows: unknown[]): Promise<ImportResult> {
     const generatedPasswords: GeneratedPassword[] = [];
@@ -46,14 +57,13 @@ export class ImportStudents {
       normalizeRow(row as Record<string, unknown>, STUDENT_HEADER_MAP),
     );
 
-    const result = await ImportService.runImport<StudentImportRow, any>(
+    const result = await ImportService.runImport<StudentImportRow, StudentProfile>(
       normalized as StudentImportRow[],
       {
-        validateRow: async (row, _rowIndex) => {
+        validateRow: async (row) => {
           try {
             StudentImportRowSchema.parse(row);
 
-            // Validate email if provided
             if (row.accountEmail) {
               const emailValidation = this.emailPolicy.validate(row.accountEmail, "student");
               if (!emailValidation.ok) {
@@ -68,11 +78,10 @@ export class ImportStudents {
             return { ok: true };
           } catch (error) {
             if (error instanceof z.ZodError) {
-              const firstError = error.issues[0];
               return {
                 ok: false,
                 code: "VALIDATION_ERROR",
-                message: firstError.message,
+                message: error.issues[0].message,
               };
             }
             return {
@@ -84,25 +93,15 @@ export class ImportStudents {
         },
 
         resolveForeignKeys: async (row) => {
-          // Resolve classCode to classId
-          const classEntity = await this.prisma.class.findUnique({
-            where: { code: row.classCode },
-            select: { id: true },
-          });
-
+          const classEntity = await this.classRepo.findByCode(row.classCode);
           if (!classEntity) {
             throw new Error(`Không tìm thấy lớp với mã "${row.classCode}"`);
           }
-
-          return {
-            classId: classEntity.id,
-          };
+          return { classId: classEntity.id };
         },
 
         checkExists: async (row) => {
-          const existing = await this.prisma.student.findUnique({
-            where: { studentCode: row.studentCode },
-          });
+          const existing = await this.studentRepo.findByStudentCode(row.studentCode);
           return existing !== null;
         },
 
@@ -111,56 +110,38 @@ export class ImportStudents {
             throw new Error("Class ID not resolved");
           }
 
-          // Handle account creation if email is provided
+          // Handle optional account creation / linking.
           let accountId: string | undefined;
 
           if (row.accountEmail) {
             const normalizedEmail = EnvEmailPolicy.normalize(row.accountEmail);
-
-            // Check if account already exists
-            const existingAccount = await this.prisma.user.findUnique({
-              where: { email: normalizedEmail },
-            });
+            const existingAccount = await this.accountRepo.findByEmail(normalizedEmail);
 
             if (existingAccount) {
-              // Check if account is already linked to another student
-              const linkedStudent = await this.prisma.student.findUnique({
-                where: { accountId: existingAccount.id },
-              });
-
+              const linkedStudent = await this.studentRepo.findByAccountId(existingAccount.id);
               if (linkedStudent) {
                 throw new Error(
-                  `Email "${row.accountEmail}" đã được liên kết với sinh viên khác`
+                  `Email "${row.accountEmail}" đã được liên kết với sinh viên khác`,
                 );
               }
-
               accountId = existingAccount.id;
             } else {
-              // Generate or use provided password
               let password = row.accountPassword;
               let isGenerated = false;
-
               if (!password) {
                 password = ImportService.generatePassword();
                 isGenerated = true;
               }
 
-              // Hash password
-              const hashedPassword = await bcrypt.hash(password, 10);
-
-              // Create account
-              const account = await this.prisma.user.create({
-                data: {
-                  email: normalizedEmail,
-                  passwordHash: hashedPassword,
-                  role: "student",
-                  isActive: true,
-                },
+              const passwordHash = await this.passwordHasher.hash(password);
+              const account = await this.accountRepo.create({
+                email: normalizedEmail,
+                passwordHash,
+                role: "student",
+                isActive: true,
               });
-
               accountId = account.id;
 
-              // Track generated password
               if (isGenerated) {
                 generatedPasswords.push({
                   row: 0, // Will be set by caller
@@ -171,23 +152,19 @@ export class ImportStudents {
             }
           }
 
-          // Create student
-          return this.prisma.student.create({
-            data: {
-              studentCode: row.studentCode,
-              fullName: row.fullName,
-              classId: resolvedKeys.classId,
-              phone: row.phone,
-              accountId,
-            },
+          return this.studentRepo.create({
+            studentCode: row.studentCode,
+            fullName: row.fullName,
+            classId: resolvedKeys.classId,
+            phone: row.phone,
+            accountId,
           });
         },
 
         batchSize: 500,
-      }
+      },
     );
 
-    // Add generated passwords to result
     if (generatedPasswords.length > 0) {
       result.generatedPasswords = generatedPasswords;
     }

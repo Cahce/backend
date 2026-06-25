@@ -19,6 +19,9 @@ export interface TeacherProfile {
   academicRank: string;
   academicDegree: string;
   phone: string | null;
+  gender: "male" | "female" | "other" | null;
+  dateOfBirth: string | null;
+  address: string | null;
   createdAt: string;
   updatedAt: string;
 }

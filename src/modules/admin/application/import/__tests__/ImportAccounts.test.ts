@@ -1,51 +1,69 @@
 import { describe, it, mock } from "node:test";
 import assert from "node:assert";
 import { ImportAccounts } from "../ImportAccounts.js";
-import type { PrismaClient } from "../../../../../generated/prisma/index.js";
+import type { AdminAccountRepo } from "../../../domain/AccountManagement/Ports.js";
+import type { TeacherProfileRepo } from "../../../domain/TeacherManagement/Ports.js";
+import type { StudentProfileRepo } from "../../../domain/StudentManagement/Ports.js";
+import type { PasswordHasher } from "../../../domain/shared/PasswordHasher.js";
+
+/**
+ * Fake account repo exposing the methods ImportAccounts uses. `linkToTeacher`
+ * / `linkToStudent` are mock.fn so tests can inspect linking calls.
+ */
+function makeAccountRepo(opts: {
+  findByEmail?: (email: string) => unknown;
+  create?: (data: { email: string; passwordHash: string; role: string; isActive: boolean }) => unknown;
+} = {}) {
+  return {
+    findByEmail: mock.fn(async (email: string) =>
+      opts.findByEmail ? opts.findByEmail(email) : null,
+    ),
+    create: mock.fn(async (data: { email: string; passwordHash: string; role: string; isActive: boolean }) =>
+      opts.create
+        ? opts.create(data)
+        : { id: "test-id", ...data, createdAt: new Date(), updatedAt: new Date() },
+    ),
+    linkToTeacher: mock.fn(async (_accountId: string, _teacherId: string) => {}),
+    linkToStudent: mock.fn(async (_accountId: string, _studentId: string) => {}),
+  };
+}
+
+function makeTeacherRepo(findByTeacherCode: (code: string) => unknown = () => null) {
+  return { findByTeacherCode: mock.fn(async (code: string) => findByTeacherCode(code)) };
+}
+
+function makeStudentRepo(findByStudentCode: (code: string) => unknown = () => null) {
+  return { findByStudentCode: mock.fn(async (code: string) => findByStudentCode(code)) };
+}
+
+function makeHasher() {
+  return { hash: mock.fn(async (plain: string) => `hashed:${plain}`) };
+}
+
+function build(opts: {
+  account?: Parameters<typeof makeAccountRepo>[0];
+  findTeacher?: (code: string) => unknown;
+  findStudent?: (code: string) => unknown;
+} = {}) {
+  const accountRepo = makeAccountRepo(opts.account);
+  const teacherRepo = makeTeacherRepo(opts.findTeacher);
+  const studentRepo = makeStudentRepo(opts.findStudent);
+  const useCase = new ImportAccounts(
+    accountRepo as unknown as AdminAccountRepo,
+    teacherRepo as unknown as TeacherProfileRepo,
+    studentRepo as unknown as StudentProfileRepo,
+    makeHasher() as unknown as PasswordHasher,
+  );
+  return { useCase, accountRepo, teacherRepo, studentRepo };
+}
 
 describe("ImportAccounts", () => {
   it("should import valid accounts successfully", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-      teacher: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+    const { useCase } = build();
 
     const rows = [
-      {
-        email: "admin@tlu.edu.vn",
-        password: "Password123",
-        role: "admin",
-        isActive: "true",
-      },
-      {
-        email: "teacher@tlu.edu.vn",
-        password: "Password456",
-        role: "teacher",
-        isActive: "true",
-      },
+      { email: "admin@tlu.edu.vn", password: "Password123", role: "admin", isActive: "true" },
+      { email: "teacher@tlu.edu.vn", password: "Password456", role: "teacher", isActive: "true" },
     ];
 
     const result = await useCase.execute(rows);
@@ -58,56 +76,18 @@ describe("ImportAccounts", () => {
   });
 
   it("should skip existing accounts", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async (args: any) => {
-          if (args.where.email === "admin@tlu.edu.vn") {
-            return {
-              id: "existing-id",
-              email: "admin@tlu.edu.vn",
-              role: "admin",
-            };
-          }
-          return null;
-        }),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
+    const { useCase } = build({
+      account: {
+        findByEmail: (email) =>
+          email === "admin@tlu.edu.vn"
+            ? { id: "existing-id", email: "admin@tlu.edu.vn", role: "admin" }
+            : null,
       },
-      teacher: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+    });
 
     const rows = [
-      {
-        email: "admin@tlu.edu.vn",
-        password: "Password123",
-        role: "admin",
-        isActive: "true",
-      },
-      {
-        email: "teacher@tlu.edu.vn",
-        password: "Password456",
-        role: "teacher",
-        isActive: "true",
-      },
+      { email: "admin@tlu.edu.vn", password: "Password123", role: "admin", isActive: "true" },
+      { email: "teacher@tlu.edu.vn", password: "Password456", role: "teacher", isActive: "true" },
     ];
 
     const result = await useCase.execute(rows);
@@ -119,53 +99,12 @@ describe("ImportAccounts", () => {
   });
 
   it("should validate email domain for role", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-      teacher: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+    const { useCase } = build();
 
     const rows = [
-      {
-        email: "student@tlu.edu.vn", // Wrong domain for student (should be @e.tlu.edu.vn)
-        password: "Password123",
-        role: "student",
-        isActive: "true",
-      },
-      {
-        email: "teacher@e.tlu.edu.vn", // Wrong domain for teacher (should be @tlu.edu.vn)
-        password: "Password456",
-        role: "teacher",
-        isActive: "true",
-      },
-      {
-        email: "valid@e.tlu.edu.vn", // Correct for student
-        password: "Password789",
-        role: "student",
-        isActive: "true",
-      },
+      { email: "student@tlu.edu.vn", password: "Password123", role: "student", isActive: "true" }, // wrong domain
+      { email: "teacher@e.tlu.edu.vn", password: "Password456", role: "teacher", isActive: "true" }, // wrong domain
+      { email: "valid@e.tlu.edu.vn", password: "Password789", role: "student", isActive: "true" }, // correct
     ];
 
     const result = await useCase.execute(rows);
@@ -180,41 +119,10 @@ describe("ImportAccounts", () => {
   });
 
   it("should generate password when not provided", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-      teacher: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+    const { useCase } = build();
 
     const rows = [
-      {
-        email: "admin@tlu.edu.vn",
-        password: "", // Empty password
-        role: "admin",
-        isActive: "true",
-      },
+      { email: "admin@tlu.edu.vn", password: "", role: "admin", isActive: "true" }, // Empty password
     ];
 
     const result = await useCase.execute(rows);
@@ -229,38 +137,12 @@ describe("ImportAccounts", () => {
   });
 
   it("should handle missing required fields", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-      teacher: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+    const { useCase } = build();
 
     const rows = [
       { email: "", password: "Password123", role: "admin" }, // Empty email
       { email: "admin@tlu.edu.vn", password: "Password123" }, // Missing role
-    ] as any[];
+    ] as unknown[];
 
     const result = await useCase.execute(rows);
 
@@ -272,42 +154,13 @@ describe("ImportAccounts", () => {
   });
 
   it("should link to teacher when linkType and linkCode provided", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "new-account-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
+    const { useCase, accountRepo } = build({
+      account: {
+        create: (data) => ({ id: "new-account-id", ...data, createdAt: new Date(), updatedAt: new Date() }),
       },
-      teacher: {
-        findUnique: mock.fn(async (args: any) => {
-          if (args.where.teacherCode === "GV001") {
-            return {
-              id: "teacher-id",
-              teacherCode: "GV001",
-              accountId: null,
-            };
-          }
-          return null;
-        }),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+      findTeacher: (code) =>
+        code === "GV001" ? { id: "teacher-id", teacherCode: "GV001", accountId: null } : null,
+    });
 
     const rows = [
       {
@@ -326,44 +179,15 @@ describe("ImportAccounts", () => {
     assert.strictEqual(result.created, 1);
     assert.strictEqual(result.failed, 0);
 
-    // Verify teacher.update was called
-    const updateCalls = (mockPrisma.teacher.update as any).mock.calls;
-    assert.strictEqual(updateCalls.length, 1);
-    assert.strictEqual(updateCalls[0].arguments[0].where.id, "teacher-id");
-    assert.strictEqual(
-      updateCalls[0].arguments[0].data.accountId,
-      "new-account-id"
-    );
+    // Linking now goes through accountRepo.linkToTeacher(accountId, teacherId).
+    const linkCalls = (accountRepo.linkToTeacher as unknown as { mock: { calls: { arguments: unknown[] }[] } }).mock.calls;
+    assert.strictEqual(linkCalls.length, 1);
+    assert.strictEqual(linkCalls[0].arguments[0], "new-account-id");
+    assert.strictEqual(linkCalls[0].arguments[1], "teacher-id");
   });
 
   it("should fail when linkCode not found", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-      teacher: {
-        findUnique: mock.fn(async () => null), // Teacher not found
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+    const { useCase } = build({ findTeacher: () => null });
 
     const rows = [
       {
@@ -386,42 +210,12 @@ describe("ImportAccounts", () => {
   });
 
   it("should fail when teacher already has account", async () => {
-    const mockPrisma = {
-      user: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-      teacher: {
-        findUnique: mock.fn(async (args: any) => {
-          if (args.where.teacherCode === "GV001") {
-            return {
-              id: "teacher-id",
-              teacherCode: "GV001",
-              accountId: "existing-account-id", // Already has account
-            };
-          }
-          return null;
-        }),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-      student: {
-        findUnique: mock.fn(async () => null),
-        update: mock.fn(async (args: any) => ({
-          id: args.where.id,
-          accountId: args.data.accountId,
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportAccounts(mockPrisma);
+    const { useCase } = build({
+      findTeacher: (code) =>
+        code === "GV001"
+          ? { id: "teacher-id", teacherCode: "GV001", accountId: "existing-account-id" }
+          : null,
+    });
 
     const rows = [
       {

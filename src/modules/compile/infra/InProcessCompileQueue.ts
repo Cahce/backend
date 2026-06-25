@@ -23,6 +23,8 @@ export class InProcessCompileQueue implements CompileQueue {
   private queue: string[] = [];
   private processing = false;
   private stopped = false;
+  // jobId -> resolvers waiting for that job to finish processing.
+  private readonly settleWaiters = new Map<string, Array<() => void>>();
 
   constructor(
     private readonly handler: ProcessCompileJobHandler,
@@ -59,6 +61,29 @@ export class InProcessCompileQueue implements CompileQueue {
     }
   }
 
+  /**
+   * Resolve when `jobId` next finishes processing. Must be raced against a
+   * timeout by the caller (a job that already settled, or one never processed
+   * by this instance, will never resolve this promise).
+   */
+  waitForSettle(jobId: string): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const waiters = this.settleWaiters.get(jobId) ?? [];
+      waiters.push(resolve);
+      this.settleWaiters.set(jobId, waiters);
+    });
+  }
+
+  private notifySettled(jobId: string): void {
+    const waiters = this.settleWaiters.get(jobId);
+    if (waiters) {
+      this.settleWaiters.delete(jobId);
+      for (const resolve of waiters) {
+        resolve();
+      }
+    }
+  }
+
   async stop(): Promise<void> {
     this.stopped = true;
     this.options.log?.info('Compile worker stopping...');
@@ -91,7 +116,11 @@ export class InProcessCompileQueue implements CompileQueue {
       this.options.log?.error(`Job ${jobId} failed:`, error);
     } finally {
       this.processing = false;
-      
+
+      // Wake anyone awaiting this job's completion (the DB status was written
+      // by the handler before it returned).
+      this.notifySettled(jobId);
+
       // Process next job if available and not stopped
       if (this.queue.length > 0 && !this.stopped) {
         // Use setImmediate to avoid deep recursion

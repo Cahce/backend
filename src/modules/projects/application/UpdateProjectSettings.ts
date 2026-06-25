@@ -1,7 +1,8 @@
 import type { ProjectSettingsRepository } from "../domain/ProjectSettingsRepository.js";
-import type { ProjectSettings, CompileOptions, ZoteroConfig } from "../domain/ProjectSettings.js";
+import type { ProjectSettings, CompileOptions, ZoteroConfig, OpenAlexConfig } from "../domain/ProjectSettings.js";
 import type { ProjectRepo } from "../domain/Project/Ports.js";
-import { ProjectAuthPolicy, type AuthContext } from "../domain/Project/Policies.js";
+import { ProjectAuthPolicy } from "../domain/Project/Policies.js";
+import { buildProjectAuthContext } from "./ProjectAuthContext.js";
 import { ProjectErrors } from "../domain/Project/Errors.js";
 import type { FileRepo } from "../../project-files/domain/ProjectFile/Ports.js";
 
@@ -13,6 +14,7 @@ export interface UpdateProjectSettingsCommand {
         mainPath?: string;
         compileOptions?: Partial<CompileOptions>;
         zoteroConfig?: ZoteroConfig;
+        openalexConfig?: OpenAlexConfig;
     };
 }
 
@@ -30,10 +32,14 @@ export class UpdateProjectSettings {
             throw new Error(ProjectErrors.PROJECT_NOT_FOUND.code);
         }
 
-        const authContext: AuthContext = {
-            userId: cmd.userId,
-            role: cmd.userRole,
-        };
+        // Resolve ProjectMember / advisor relations so editor members can update
+        // settings (inline AuthContext left membershipRole/isAdvisor undefined).
+        const authContext = await buildProjectAuthContext(
+            this.projectRepo,
+            project,
+            cmd.userId,
+            cmd.userRole,
+        );
 
         if (!ProjectAuthPolicy.canWrite(project, authContext)) {
             throw new Error(ProjectErrors.UNAUTHORIZED.code);
@@ -63,6 +69,9 @@ export class UpdateProjectSettings {
             cmd.patch.zoteroConfig !== undefined
                 ? cmd.patch.zoteroConfig
                 : current.zoteroConfig,
+            cmd.patch.openalexConfig !== undefined
+                ? cmd.patch.openalexConfig
+                : current.openalexConfig,
             new Date(),
         );
 

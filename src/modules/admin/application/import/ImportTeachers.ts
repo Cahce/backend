@@ -1,6 +1,9 @@
 import { z } from "zod";
-import bcrypt from "bcrypt";
-import type { PrismaClient } from "../../../../generated/prisma/index.js";
+import type { DepartmentRepo } from "../../domain/Department/Ports.js";
+import type { TeacherProfileRepo } from "../../domain/TeacherManagement/Ports.js";
+import type { TeacherProfile } from "../../domain/TeacherManagement/Types.js";
+import type { AdminAccountRepo } from "../../domain/AccountManagement/Ports.js";
+import type { PasswordHasher } from "../../domain/shared/PasswordHasher.js";
 import { ImportService, type ImportResult, type GeneratedPassword } from "./ImportTypes.js";
 import { EnvEmailPolicy } from "../../domain/AccountManagement/Policies.js";
 import {
@@ -42,12 +45,20 @@ const TEACHER_HEADER_MAP: HeaderMap = {
 };
 
 /**
- * Import teachers from CSV with optional account creation
+ * Import teachers from CSV with optional account creation.
+ *
+ * Application use case — depends only on domain ports (department/teacher/account
+ * repos + PasswordHasher), never on Prisma or bcrypt directly.
  */
 export class ImportTeachers {
   private readonly emailPolicy = new EnvEmailPolicy();
 
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly departmentRepo: DepartmentRepo,
+    private readonly teacherRepo: TeacherProfileRepo,
+    private readonly accountRepo: AdminAccountRepo,
+    private readonly passwordHasher: PasswordHasher,
+  ) {}
 
   async execute(rows: unknown[]): Promise<ImportResult> {
     const generatedPasswords: GeneratedPassword[] = [];
@@ -60,12 +71,8 @@ export class ImportTeachers {
     // omit "Mã GV" follow the dominant prefix/digit-width pattern in the DB
     // (e.g., {GV001, GV002} → GV003). Reserves any teacherCode already present
     // in the upload so we never collide.
-    const existing = await this.prisma.teacher.findMany({
-      select: { teacherCode: true },
-    });
-    const codeGen = new SequentialCodeGenerator(
-      existing.map((t) => t.teacherCode),
-    );
+    const existingCodes = await this.teacherRepo.listAllTeacherCodes();
+    const codeGen = new SequentialCodeGenerator(existingCodes);
     for (const row of normalized) {
       const code = (row as { teacherCode?: unknown }).teacherCode;
       if (typeof code === "string" && code.trim() !== "") {
@@ -79,14 +86,13 @@ export class ImportTeachers {
       }
     }
 
-    const result = await ImportService.runImport<TeacherImportRow, any>(
+    const result = await ImportService.runImport<TeacherImportRow, TeacherProfile>(
       normalized as TeacherImportRow[],
       {
-        validateRow: async (row, _rowIndex) => {
+        validateRow: async (row) => {
           try {
             TeacherImportRowSchema.parse(row);
 
-            // Validate email if provided
             if (row.accountEmail) {
               const emailValidation = this.emailPolicy.validate(row.accountEmail, "teacher");
               if (!emailValidation.ok) {
@@ -101,11 +107,10 @@ export class ImportTeachers {
             return { ok: true };
           } catch (error) {
             if (error instanceof z.ZodError) {
-              const firstError = error.issues[0];
               return {
                 ok: false,
                 code: "VALIDATION_ERROR",
-                message: firstError.message,
+                message: error.issues[0].message,
               };
             }
             return {
@@ -117,25 +122,15 @@ export class ImportTeachers {
         },
 
         resolveForeignKeys: async (row) => {
-          // Resolve departmentCode to departmentId
-          const department = await this.prisma.department.findUnique({
-            where: { code: row.departmentCode },
-            select: { id: true },
-          });
-
+          const department = await this.departmentRepo.findByCode(row.departmentCode);
           if (!department) {
             throw new Error(`Không tìm thấy bộ môn với mã "${row.departmentCode}"`);
           }
-
-          return {
-            departmentId: department.id,
-          };
+          return { departmentId: department.id };
         },
 
         checkExists: async (row) => {
-          const existing = await this.prisma.teacher.findUnique({
-            where: { teacherCode: row.teacherCode },
-          });
+          const existing = await this.teacherRepo.findByTeacherCode(row.teacherCode);
           return existing !== null;
         },
 
@@ -144,56 +139,38 @@ export class ImportTeachers {
             throw new Error("Department ID not resolved");
           }
 
-          // Handle account creation if email is provided
+          // Handle optional account creation / linking.
           let accountId: string | undefined;
 
           if (row.accountEmail) {
             const normalizedEmail = EnvEmailPolicy.normalize(row.accountEmail);
-
-            // Check if account already exists
-            const existingAccount = await this.prisma.user.findUnique({
-              where: { email: normalizedEmail },
-            });
+            const existingAccount = await this.accountRepo.findByEmail(normalizedEmail);
 
             if (existingAccount) {
-              // Check if account is already linked to another teacher
-              const linkedTeacher = await this.prisma.teacher.findUnique({
-                where: { accountId: existingAccount.id },
-              });
-
+              const linkedTeacher = await this.teacherRepo.findByAccountId(existingAccount.id);
               if (linkedTeacher) {
                 throw new Error(
-                  `Email "${row.accountEmail}" đã được liên kết với giảng viên khác`
+                  `Email "${row.accountEmail}" đã được liên kết với giảng viên khác`,
                 );
               }
-
               accountId = existingAccount.id;
             } else {
-              // Generate or use provided password
               let password = row.accountPassword;
               let isGenerated = false;
-
               if (!password) {
                 password = ImportService.generatePassword();
                 isGenerated = true;
               }
 
-              // Hash password
-              const hashedPassword = await bcrypt.hash(password, 10);
-
-              // Create account
-              const account = await this.prisma.user.create({
-                data: {
-                  email: normalizedEmail,
-                  passwordHash: hashedPassword,
-                  role: "teacher",
-                  isActive: true,
-                },
+              const passwordHash = await this.passwordHasher.hash(password);
+              const account = await this.accountRepo.create({
+                email: normalizedEmail,
+                passwordHash,
+                role: "teacher",
+                isActive: true,
               });
-
               accountId = account.id;
 
-              // Track generated password
               if (isGenerated) {
                 generatedPasswords.push({
                   row: 0, // Will be set by caller
@@ -204,25 +181,21 @@ export class ImportTeachers {
             }
           }
 
-          // Create teacher
-          return this.prisma.teacher.create({
-            data: {
-              teacherCode: row.teacherCode,
-              fullName: row.fullName,
-              departmentId: resolvedKeys.departmentId,
-              academicRank: row.academicRank || "",
-              academicDegree: row.academicDegree || "",
-              phone: row.phone,
-              accountId,
-            },
+          return this.teacherRepo.create({
+            teacherCode: row.teacherCode,
+            fullName: row.fullName,
+            departmentId: resolvedKeys.departmentId,
+            academicRank: row.academicRank || "",
+            academicDegree: row.academicDegree || "",
+            phone: row.phone,
+            accountId,
           });
         },
 
         batchSize: 500,
-      }
+      },
     );
 
-    // Add generated passwords to result
     if (generatedPasswords.length > 0) {
       result.generatedPasswords = generatedPasswords;
     }

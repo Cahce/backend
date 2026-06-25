@@ -1,6 +1,6 @@
-import bcrypt from 'bcrypt';
 import type { AdminAccountRepo } from '../../domain/AccountManagement/Ports.js';
 import type { EmailPolicy } from '../../domain/AccountManagement/Policies.js';
+import type { PasswordHasher } from '../../domain/shared/PasswordHasher.js';
 import type { Account, UserRole } from '../../domain/AccountManagement/Types.js';
 import { AccountErrors } from '../../domain/AccountManagement/Errors.js';
 import type { Result } from '../Types.js';
@@ -20,7 +20,8 @@ export interface CreateAccountCommand {
 export class CreateAccountUseCase {
   constructor(
     private readonly accountRepo: AdminAccountRepo,
-    private readonly emailPolicy: EmailPolicy
+    private readonly emailPolicy: EmailPolicy,
+    private readonly passwordHasher: PasswordHasher
   ) {}
 
   async execute(command: CreateAccountCommand): Promise<Result<Account>> {
@@ -36,7 +37,7 @@ export class CreateAccountUseCase {
       return failure(AccountErrors.EMAIL_EXISTS.code, AccountErrors.EMAIL_EXISTS.message);
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await this.passwordHasher.hash(password);
     const account = await this.accountRepo.create({
       email,
       passwordHash,

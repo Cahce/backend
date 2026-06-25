@@ -43,6 +43,9 @@ export class TeacherRepository implements TeacherProfilePort {
       academicRank: teacher.academicRank,
       academicDegree: teacher.academicDegree,
       phone: teacher.phone,
+      gender: teacher.gender,
+      dateOfBirth: teacher.dateOfBirth ? teacher.dateOfBirth.toISOString() : null,
+      address: teacher.address,
       createdAt: teacher.createdAt.toISOString(),
       updatedAt: teacher.updatedAt.toISOString(),
     };

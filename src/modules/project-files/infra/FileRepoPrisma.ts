@@ -8,7 +8,7 @@
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import { Prisma } from '../../../generated/prisma/index.js';
 import type { FileRepo } from '../domain/ProjectFile/Ports.js';
-import type { File, CreateFileData, UpdateFileData, RenameFileData } from '../domain/ProjectFile/Types.js';
+import type { File, FileMetadata, CreateFileData, UpdateFileData, RenameFileData } from '../domain/ProjectFile/Types.js';
 import { FileKind, StorageMode } from '../domain/ProjectFile/Types.js';
 import { getCompilationKinds } from '../domain/FileKindPolicy.js';
 
@@ -161,6 +161,41 @@ export class FileRepoPrisma implements FileRepo {
     });
 
     return files.map((file) => this.mapToFile(file, this.determineStorageMode(file)));
+  }
+
+  /**
+   * List file metadata only (no textContent/storageKey/sha256). Used by the
+   * hot file-tree endpoint so a workspace open does not transfer every file's
+   * `@db.Text` content just to render names + sizes.
+   */
+  async listMetadataByProjectId(projectId: string): Promise<FileMetadata[]> {
+    const files = await this.prisma.file.findMany({
+      where: { projectId },
+      orderBy: { path: 'asc' },
+      select: {
+        id: true,
+        projectId: true,
+        path: true,
+        kind: true,
+        mimeType: true,
+        sizeBytes: true,
+        lastEditedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return files.map((file) => ({
+      id: file.id,
+      projectId: file.projectId,
+      path: file.path,
+      kind: file.kind as FileKind,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      lastEditedAt: file.lastEditedAt,
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+    }));
   }
 
   /**

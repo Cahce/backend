@@ -11,7 +11,7 @@ import type {
   ZoteroSyncLogRepo,
 } from "../domain/Ports.js";
 import type { BibliographyService } from "../../bibliography/application/BibliographyService.js";
-import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
 import { ZoteroNotConnectedError } from "../domain/Errors.js";
 import { mapZoteroItemToBibEntry } from "../domain/Mapping.js";
 import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
@@ -211,18 +211,10 @@ export class SyncToBibFile {
   ) {
     const allItems = [];
 
-    // If specific item keys are provided, fetch them individually
+    // If specific item keys are provided, fetch them in ONE batched request
+    // (chunked ≤50 by the client) instead of one getItem round-trip per key.
     if (filters.itemKeys && filters.itemKeys.length > 0) {
-      for (const itemKey of filters.itemKeys) {
-        try {
-          const item = await this.apiClient.getItem(libraryType, libraryId, itemKey, apiKey);
-          allItems.push(item);
-        } catch (error) {
-          // Skip items that can't be fetched
-          console.warn(`Failed to fetch item ${itemKey}:`, error);
-        }
-      }
-      return allItems;
+      return this.apiClient.getItemsByKeys(libraryType, libraryId, filters.itemKeys, apiKey);
     }
 
     // If collection keys are provided, fetch items from each collection

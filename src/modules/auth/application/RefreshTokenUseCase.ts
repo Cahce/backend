@@ -1,19 +1,39 @@
+/**
+ * Refresh Token Use Case
+ *
+ * Exchanges a valid (non-revoked, non-expired) rotating refresh token for a new
+ * access + refresh pair. Rotation is one-time-use: the presented token is
+ * revoked and replaced (same family). Reuse of an already-rotated token is
+ * treated as theft → the whole family is burned.
+ */
+
+import { AuthError, AuthErrors } from "../domain/AuthErrors.js";
 import type {
     IRefreshTokenRepository,
     ITokenService,
     IUserRepository,
 } from "../domain/Ports.js";
-import { AuthErrors } from "../domain/AuthErrors.js";
 import { getPermissionsForRole } from "../../../shared/auth/Permissions.js";
-import type { RefreshCommand, RefreshResponse } from "./Types.js";
+import type { AuthUserView } from "./Types.js";
 
-/**
- * Refresh use case — exchanges a valid refresh token for a new token pair.
- *
- * Rotation: each successful refresh issues a NEW refresh token (same family) and
- * revokes the presented one. Presenting an already-revoked token is treated as
- * reuse/theft and burns the whole family.
- */
+export interface RefreshCommand {
+    refreshToken: string;
+}
+
+export interface RefreshSuccess {
+    success: true;
+    accessToken: string;
+    refreshToken: string;
+    user: AuthUserView;
+}
+
+export interface RefreshFailure {
+    success: false;
+    error: { code: string; message: string };
+}
+
+export type RefreshResponse = RefreshSuccess | RefreshFailure;
+
 export class RefreshTokenUseCase {
     constructor(
         private readonly userRepo: IUserRepository,
@@ -26,48 +46,48 @@ export class RefreshTokenUseCase {
             const tokenHash = this.tokenService.hashRefreshToken(command.refreshToken);
             const row = await this.refreshTokenRepo.findByHash(tokenHash);
 
+            // Unknown token.
             if (!row) {
-                return { success: false, error: AuthErrors.REFRESH_TOKEN_INVALID };
+                return this.fail(AuthErrors.REFRESH_TOKEN_INVALID);
             }
 
-            // Reuse of an already-rotated/revoked token → theft response.
-            if (row.revokedAt) {
+            // Reuse of an already-rotated/revoked token → theft: burn the family
+            // so the legitimate holder's next refresh also fails (forced re-login).
+            if (row.revokedAt !== null) {
                 await this.refreshTokenRepo.revokeFamily(row.familyId);
-                return { success: false, error: AuthErrors.TOKEN_REUSE_DETECTED };
+                return this.fail(AuthErrors.TOKEN_REUSE_DETECTED);
             }
 
+            // Past TTL.
             if (row.expiresAt.getTime() < Date.now()) {
-                return { success: false, error: AuthErrors.REFRESH_TOKEN_EXPIRED };
+                return this.fail(AuthErrors.REFRESH_TOKEN_EXPIRED);
             }
 
+            // Valid → user must still exist + be active.
             const user = await this.userRepo.findById(row.userId);
             if (!user || !user.isActive) {
-                // Account gone/disabled: burn the family so the token can't keep refreshing.
                 await this.refreshTokenRepo.revokeFamily(row.familyId);
-                return {
-                    success: false,
-                    error: user ? AuthErrors.ACCOUNT_INACTIVE : AuthErrors.REFRESH_TOKEN_INVALID,
-                };
+                return this.fail(AuthErrors.REFRESH_TOKEN_INVALID);
             }
 
-            // Issue a new access token + rotate the refresh token (same family).
+            // Issue a new access + refresh pair (same family); rotate atomically.
             const access = await this.tokenService.generateAccessToken({
                 userId: user.id,
                 email: user.email,
                 role: user.role,
             });
-            const newRefresh = this.tokenService.generateRefreshToken();
+            const nextRefresh = this.tokenService.generateRefreshToken();
             await this.refreshTokenRepo.rotate(row.id, {
-                tokenHash: this.tokenService.hashRefreshToken(newRefresh.token),
+                tokenHash: this.tokenService.hashRefreshToken(nextRefresh.token),
                 familyId: row.familyId,
-                expiresAt: newRefresh.expiresAt,
+                expiresAt: nextRefresh.expiresAt,
                 userId: user.id,
             });
 
             return {
                 success: true,
                 accessToken: access.token,
-                refreshToken: newRefresh.token,
+                refreshToken: nextRefresh.token,
                 user: {
                     id: user.id,
                     email: user.email,
@@ -77,11 +97,18 @@ export class RefreshTokenUseCase {
                 },
             };
         } catch (error) {
+            if (error instanceof AuthError) {
+                return this.fail({ code: error.code, message: error.message });
+            }
             console.error("Refresh token use case error:", error);
             return {
                 success: false,
-                error: { code: "INTERNAL_ERROR", message: "Làm mới phiên đăng nhập thất bại" },
+                error: { code: "INTERNAL_ERROR", message: "Làm mới phiên thất bại" },
             };
         }
+    }
+
+    private fail(e: { code: string; message: string }): RefreshFailure {
+        return { success: false, error: { code: e.code, message: e.message } };
     }
 }

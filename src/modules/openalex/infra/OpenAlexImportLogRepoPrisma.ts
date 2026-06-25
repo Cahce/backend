@@ -4,11 +4,16 @@
  * Implements OpenAlexImportLogRepo using Prisma ORM.
  */
 
-import type { OpenAlexImportStatus } from "../../../generated/prisma/index.js";
-import type { OpenAlexImportLogRepo, OpenAlexImportLogRecord } from "../domain/Ports.js";
+import type { PrismaClient } from "../../../generated/prisma/index.js";
+import type {
+  OpenAlexImportLogRepo,
+  OpenAlexImportLogRecord,
+  OpenAlexImportLogCreateInput,
+} from "../domain/Ports.js";
+import type { OpenAlexImportStatus } from "../domain/Types.js";
 
 export class OpenAlexImportLogRepoPrisma implements OpenAlexImportLogRepo {
-  constructor(private readonly prisma: any) {}
+  constructor(private readonly prisma: PrismaClient) {}
 
   async create(data: {
     userId: string;
@@ -38,6 +43,47 @@ export class OpenAlexImportLogRepoPrisma implements OpenAlexImportLogRepo {
     });
 
     return log;
+  }
+
+  async createMany(rows: OpenAlexImportLogCreateInput[]): Promise<void> {
+    if (rows.length === 0) {
+      return;
+    }
+    await this.prisma.openAlexImportLog.createMany({
+      data: rows.map((r) => ({
+        userId: r.userId,
+        projectId: r.projectId,
+        openAlexId: r.openAlexId,
+        citationKey: r.citationKey,
+        targetBibPath: r.targetBibPath,
+        doi: r.doi ?? null,
+        title: r.title ?? null,
+        year: r.year ?? null,
+        status: r.status,
+        errorMessage: r.errorMessage ?? null,
+      })),
+    });
+  }
+
+  async findImportedByProjectAndOpenAlexIds(
+    projectId: string,
+    openAlexIds: string[]
+  ): Promise<OpenAlexImportLogRecord[]> {
+    if (openAlexIds.length === 0) {
+      return [];
+    }
+    const logs = await this.prisma.openAlexImportLog.findMany({
+      where: {
+        projectId,
+        openAlexId: { in: openAlexIds },
+        status: "imported",
+      },
+      orderBy: {
+        importedAt: "desc",
+      },
+    });
+
+    return logs;
   }
 
   async findByProjectAndOpenAlexId(

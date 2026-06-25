@@ -83,7 +83,7 @@ function handleError(error: unknown, reply: FastifyReply) {
     }
   }
 
-  console.error("Unhandled error in Bibliography routes:", error);
+  reply.log.error({ err: error }, "Unhandled error in Bibliography routes");
   return reply.code(500).send({
     error: {
       code: "INTERNAL_ERROR",

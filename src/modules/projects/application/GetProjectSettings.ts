@@ -1,7 +1,8 @@
 import type { ProjectSettingsRepository } from "../domain/ProjectSettingsRepository.js";
 import type { ProjectSettings } from "../domain/ProjectSettings.js";
 import type { ProjectRepo } from "../domain/Project/Ports.js";
-import { ProjectAuthPolicy, type AuthContext } from "../domain/Project/Policies.js";
+import { ProjectAuthPolicy } from "../domain/Project/Policies.js";
+import { buildProjectAuthContext } from "./ProjectAuthContext.js";
 import { ProjectErrors } from "../domain/Project/Errors.js";
 
 export interface GetProjectSettingsCommand {
@@ -23,10 +24,14 @@ export class GetProjectSettings {
             throw new Error(ProjectErrors.PROJECT_NOT_FOUND.code);
         }
 
-        const authContext: AuthContext = {
-            userId: cmd.userId,
-            role: cmd.userRole,
-        };
+        // Resolve ProjectMember / advisor relations so collaborators and
+        // advisors are not wrongly denied (inline AuthContext left these undefined).
+        const authContext = await buildProjectAuthContext(
+            this.projectRepo,
+            project,
+            cmd.userId,
+            cmd.userRole,
+        );
 
         if (!ProjectAuthPolicy.canRead(project, authContext)) {
             throw new Error(ProjectErrors.UNAUTHORIZED.code);

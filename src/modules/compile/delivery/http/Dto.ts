@@ -3,9 +3,10 @@
  */
 
 import { z } from 'zod';
+import { ZMSG } from '../../../../shared/validation/ZodMessages.js';
 
 export const enqueueCompileBodySchema = z.object({
-  entryPath: z.string().min(1).optional(),
+  entryPath: z.string().min(1, ZMSG.required('Đường dẫn tệp')).optional(),
   format: z.literal('pdf').optional(),
   engine: z.literal('node').optional(),
 });

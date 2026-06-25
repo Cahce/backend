@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { ZMSG } from "../../../../../shared/validation/ZodMessages.js";
 import type { UserRole } from "../../../domain/AccountManagement/Types.js";
 
 /**
  * Request DTOs
  */
 export const CreateAccountRequestSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
+  email: z.string().min(1, ZMSG.required("Email")).email(ZMSG.emailInvalid),
+  password: z.string().min(8, ZMSG.minLen("Mật khẩu", 8)),
   role: z.enum(["admin", "teacher", "student"]),
   isActive: z.boolean().optional().default(true),
   linkTo: z
@@ -21,7 +22,7 @@ export const CreateAccountRequestSchema = z.object({
 export type CreateAccountRequest = z.infer<typeof CreateAccountRequestSchema>;
 
 export const UpdateAccountRequestSchema = z.object({
-  email: z.string().email().optional(),
+  email: z.string().email(ZMSG.emailInvalid).optional(),
   role: z.enum(["admin", "teacher", "student"]).optional(),
   isActive: z.boolean().optional(),
 });
@@ -29,7 +30,7 @@ export const UpdateAccountRequestSchema = z.object({
 export type UpdateAccountRequest = z.infer<typeof UpdateAccountRequestSchema>;
 
 export const ResetPasswordRequestSchema = z.object({
-  newPassword: z.string().min(8),
+  newPassword: z.string().min(8, ZMSG.minLen("Mật khẩu", 8)),
 });
 
 export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;

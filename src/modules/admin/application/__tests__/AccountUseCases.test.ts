@@ -8,6 +8,7 @@ import { GetAccountUseCase } from "../AccountManagement/GetAccountUseCase.js";
 import { UpdateAccountUseCase } from "../AccountManagement/UpdateAccountUseCase.js";
 import { DeleteAccountUseCase } from "../AccountManagement/DeleteAccountUseCase.js";
 import { ResetAccountPasswordUseCase } from "../AccountManagement/ResetAccountPasswordUseCase.js";
+import type { PasswordHasher } from "../../domain/shared/PasswordHasher.js";
 
 type MockUser = {
   id: string;
@@ -61,16 +62,18 @@ describe("Account Use Cases", () => {
   let mockPrisma: MockPrismaClient;
   let accountRepo: AdminAccountRepoPrisma;
   let emailPolicy: EnvEmailPolicy;
+  let passwordHasher: PasswordHasher;
 
   beforeEach(() => {
     mockPrisma = new MockPrismaClient();
     accountRepo = new AdminAccountRepoPrisma(mockPrisma as any);
     emailPolicy = new EnvEmailPolicy();
+    passwordHasher = { hash: async (plain: string) => "hashed:" + plain };
   });
 
   describe("CreateAccountUseCase", () => {
     it("should create account with valid data", async () => {
-      const useCase = new CreateAccountUseCase(accountRepo, emailPolicy);
+      const useCase = new CreateAccountUseCase(accountRepo, emailPolicy, passwordHasher);
       mockPrisma.user.findUnique = async () => null;
       mockPrisma.user.create = async () => makeUser();
 
@@ -87,7 +90,7 @@ describe("Account Use Cases", () => {
     });
 
     it("should reject invalid email domain for role", async () => {
-      const useCase = new CreateAccountUseCase(accountRepo, emailPolicy);
+      const useCase = new CreateAccountUseCase(accountRepo, emailPolicy, passwordHasher);
       mockPrisma.user.findUnique = async () => null;
 
       const result = await useCase.execute({
@@ -103,7 +106,7 @@ describe("Account Use Cases", () => {
     });
 
     it("should reject duplicate email", async () => {
-      const useCase = new CreateAccountUseCase(accountRepo, emailPolicy);
+      const useCase = new CreateAccountUseCase(accountRepo, emailPolicy, passwordHasher);
       mockPrisma.user.findUnique = async () => makeUser();
 
       const result = await useCase.execute({
@@ -214,7 +217,7 @@ describe("Account Use Cases", () => {
 
   describe("ResetAccountPasswordUseCase", () => {
     it("should reset password and set passwordChangedAt", async () => {
-      const useCase = new ResetAccountPasswordUseCase(accountRepo);
+      const useCase = new ResetAccountPasswordUseCase(accountRepo, passwordHasher);
       const updated = makeUser({ passwordHash: "new-hash", passwordChangedAt: new Date() });
 
       mockPrisma.user.findUnique = async () => makeUser();

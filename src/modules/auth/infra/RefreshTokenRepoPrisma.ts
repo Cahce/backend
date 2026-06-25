@@ -1,10 +1,13 @@
+/**
+ * Prisma implementation of the rotating refresh-token store.
+ *
+ * Only the SHA-256 hash of the opaque token is persisted. Rotation revokes the
+ * old row + inserts the next (same family) atomically in a transaction.
+ */
+
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { IRefreshTokenRepository, RefreshTokenRow } from "../domain/Ports.js";
 
-/**
- * Prisma implementation of the refresh-token repository.
- * Stores only the SHA-256 hash of each opaque refresh token.
- */
 export class RefreshTokenRepoPrisma implements IRefreshTokenRepository {
     constructor(private readonly prisma: PrismaClient) {}
 
@@ -29,23 +32,16 @@ export class RefreshTokenRepoPrisma implements IRefreshTokenRepository {
     async findByHash(tokenHash: string): Promise<RefreshTokenRow | null> {
         return this.prisma.refreshToken.findUnique({
             where: { tokenHash },
-            select: {
-                id: true,
-                userId: true,
-                tokenHash: true,
-                familyId: true,
-                expiresAt: true,
-                revokedAt: true,
-            },
+            select: { id: true, userId: true, familyId: true, expiresAt: true, revokedAt: true },
         });
     }
 
     async rotate(
         oldId: string,
         next: { tokenHash: string; familyId: string; expiresAt: Date; userId: string },
-    ): Promise<{ id: string }> {
-        return this.prisma.$transaction(async (tx) => {
-            const created = await tx.refreshToken.create({
+    ): Promise<void> {
+        await this.prisma.$transaction(async (tx) => {
+            const inserted = await tx.refreshToken.create({
                 data: {
                     tokenHash: next.tokenHash,
                     userId: next.userId,
@@ -56,9 +52,8 @@ export class RefreshTokenRepoPrisma implements IRefreshTokenRepository {
             });
             await tx.refreshToken.update({
                 where: { id: oldId },
-                data: { revokedAt: new Date(), replacedBy: created.id },
+                data: { revokedAt: new Date(), replacedBy: inserted.id },
             });
-            return { id: created.id };
         });
     }
 

@@ -6,7 +6,7 @@
 
 import type { CompileJob } from '../domain/CompileJob.js';
 import type { CompileJobRepository } from '../domain/CompileJobRepository.js';
-import type { ProjectAccessPolicy } from '../domain/Policies.js';
+import type { ProjectAccessPolicy } from '../../projects/domain/access/ProjectAccessPolicies.js';
 
 export interface ListCompileJobsCommand {
   projectId: string;

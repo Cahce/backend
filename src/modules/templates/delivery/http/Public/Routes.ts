@@ -105,7 +105,10 @@ export async function publicTemplateRoutes(app: FastifyInstance, container: Temp
       },
     },
     async (request, reply) => {
-      const result = await container.getTemplateById.execute(request.params.id);
+      // Public detail never returns usageCount — skip the usage aggregation.
+      const result = await container.getTemplateById.execute(request.params.id, {
+        includeUsage: false,
+      });
 
       if (result.success) {
         // Only return if active

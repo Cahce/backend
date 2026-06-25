@@ -29,12 +29,20 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
     async function verify(req: FastifyRequest, reply: FastifyReply): Promise<void> {
         try {
             await req.jwtVerify();
-        } catch {
+        } catch (err) {
+            // Distinguish an EXPIRED access token from a missing/invalid one: the
+            // frontend silently refreshes only on `TOKEN_EXPIRED` (any other 401
+            // clears auth + redirects). fast-jwt/@fastify/jwt expose an error code
+            // for expiry; fall back to a message check for safety.
+            const code = (err as { code?: string } | undefined)?.code;
+            const isExpired =
+                code === "FAST_JWT_EXPIRED" ||
+                code === "FST_JWT_AUTHORIZATION_TOKEN_EXPIRED" ||
+                (err instanceof Error && /expired/i.test(err.message));
             return reply.code(401).send({
-                error: {
-                    code: "UNAUTHENTICATED",
-                    message: "Chưa đăng nhập hoặc token không hợp lệ",
-                },
+                error: isExpired
+                    ? { code: "TOKEN_EXPIRED", message: "Phiên đăng nhập đã hết hạn" }
+                    : { code: "UNAUTHENTICATED", message: "Chưa đăng nhập hoặc token không hợp lệ" },
             });
         }
 

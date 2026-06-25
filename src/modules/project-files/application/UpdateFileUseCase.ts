@@ -32,14 +32,14 @@ export interface UpdateFileCommand {
  */
 export class UpdateFileUseCase {
   constructor(
-    private readonly FileRepo: FileRepo,
-    private readonly ProjectRepo: ProjectRepo,
+    private readonly fileRepo: FileRepo,
+    private readonly projectRepo: ProjectRepo,
   ) {}
 
   async execute(command: UpdateFileCommand): Promise<Result<File>> {
     try {
       // Verify project exists
-      const project = await this.ProjectRepo.findById(command.projectId);
+      const project = await this.projectRepo.findById(command.projectId);
 
       if (!project) {
         return failure(FileErrors.PROJECT_NOT_FOUND.code, FileErrors.PROJECT_NOT_FOUND.message);
@@ -47,7 +47,7 @@ export class UpdateFileUseCase {
 
       // Enforce authorization (resolves ProjectMember / advisor relations).
       const authContext: AuthContext = await buildProjectAuthContext(
-        this.ProjectRepo,
+        this.projectRepo,
         project,
         command.userId,
         command.userRole,
@@ -58,7 +58,7 @@ export class UpdateFileUseCase {
       }
 
       // Find file by project ID and path
-      const existingFile = await this.FileRepo.findByProjectIdAndPath(
+      const existingFile = await this.fileRepo.findByProjectIdAndPath(
         command.projectId,
         command.path,
       );
@@ -73,7 +73,7 @@ export class UpdateFileUseCase {
 
       // Update file via repository
       // Stage 1: storageMode remains inline (no migration to object storage)
-      const file = await this.FileRepo.update({
+      const file = await this.fileRepo.update({
         projectId: command.projectId,
         path: command.path,
         content: command.content,

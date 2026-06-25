@@ -35,7 +35,7 @@ export interface CreateFilesFromTemplateCommand {
  * Creates multiple files from a template, applying storage policy to each.
  */
 export class CreateFilesFromTemplateUseCase {
-  constructor(private readonly FileRepo: FileRepo) {}
+  constructor(private readonly fileRepo: FileRepo) {}
 
   async execute(command: CreateFilesFromTemplateCommand): Promise<Result<File[]>> {
     try {
@@ -51,7 +51,7 @@ export class CreateFilesFromTemplateUseCase {
           const storageMode = StoragePolicy.determineStorageMode(sizeBytes, templateFile.kind);
 
           // Create file via repository
-          const file = await this.FileRepo.create({
+          const file = await this.fileRepo.create({
             projectId: command.projectId,
             path: templateFile.path,
             kind: templateFile.kind,

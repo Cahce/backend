@@ -6,7 +6,7 @@
  * No framework dependencies.
  */
 
-import type { File, CreateFileData, UpdateFileData, RenameFileData } from './Types.js';
+import type { File, FileMetadata, CreateFileData, UpdateFileData, RenameFileData } from './Types.js';
 import type { FileKind } from './Types.js';
 
 /**
@@ -65,6 +65,15 @@ export interface FileRepo {
    * @returns List of File entities
    */
   listByProjectId(projectId: string): Promise<File[]>;
+
+  /**
+   * List file METADATA (no textContent / storageKey) for a project, ordered by
+   * path. Use this for the file-tree listing — it avoids loading every file's
+   * `@db.Text` content, which `listByProjectId` pulls and the tree discards.
+   * @param projectId - Project ID
+   * @returns File metadata entities (content excluded)
+   */
+  listMetadataByProjectId(projectId: string): Promise<FileMetadata[]>;
 
   /**
    * Update an existing File

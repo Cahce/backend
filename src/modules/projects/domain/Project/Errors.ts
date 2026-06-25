@@ -67,4 +67,13 @@ export const ProjectErrors = {
     code: 'MISSING_FILE',
     message: 'Cần upload một tệp .zip',
   },
+
+  /**
+   * Uploaded archive is not a supported/recognized format (zip/7z/rar/tar).
+   * Mapped to HTTP 400.
+   */
+  UNSUPPORTED_ARCHIVE: {
+    code: 'UNSUPPORTED_ARCHIVE',
+    message: 'Định dạng tệp nén không được hỗ trợ',
+  },
 } as const;

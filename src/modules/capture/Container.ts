@@ -7,7 +7,7 @@
  */
 
 import type { BibliographyService } from "../bibliography/application/BibliographyService.js";
-import type { ProjectWriteAccessPolicy } from "../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../projects/domain/access/ProjectAccessPolicies.js";
 import type { LibraryWriterPort, IdentifierFallbackPort } from "./domain/Ports.js";
 
 import { TranslationServerClient } from "./infra/TranslationServerClient.js";

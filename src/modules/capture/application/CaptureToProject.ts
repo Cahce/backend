@@ -15,7 +15,7 @@ import type {
 } from "../domain/Ports.js";
 import type { CaptureItem } from "../domain/Types.js";
 import type { BibliographyService } from "../../bibliography/application/BibliographyService.js";
-import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
 import {
   CaptureInvalidInputError,
   TranslationNoResultError,

@@ -9,6 +9,7 @@ import type { ProjectRepo } from '../../projects/domain/Project/Ports.js';
 import { FileErrors } from '../domain/ProjectFile/Errors.js';
 import { ProjectAuthPolicy, type AuthContext } from '../../projects/domain/Project/Policies.js';
 import { buildProjectAuthContext } from '../../projects/application/ProjectAuthContext.js';
+import type { BlobStorage } from '../../../shared/storage/BlobStorage.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
@@ -30,14 +31,16 @@ export interface DeleteFileCommand {
  */
 export class DeleteFileUseCase {
   constructor(
-    private readonly FileRepo: FileRepo,
-    private readonly ProjectRepo: ProjectRepo,
+    private readonly fileRepo: FileRepo,
+    private readonly projectRepo: ProjectRepo,
+    // Optional: when wired, the backing blob of a binary file is removed too.
+    private readonly blobStorage?: BlobStorage,
   ) {}
 
   async execute(command: DeleteFileCommand): Promise<Result<void>> {
     try {
       // Verify project exists
-      const project = await this.ProjectRepo.findById(command.projectId);
+      const project = await this.projectRepo.findById(command.projectId);
 
       if (!project) {
         return failure(FileErrors.PROJECT_NOT_FOUND.code, FileErrors.PROJECT_NOT_FOUND.message);
@@ -45,7 +48,7 @@ export class DeleteFileUseCase {
 
       // Enforce authorization (resolves ProjectMember / advisor relations).
       const authContext: AuthContext = await buildProjectAuthContext(
-        this.ProjectRepo,
+        this.projectRepo,
         project,
         command.userId,
         command.userRole,
@@ -56,7 +59,7 @@ export class DeleteFileUseCase {
       }
 
       // Find file by project ID and path
-      const existingFile = await this.FileRepo.findByProjectIdAndPath(
+      const existingFile = await this.fileRepo.findByProjectIdAndPath(
         command.projectId,
         command.path,
       );
@@ -65,9 +68,19 @@ export class DeleteFileUseCase {
         return failure(FileErrors.FILE_NOT_FOUND.code, FileErrors.FILE_NOT_FOUND.message);
       }
 
-      // Delete file via repository
-      // Stage 1: Only delete database record (inline storage)
-      await this.FileRepo.delete(command.projectId, command.path);
+      // Delete the DB record first.
+      await this.fileRepo.delete(command.projectId, command.path);
+
+      // Best-effort: remove the backing blob for binary files so deleting a file
+      // does not orphan its on-disk object. A failure here must NOT fail the
+      // user-visible delete (the row is already gone); the blob can be swept later.
+      if (existingFile.storageKey && this.blobStorage) {
+        try {
+          await this.blobStorage.delete(existingFile.storageKey);
+        } catch {
+          // ignore — an orphaned blob is preferable to a failed delete
+        }
+      }
 
       return success(undefined);
     } catch (error) {

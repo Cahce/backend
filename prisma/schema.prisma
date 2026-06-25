@@ -133,6 +133,8 @@ model User {
   refreshTokens       RefreshToken[]
   zoteroConnections   ZoteroConnection[]
   openAlexImportLogs  OpenAlexImportLog[]
+
+  @@index([createdAt])
 }
 
 /**
@@ -149,7 +151,7 @@ model Faculty {
   departments Department[]
   majors      Major[]
 
-  @@index([code])
+  @@index([updatedAt])
 }
 
 model Department {
@@ -165,7 +167,7 @@ model Department {
   teachers  Teacher[]
 
   @@index([facultyId])
-  @@index([code])
+  @@index([updatedAt])
 }
 
 model Major {
@@ -179,7 +181,7 @@ model Major {
   classes       Class[]
 
   @@index([facultyId])
-  @@index([code])
+  @@index([updatedAt])
 }
 
 model Class {
@@ -195,7 +197,7 @@ model Class {
   students  Student[]
 
   @@index([majorId])
-  @@index([code])
+  @@index([updatedAt])
 }
 
 /**
@@ -371,6 +373,7 @@ model OpenAlexImportLog {
   @@index([projectId, importedAt])
   @@index([userId, importedAt])
   @@index([openAlexId])
+  @@index([projectId, openAlexId])
 }
 
 /**
@@ -412,6 +415,8 @@ model Project {
   @@index([templateId])
   @@index([templateVersionId])
   @@index([category])
+  @@index([updatedAt])
+  @@index([createdAt])
 }
 
 /**

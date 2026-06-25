@@ -20,13 +20,17 @@ export const tokenCleanupPlugin = fp(
   async function tokenCleanupPlugin(app: FastifyInstance) {
     const intervalId = setInterval(async () => {
       try {
-        const result = await app.prisma.invalidToken.deleteMany({
-          where: { expiresAt: { lt: new Date() } },
-        });
-        if (result.count > 0) {
+        const now = new Date();
+        const [invalid, refresh] = await Promise.all([
+          app.prisma.invalidToken.deleteMany({ where: { expiresAt: { lt: now } } }),
+          // Expired rotating refresh tokens are dead weight too (revoked/rotated
+          // rows past their TTL); sweep them on the same interval.
+          app.prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: now } } }),
+        ]);
+        if (invalid.count > 0 || refresh.count > 0) {
           app.log.info(
-            { deletedCount: result.count },
-            "Cleaned up expired InvalidToken rows",
+            { invalidTokens: invalid.count, refreshTokens: refresh.count },
+            "Cleaned up expired token rows",
           );
         }
       } catch (err) {

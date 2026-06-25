@@ -27,7 +27,7 @@ import { GetAdminProjectStatsUseCase } from './application/GetAdminProjectStatsU
 import type { FileRepo } from '../project-files/domain/ProjectFile/Ports.js';
 import type { MaterializeTemplate } from './domain/MaterializeTemplate.js';
 import type { BlobStorage } from '../../shared/storage/BlobStorage.js';
-import type { ProjectAccessPolicy } from '../compile/domain/Policies.js';
+import type { ProjectAccessPolicy } from './domain/access/ProjectAccessPolicies.js';
 
 /**
  * Projects Module Container

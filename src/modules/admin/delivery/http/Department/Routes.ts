@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { AdminContainer } from "../../../Container.js";
-import { ImportDepartments } from "../../../application/import/ImportDepartments.js";
 import { FileParser } from "../../../infra/FileParser.js";
 import {
     CreateDepartmentRequestSchema,
@@ -23,7 +22,7 @@ import {
  */
 export async function departmentRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
-    const importDepartments = new ImportDepartments(app.prisma);
+    const importDepartments = container.importDepartments;
 
     // POST /api/v1/admin/departments - create department
     app.post<{ Body: CreateDepartmentRequestDto }>(

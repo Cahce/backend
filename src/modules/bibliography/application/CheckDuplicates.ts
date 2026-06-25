@@ -4,7 +4,7 @@
 
 import type { BibEntry } from "../domain/BibEntry.js";
 import type { BibliographyService } from "./BibliographyService.js";
-import type { ProjectAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
 import {
   analyzeDuplicateEntries,
   type DuplicateGroup,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+import { ZMSG } from "../../../../../shared/validation/ZodMessages.js";
 
 extendZodWithOpenApi(z);
 
@@ -7,9 +8,9 @@ export const updateProjectSettingsSchema = z
     .object({
         mainPath: z
             .string()
-            .min(1)
+            .min(1, ZMSG.required("Đường dẫn tệp chính"))
             .refine((p) => !p.startsWith("/") && !p.includes(".."), {
-                message: "INVALID_MAIN_PATH",
+                message: "Đường dẫn tệp chính không hợp lệ",
             })
             .optional()
             .openapi({
@@ -32,6 +33,12 @@ export const updateProjectSettingsSchema = z
             .openapi({
                 description: "Zotero configuration for the project",
             }),
+        openalexConfig: z
+            .unknown()
+            .optional()
+            .openapi({
+                description: "OpenAlex configuration for the project",
+            }),
     })
     .openapi("UpdateProjectSettingsRequest");
 
@@ -42,5 +49,6 @@ export interface ProjectSettingsResponse {
     mainPath: string;
     compileOptions: Record<string, unknown>;
     zoteroConfig: Record<string, unknown> | null;
+    openalexConfig: Record<string, unknown> | null;
     updatedAt: string;
 }

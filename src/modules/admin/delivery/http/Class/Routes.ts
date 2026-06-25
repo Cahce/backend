@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { AdminContainer } from "../../../Container.js";
-import { ImportClasses } from "../../../application/import/ImportClasses.js";
 import { FileParser } from "../../../infra/FileParser.js";
 import {
     CreateClassRequestSchema,
@@ -23,7 +22,7 @@ import {
  */
 export async function classRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
-    const importClasses = new ImportClasses(app.prisma);
+    const importClasses = container.importClasses;
 
     // POST /api/v1/admin/classes - create class
     app.post<{ Body: CreateClassRequestDto }>(

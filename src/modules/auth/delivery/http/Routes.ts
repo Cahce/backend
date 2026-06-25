@@ -5,16 +5,25 @@ import { GetUserByEmailUseCase } from "../../application/GetUserByEmailUseCase.j
 import { LogoutUseCase } from "../../application/LogoutUseCase.js";
 import { ChangePasswordUseCase } from "../../application/ChangePasswordUseCase.js";
 import { UserRepoPrisma } from "../../infra/UserRepoPrisma.js";
+import { UserProfileQueryRepoPrisma } from "../../infra/UserProfileQueryRepoPrisma.js";
 import { PasswordHasherBcrypt } from "../../infra/PasswordHasherBcrypt.js";
 import { JwtTokenServiceFastify } from "../../infra/JwtTokenServiceFastify.js";
 import { TokenRevocationRepoPrisma } from "../../infra/TokenRevocationRepoPrisma.js";
+import { RefreshTokenRepoPrisma } from "../../infra/RefreshTokenRepoPrisma.js";
+import { RefreshTokenUseCase } from "../../application/RefreshTokenUseCase.js";
+import { UpdateOwnProfileUseCase } from "../../application/UpdateOwnProfileUseCase.js";
+import { UserProfileMutationRepoPrisma } from "../../infra/UserProfileMutationRepoPrisma.js";
 import {
     LoginRequestSchema,
     ChangePasswordRequestSchema,
     GetUserByEmailParamsSchema,
+    RefreshRequestSchema,
+    UpdateOwnProfileRequestSchema,
     type LoginRequestDto,
     type ChangePasswordRequestDto,
     type GetUserByEmailParamsDto,
+    type RefreshRequestDto,
+    type UpdateOwnProfileRequestDto,
 } from "./Dto.js";
 
 /**
@@ -44,8 +53,12 @@ const schemas = {
         properties: {
             accessToken: {
                 type: "string",
-                description: "JWT access token",
+                description: "JWT access token (ngắn hạn)",
                 examples: ["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."],
+            },
+            refreshToken: {
+                type: "string",
+                description: "Refresh token (xoay vòng, đổi ở /auth/refresh)",
             },
             user: {
                 type: "object",
@@ -76,6 +89,21 @@ const schemas = {
                     },
                 },
             },
+        },
+    },
+    refreshRequest: {
+        type: "object",
+        required: ["refreshToken"],
+        properties: {
+            refreshToken: { type: "string", description: "Refresh token hiện tại" },
+        },
+    },
+    refreshResponse: {
+        type: "object",
+        properties: {
+            accessToken: { type: "string", description: "Access token mới (ngắn hạn)" },
+            refreshToken: { type: "string", description: "Refresh token mới (token cũ bị thu hồi)" },
+            user: { type: "object", description: "Thông tin người dùng" },
         },
     },
     currentUserResponse: {
@@ -159,6 +187,9 @@ const schemas = {
                     studentCode: { type: "string" },
                     fullName: { type: "string" },
                     phone: { type: "string", nullable: true },
+                    gender: { type: "string", enum: ["male", "female", "other"], nullable: true },
+                    dateOfBirth: { type: "string", format: "date-time", nullable: true },
+                    address: { type: "string", nullable: true },
                     class: {
                         type: "object",
                         properties: {
@@ -192,6 +223,9 @@ const schemas = {
                     teacherCode: { type: "string" },
                     fullName: { type: "string" },
                     phone: { type: "string", nullable: true },
+                    gender: { type: "string", enum: ["male", "female", "other"], nullable: true },
+                    dateOfBirth: { type: "string", format: "date-time", nullable: true },
+                    address: { type: "string", nullable: true },
                     academicRank: { type: "string" },
                     academicDegree: { type: "string" },
                     department: {
@@ -210,6 +244,33 @@ const schemas = {
                             },
                         },
                     },
+                },
+            },
+        },
+    },
+    updateOwnProfileRequest: {
+        type: "object",
+        properties: {
+            gender: { type: "string", enum: ["male", "female", "other"], nullable: true },
+            dateOfBirth: {
+                type: "string",
+                nullable: true,
+                description: "Ngày sinh (ISO, ví dụ 2002-01-15)",
+            },
+            phone: { type: "string", nullable: true },
+            address: { type: "string", nullable: true },
+        },
+    },
+    ownProfileResponse: {
+        type: "object",
+        properties: {
+            profile: {
+                type: "object",
+                properties: {
+                    gender: { type: "string", enum: ["male", "female", "other"], nullable: true },
+                    dateOfBirth: { type: "string", format: "date-time", nullable: true },
+                    phone: { type: "string", nullable: true },
+                    address: { type: "string", nullable: true },
                 },
             },
         },
@@ -243,15 +304,26 @@ const schemas = {
 export async function authRoutes(app: FastifyInstance) {
     // Wire dependencies
     const userRepo = new UserRepoPrisma(app.prisma);
+    const userProfileQuery = new UserProfileQueryRepoPrisma(app.prisma);
     const passwordHasher = new PasswordHasherBcrypt();
     const tokenService = new JwtTokenServiceFastify(app);
     const tokenRevocationRepo = new TokenRevocationRepoPrisma(app.prisma);
 
-    const loginUseCase = new LoginUseCase(userRepo, passwordHasher, tokenService);
+    const refreshTokenRepo = new RefreshTokenRepoPrisma(app.prisma);
+
+    const loginUseCase = new LoginUseCase(userRepo, passwordHasher, tokenService, refreshTokenRepo);
     const getCurrentUserUseCase = new GetCurrentUserUseCase(userRepo);
-    const getUserByEmailUseCase = new GetUserByEmailUseCase(userRepo, app.prisma);
-    const logoutUseCase = new LogoutUseCase(tokenRevocationRepo, app.tokenRevocationCache);
+    const getUserByEmailUseCase = new GetUserByEmailUseCase(userProfileQuery);
+    const refreshTokenUseCase = new RefreshTokenUseCase(userRepo, tokenService, refreshTokenRepo);
+    const logoutUseCase = new LogoutUseCase(
+        tokenRevocationRepo,
+        refreshTokenRepo,
+        tokenService,
+        app.tokenRevocationCache,
+    );
     const changePasswordUseCase = new ChangePasswordUseCase(userRepo, passwordHasher);
+    const userProfileMutation = new UserProfileMutationRepoPrisma(app.prisma);
+    const updateOwnProfileUseCase = new UpdateOwnProfileUseCase(userProfileMutation);
 
     // POST /api/v1/auth/login
     app.post<{ Body: LoginRequestDto }>(
@@ -291,6 +363,7 @@ export async function authRoutes(app: FastifyInstance) {
             if (result.success) {
                 return reply.code(200).send({
                     accessToken: result.accessToken,
+                    refreshToken: result.refreshToken,
                     user: result.user,
                 });
             }
@@ -408,8 +481,52 @@ export async function authRoutes(app: FastifyInstance) {
         },
     );
 
+    // POST /api/v1/auth/refresh — exchange a valid refresh token for a new pair.
+    // PUBLIC: no `verify` preHandler (the access token may be expired/absent);
+    // it authenticates via the refresh token in the body.
+    app.post<{ Body: RefreshRequestDto }>(
+        "/refresh",
+        {
+            schema: {
+                description: "Làm mới phiên: đổi refresh token lấy cặp token mới (xoay vòng)",
+                tags: ["auth"],
+                body: schemas.refreshRequest,
+                response: {
+                    200: schemas.refreshResponse,
+                    400: schemas.errorResponse,
+                    401: schemas.errorResponse,
+                    500: schemas.errorResponse,
+                },
+            },
+        },
+        async (request, reply) => {
+            const parseResult = RefreshRequestSchema.safeParse(request.body);
+            if (!parseResult.success) {
+                return reply.code(400).send({
+                    error: {
+                        code: "VALIDATION_ERROR",
+                        message: parseResult.error.issues[0].message,
+                    },
+                });
+            }
+
+            const result = await refreshTokenUseCase.execute(parseResult.data);
+
+            if (result.success) {
+                return reply.code(200).send({
+                    accessToken: result.accessToken,
+                    refreshToken: result.refreshToken,
+                    user: result.user,
+                });
+            }
+
+            const statusCode = getStatusCodeForError(result.error.code);
+            return reply.code(statusCode).send({ error: result.error });
+        },
+    );
+
     // POST /api/v1/auth/logout
-    app.post(
+    app.post<{ Body: { refreshToken?: string } }>(
         "/logout",
         {
             preHandler: app.auth.verify,
@@ -427,9 +544,15 @@ export async function authRoutes(app: FastifyInstance) {
         async (request, reply) => {
             const jti = request.user.jti;
             const userId = request.user.sub;
+            // Access tokens are now signed with `exp`; pass it so the revocation
+            // row's lifetime matches the token's real expiry (self-cleaning).
+            const tokenExpSeconds = (request.user as { exp?: number }).exp;
+            // Optional: the client sends its refresh token so its whole family is
+            // revoked (the session cannot be silently refreshed after logout).
+            const refreshToken = request.body?.refreshToken;
 
             // Execute use case
-            const result = await logoutUseCase.execute({ jti, userId });
+            const result = await logoutUseCase.execute({ jti, userId, tokenExpSeconds, refreshToken });
 
             // Map result to HTTP response
             if (result.success) {
@@ -502,6 +625,68 @@ export async function authRoutes(app: FastifyInstance) {
             });
         },
     );
+
+    // PUT /api/v1/auth/me/profile — self-service update of personal info
+    // (gender / dateOfBirth / phone / address) on the caller's own
+    // student or teacher profile. Identity/academic fields stay admin-managed.
+    app.put<{ Body: UpdateOwnProfileRequestDto }>(
+        "/me/profile",
+        {
+            preHandler: app.auth.verify,
+            schema: {
+                description:
+                    "Người dùng tự cập nhật thông tin cá nhân (giới tính, ngày sinh, số điện thoại, địa chỉ)",
+                tags: ["auth"],
+                security: [{ bearerAuth: [] }],
+                body: schemas.updateOwnProfileRequest,
+                response: {
+                    200: schemas.ownProfileResponse,
+                    400: schemas.errorResponse,
+                    401: schemas.errorResponse,
+                    403: schemas.errorResponse,
+                    404: schemas.errorResponse,
+                    500: schemas.errorResponse,
+                },
+            },
+        },
+        async (request, reply) => {
+            const accountId = request.user.sub;
+            const role = request.user.role;
+
+            const parseResult = UpdateOwnProfileRequestSchema.safeParse(request.body);
+            if (!parseResult.success) {
+                return reply.code(400).send({
+                    error: {
+                        code: "VALIDATION_ERROR",
+                        message: parseResult.error.issues[0].message,
+                    },
+                });
+            }
+
+            const result = await updateOwnProfileUseCase.execute({
+                accountId,
+                role,
+                data: parseResult.data,
+            });
+
+            if (result.success) {
+                return reply.code(200).send({
+                    profile: {
+                        gender: result.data.gender,
+                        dateOfBirth: result.data.dateOfBirth
+                            ? result.data.dateOfBirth.toISOString()
+                            : null,
+                        phone: result.data.phone,
+                        address: result.data.address,
+                    },
+                });
+            }
+
+            return reply.code(getStatusCodeForError(result.error.code)).send({
+                error: result.error,
+            });
+        },
+    );
 }
 
 /**
@@ -518,10 +703,16 @@ function getStatusCodeForError(errorCode: string): number {
             return 400;
         case "INVALID_CREDENTIALS":
         case "UNAUTHORIZED":
+        case "TOKEN_EXPIRED":
+        case "REFRESH_TOKEN_INVALID":
+        case "REFRESH_TOKEN_EXPIRED":
+        case "TOKEN_REUSE_DETECTED":
             return 401;
         case "ACCOUNT_INACTIVE":
+        case "PROFILE_NOT_EDITABLE":
             return 403;
         case "USER_NOT_FOUND":
+        case "PROFILE_NOT_LINKED":
             return 404;
         case "INTERNAL_ERROR":
         default:

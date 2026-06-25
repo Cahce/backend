@@ -1,5 +1,7 @@
 import { z } from "zod";
-import type { PrismaClient } from "../../../../generated/prisma/index.js";
+import type { FacultyRepo } from "../../domain/Faculty/Ports.js";
+import type { MajorRepo } from "../../domain/Major/Ports.js";
+import type { Major } from "../../domain/Major/Types.js";
 import { ImportService, type ImportResult } from "./ImportTypes.js";
 import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
 
@@ -24,29 +26,32 @@ const MAJOR_HEADER_MAP: HeaderMap = {
 };
 
 /**
- * Import majors from CSV
+ * Import majors from CSV / XLSX. Application use case — depends only on the
+ * FacultyRepo + MajorRepo domain ports, never on Prisma.
  */
 export class ImportMajors {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly facultyRepo: FacultyRepo,
+    private readonly majorRepo: MajorRepo,
+  ) {}
 
   async execute(rows: unknown[]): Promise<ImportResult> {
     const normalized = rows.map((row) =>
       normalizeRow(row as Record<string, unknown>, MAJOR_HEADER_MAP),
     );
-    return ImportService.runImport<MajorImportRow, any>(
+    return ImportService.runImport<MajorImportRow, Major>(
       normalized as MajorImportRow[],
       {
-        validateRow: async (row, _rowIndex) => {
+        validateRow: async (row) => {
           try {
             MajorImportRowSchema.parse(row);
             return { ok: true };
           } catch (error) {
             if (error instanceof z.ZodError) {
-              const firstError = error.issues[0];
               return {
                 ok: false,
                 code: "VALIDATION_ERROR",
-                message: firstError.message,
+                message: error.issues[0].message,
               };
             }
             return {
@@ -58,25 +63,15 @@ export class ImportMajors {
         },
 
         resolveForeignKeys: async (row) => {
-          // Resolve facultyCode to facultyId
-          const faculty = await this.prisma.faculty.findUnique({
-            where: { code: row.facultyCode },
-            select: { id: true },
-          });
-
+          const faculty = await this.facultyRepo.findByCode(row.facultyCode);
           if (!faculty) {
             throw new Error(`Không tìm thấy khoa với mã "${row.facultyCode}"`);
           }
-
-          return {
-            facultyId: faculty.id,
-          };
+          return { facultyId: faculty.id };
         },
 
         checkExists: async (row) => {
-          const existing = await this.prisma.major.findUnique({
-            where: { code: row.code },
-          });
+          const existing = await this.majorRepo.findByCode(row.code);
           return existing !== null;
         },
 
@@ -84,18 +79,15 @@ export class ImportMajors {
           if (!resolvedKeys?.facultyId) {
             throw new Error("Faculty ID not resolved");
           }
-
-          return this.prisma.major.create({
-            data: {
-              code: row.code,
-              name: row.name,
-              facultyId: resolvedKeys.facultyId,
-            },
+          return this.majorRepo.create({
+            code: row.code,
+            name: row.name,
+            facultyId: resolvedKeys.facultyId,
           });
         },
 
         batchSize: 500,
-      }
+      },
     );
   }
 }

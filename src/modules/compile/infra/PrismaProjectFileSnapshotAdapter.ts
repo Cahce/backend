@@ -36,9 +36,9 @@ export class PrismaProjectFileSnapshotAdapter implements ProjectFileSnapshotPort
     private readonly storage: BlobStorage,
     opts: PrismaProjectFileSnapshotAdapterOptions = {},
   ) {
-    this.maxBytes =
-      opts.maxBytes ??
-      Number(process.env.MAX_SNAPSHOT_BYTES ?? DEFAULT_MAX_SNAPSHOT_BYTES);
+    // Env is read only in src/config; the limit is injected via opts from the
+    // composition root (app.config.compile.maxSnapshotBytes).
+    this.maxBytes = opts.maxBytes ?? DEFAULT_MAX_SNAPSHOT_BYTES;
   }
 
   async *listFiles(projectId: string): AsyncIterable<ProjectFileSnapshot> {

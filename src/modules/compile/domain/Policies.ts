@@ -1,21 +1,17 @@
 /**
- * Compile module policies
- * 
- * Depends on existing projects access policy.
+ * Compile module policies.
+ *
+ * The cross-cutting project read/write access ports now live in
+ * `projects/domain/access/ProjectAccessPolicies.ts` (their natural owner).
+ * Only the compile-specific official-compile access policy remains here.
  */
 
-export interface ProjectAccessPolicy {
-  /**
-   * Check if user can READ a project (view compile jobs / artifacts).
-   * Throws error if access is denied.
-   */
-  requireProjectAccess(projectId: string, userId: string): Promise<void>;
-}
-
 /**
- * Separate from {@link ProjectAccessPolicy} so the shared read policy (used by
- * binary upload / zotero / openalex / zip) is not forced to know about official
- * compile. Only the compile module's own policy implements this.
+ * Official (backend) compile/export access.
+ *
+ * Separate from the shared read policy (`ProjectAccessPolicy`, used by binary
+ * upload / zotero / openalex / zip) so that shared read implementations are not
+ * forced to know about official compile. Only the compile module implements this.
  */
 export interface OfficialCompileAccessPolicy {
   /**
@@ -28,19 +24,4 @@ export interface OfficialCompileAccessPolicy {
     userId: string,
     userRole: 'admin' | 'teacher' | 'student',
   ): Promise<void>;
-}
-
-/**
- * Write-level project access (owner or editor member). Used by content-mutating
- * surfaces that live outside the projects module — binary upload, zotero/openalex
- * bibliography writes, web capture — so viewer-members and admin oversight cannot
- * mutate project content. Separate from {@link ProjectAccessPolicy} (read: owner
- * or any member) so the shared read implementations are not forced to change.
- */
-export interface ProjectWriteAccessPolicy {
-  /**
-   * Check if user may WRITE project content (owner or editor member only).
-   * Throws (`PROJECT_NOT_FOUND` / `PROJECT_ACCESS_DENIED`) if access is denied.
-   */
-  requireWriteAccess(projectId: string, userId: string): Promise<void>;
 }

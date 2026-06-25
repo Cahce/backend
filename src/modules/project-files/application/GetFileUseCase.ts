@@ -30,14 +30,14 @@ export interface GetFileCommand {
  */
 export class GetFileUseCase {
   constructor(
-    private readonly FileRepo: FileRepo,
-    private readonly ProjectRepo: ProjectRepo,
+    private readonly fileRepo: FileRepo,
+    private readonly projectRepo: ProjectRepo,
   ) {}
 
   async execute(command: GetFileCommand): Promise<Result<File>> {
     try {
       // Verify project exists
-      const project = await this.ProjectRepo.findById(command.projectId);
+      const project = await this.projectRepo.findById(command.projectId);
 
       if (!project) {
         return failure(FileErrors.PROJECT_NOT_FOUND.code, FileErrors.PROJECT_NOT_FOUND.message);
@@ -45,7 +45,7 @@ export class GetFileUseCase {
 
       // Enforce authorization (resolves ProjectMember / advisor relations).
       const authContext: AuthContext = await buildProjectAuthContext(
-        this.ProjectRepo,
+        this.projectRepo,
         project,
         command.userId,
         command.userRole,
@@ -56,7 +56,7 @@ export class GetFileUseCase {
       }
 
       // Find file by project ID and path
-      const file = await this.FileRepo.findByProjectIdAndPath(command.projectId, command.path);
+      const file = await this.fileRepo.findByProjectIdAndPath(command.projectId, command.path);
 
       if (!file) {
         return failure(FileErrors.FILE_NOT_FOUND.code, FileErrors.FILE_NOT_FOUND.message);

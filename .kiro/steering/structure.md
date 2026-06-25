@@ -39,18 +39,25 @@ Each feature module under `src/modules/<name>/` follows this layout:
 
 ## Current Modules
 
+These are the modules that actually exist under `src/modules/` (verified against the tree):
+
 | Module | Responsibility |
 |---|---|
-| `auth` | Login, logout, token refresh, SSO |
-| `admin` | Admin user/system management |
-| `student` | Student profile management |
-| `teacher` | Teacher profile management |
-| `projects` | Project CRUD, membership, share links |
-| `project-files` | File upload/download within projects |
-| `compile` | Typst compile job queue and results |
-| `artifacts` | Compiled output (PDF) storage and retrieval |
-| `templates` | Project templates |
-| `zotero` | Zotero bibliography integration |
+| `auth` | Login, logout, change-password, current-user / user lookup (JWT + token revocation) |
+| `admin` | Admin academic structure (faculty/department/major/class), teacher/student profile & account management, XLSX/CSV import |
+| `teachers` | Teacher profile (`/api/v1/teachers/me`) — the live teacher module |
+| `projects` | Project CRUD, settings, membership, share links, zip import/export, admin oversight |
+| `project-files` | File-tree CRUD + binary upload within projects |
+| `compile` | Typst compile job queue, artifacts, official compile/export |
+| `templates` | Project templates + versions + source-project authoring |
+| `bibliography` | `.bib`/Hayagriva parsing, serialization, citation-key + duplicate detection (no infra: pure logic + project-files port) |
+| `zotero` | Zotero connection + sync into the project bibliography |
+| `openalex` | OpenAlex search + import into the project bibliography |
+| `capture` | Web-to-cite capture (translation-server + OpenAlex fallback) |
+
+> The empty placeholder directories `student/`, `teacher/`, and `artifacts/` were removed — they
+> contained no code. Student/teacher data lives under `admin` (and the live teacher profile under
+> `teachers`); compiled artifacts are served from `compile`. Do not recreate empty module shells.
 
 ## Plugins
 
@@ -70,5 +77,7 @@ Defined in `src/types/fastify.d.ts`:
 - **Routes.ts** registers Fastify routes; use `app.auth.verify` as a `preHandler` for protected routes
 - **Dto.ts** defines Zod schemas; use `@asteasolutions/zod-to-openapi` for OpenAPI annotations
 - All imports use `.js` extensions (ESM NodeNext requirement), even for `.ts` source files
-- Use path aliases (`@modules/`, `@shared/`, `@config`) instead of relative paths across module boundaries
+- Use relative imports with `.js` extensions across module boundaries. **Path aliases are intentionally
+  NOT configured** (the unused `@modules/@shared/@config` `paths` block + the `build:aliases` script were
+  removed, since the default `build` runs plain `tsc` and would not rewrite alias paths at runtime). See `tech.md`.
 - Prisma client is imported from `src/generated/prisma/client.js`, not from `@prisma/client`

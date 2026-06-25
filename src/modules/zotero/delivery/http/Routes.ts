@@ -533,7 +533,7 @@ function handleError(error: unknown, reply: FastifyReply) {
   }
 
   // Generic error
-  console.error("Unhandled error in Zotero routes:", error);
+  reply.log.error({ err: error }, "Unhandled error in Zotero routes");
   return reply.code(500).send({
     error: {
       code: "INTERNAL_ERROR",

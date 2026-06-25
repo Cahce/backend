@@ -1,7 +1,7 @@
 import type { PrismaClient, ProjectSettings as PrismaProjectSettings } from "../../../generated/prisma/index.js";
 import { Prisma } from "../../../generated/prisma/index.js";
 import type { ProjectSettingsRepository } from "../domain/ProjectSettingsRepository.js";
-import { ProjectSettings, type CompileOptions, type ZoteroConfig } from "../domain/ProjectSettings.js";
+import { ProjectSettings, type CompileOptions, type ZoteroConfig, type OpenAlexConfig } from "../domain/ProjectSettings.js";
 
 export class PrismaProjectSettingsRepository implements ProjectSettingsRepository {
     constructor(private readonly prisma: PrismaClient) {}
@@ -21,6 +21,7 @@ export class PrismaProjectSettingsRepository implements ProjectSettingsRepositor
                 mainPath: "main.typ",
                 compileOptions: Prisma.JsonNull,
                 zoteroConfig: Prisma.JsonNull,
+                openalexConfig: Prisma.JsonNull,
             },
         });
 
@@ -36,6 +37,9 @@ export class PrismaProjectSettingsRepository implements ProjectSettingsRepositor
                 zoteroConfig: settings.zoteroConfig === null
                     ? Prisma.JsonNull
                     : (settings.zoteroConfig as Prisma.InputJsonValue),
+                openalexConfig: settings.openalexConfig === null
+                    ? Prisma.JsonNull
+                    : (settings.openalexConfig as Prisma.InputJsonValue),
                 updatedAt: new Date(),
             },
         });
@@ -49,6 +53,7 @@ export class PrismaProjectSettingsRepository implements ProjectSettingsRepositor
             row.mainPath,
             (row.compileOptions as CompileOptions) ?? {},
             (row.zoteroConfig as ZoteroConfig) ?? null,
+            (row.openalexConfig as OpenAlexConfig) ?? null,
             row.updatedAt,
         );
     }

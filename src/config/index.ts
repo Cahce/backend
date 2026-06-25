@@ -6,6 +6,10 @@ const EnvSchema = z.object({
     HOST: z.string().default("0.0.0.0"),
     DATABASE_URL: z.string().min(1),
     JWT_SECRET: z.string().min(1),
+    // Access token lifetime (short) + refresh token lifetime ("force re-login"
+    // window). @fastify/jwt expiresIn syntax: "15m", "1h", "1d", "900s".
+    JWT_ACCESS_TTL: z.string().default("15m"),
+    JWT_REFRESH_TTL: z.string().default("1d"),
     SWAGGER_ROUTE_PREFIX: z.string().default("/docs"),
     // Blob Storage
     BLOB_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
@@ -16,6 +20,8 @@ const EnvSchema = z.object({
     COMPILE_WORKER_ENABLED: z.coerce.boolean().default(true),
     COMPILE_TIMEOUT_MS: z.coerce.number().default(60000),
     COMPILE_FONT_DIRS: z.string().default('./var/fonts'),
+    // Hard byte ceiling for a project-file compile snapshot (cumulative).
+    MAX_SNAPSHOT_BYTES: z.coerce.number().default(256 * 1024 * 1024), // 256 MB
     // Bibliography Integration
     ZOTERO_API_BASE: z.string().default("https://api.zotero.org"),
     OPENALEX_MAILTO: z.string().default(""),
@@ -37,6 +43,8 @@ export const config = {
     },
     auth: {
         jwtSecret: env.JWT_SECRET,
+        accessTtl: env.JWT_ACCESS_TTL,
+        refreshTtl: env.JWT_REFRESH_TTL,
     },
     swagger: {
         routePrefix: env.SWAGGER_ROUTE_PREFIX,
@@ -52,6 +60,7 @@ export const config = {
         workerEnabled: env.COMPILE_WORKER_ENABLED,
         timeoutMs: env.COMPILE_TIMEOUT_MS,
         fontDirs: env.COMPILE_FONT_DIRS,
+        maxSnapshotBytes: env.MAX_SNAPSHOT_BYTES,
     },
     bibliography: {
         zoteroApiBase: env.ZOTERO_API_BASE,

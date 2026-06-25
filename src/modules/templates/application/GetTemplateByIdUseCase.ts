@@ -22,7 +22,10 @@ export type GetTemplateByIdResult =
 export class GetTemplateByIdUseCase {
   constructor(private readonly templateRepo: TemplateRepo) {}
 
-  async execute(id: string): Promise<GetTemplateByIdResult> {
+  async execute(
+    id: string,
+    options?: { includeUsage?: boolean },
+  ): Promise<GetTemplateByIdResult> {
     try {
       const template = await this.templateRepo.findById(id);
 
@@ -33,13 +36,19 @@ export class GetTemplateByIdUseCase {
         };
       }
 
-      const usage = await this.templateRepo.countUsageByTemplateIds([id]);
+      // usageCount is an admin-detail concern. The public detail path passes
+      // includeUsage:false to skip the groupBy + findMany aggregation entirely
+      // (the public response never returns usageCount).
+      const usageCount =
+        options?.includeUsage === false
+          ? 0
+          : (await this.templateRepo.countUsageByTemplateIds([id])).get(id) ?? 0;
 
       return {
         success: true,
         data: {
           ...template,
-          usageCount: usage.get(id) ?? 0,
+          usageCount,
         },
       };
     } catch (error) {

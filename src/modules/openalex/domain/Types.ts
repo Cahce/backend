@@ -1,9 +1,18 @@
 /**
  * OpenAlex Domain Types
- * 
+ *
  * Raw API shapes from OpenAlex API.
  * No framework dependencies.
  */
+
+/**
+ * Import status for an OpenAlex → bibliography import attempt.
+ *
+ * Domain-owned union (NOT the Prisma-generated enum) so the domain layer stays
+ * free of framework imports. The infra repository maps this to/from the Prisma
+ * `OpenAlexImportStatus` enum at the persistence boundary.
+ */
+export type OpenAlexImportStatus = "imported" | "skipped_duplicate" | "failed";
 
 /**
  * OpenAlex Author

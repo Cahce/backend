@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { AdminContainer } from "../../../Container.js";
-import { ImportMajors } from "../../../application/import/ImportMajors.js";
 import { FileParser } from "../../../infra/FileParser.js";
 import {
     CreateMajorRequestSchema,
@@ -23,7 +22,7 @@ import {
  */
 export async function majorRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
-    const importMajors = new ImportMajors(app.prisma);
+    const importMajors = container.importMajors;
 
     // POST /api/v1/admin/majors - create major
     app.post<{ Body: CreateMajorRequestDto }>(

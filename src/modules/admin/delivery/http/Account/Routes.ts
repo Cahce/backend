@@ -13,7 +13,6 @@ import {
   type MessageResponse,
 } from "./Dto.js";
 import { AdminContainer } from "../../../Container.js";
-import { ImportAccounts } from "../../../application/import/ImportAccounts.js";
 import { FileParser } from "../../../infra/FileParser.js";
 
 export async function accountRoutes(app: FastifyInstance): Promise<void> {
@@ -26,7 +25,7 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     deleteAccountUseCase,
     resetAccountPasswordUseCase: resetPasswordUseCase,
   } = container;
-  const importAccounts = new ImportAccounts(app.prisma);
+  const importAccounts = container.importAccounts;
 
   // POST /admin/accounts - Create account
   app.post<{ Body: unknown }>(

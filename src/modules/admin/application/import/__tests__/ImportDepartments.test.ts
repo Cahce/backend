@@ -1,31 +1,47 @@
 import { describe, it, mock } from "node:test";
 import assert from "node:assert";
 import { ImportDepartments } from "../ImportDepartments.js";
-import type { PrismaClient } from "../../../../../generated/prisma/index.js";
+import type { FacultyRepo } from "../../../domain/Faculty/Ports.js";
+import type { DepartmentRepo } from "../../../domain/Department/Ports.js";
+
+/**
+ * Fake FacultyRepo exposing only findByCode (the sole method the importer uses).
+ * `findByCode(code)` returns the resolved faculty (needs `.id`) or null.
+ */
+function makeFacultyRepo(findByCode: (code: string) => unknown): FacultyRepo {
+  return {
+    findByCode: mock.fn(async (code: string) => findByCode(code)),
+  } as unknown as FacultyRepo;
+}
+
+/**
+ * Fake DepartmentRepo exposing findByCode (existence check) + create.
+ * `create(data)` receives `{ code, name, facultyId }` directly (no `.data` wrap).
+ */
+function makeDepartmentRepo(opts: {
+  findByCode?: (code: string) => unknown;
+  create?: (data: { code: string; name: string; facultyId: string }) => unknown;
+}): DepartmentRepo {
+  return {
+    findByCode: mock.fn(async (code: string) =>
+      opts.findByCode ? opts.findByCode(code) : null,
+    ),
+    create: mock.fn(async (data: { code: string; name: string; facultyId: string }) =>
+      opts.create
+        ? opts.create(data)
+        : { id: "test-id", ...data, createdAt: new Date(), updatedAt: new Date() },
+    ),
+  } as unknown as DepartmentRepo;
+}
 
 describe("ImportDepartments", () => {
   it("should import valid departments successfully", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async (args: any) => {
-          if (args.where.code === "CNTT") {
-            return { id: "faculty-1", code: "CNTT", name: "Khoa CNTT" };
-          }
-          return null;
-        }),
-      },
-      department: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+    const useCase = new ImportDepartments(
+      makeFacultyRepo((code) =>
+        code === "CNTT" ? { id: "faculty-1", code: "CNTT", name: "Khoa CNTT" } : null,
+      ),
+      makeDepartmentRepo({}),
+    );
 
     const rows = [
       { code: "KHMT", name: "Khoa học Máy tính", facultyCode: "CNTT" },
@@ -42,26 +58,10 @@ describe("ImportDepartments", () => {
   });
 
   it("accepts Vietnamese headers from the downloadable template", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async (args: any) => ({
-          id: "faculty-1",
-          code: args.where.code,
-          name: "Khoa",
-        })),
-      },
-      department: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+    const useCase = new ImportDepartments(
+      makeFacultyRepo((code) => ({ id: "faculty-1", code, name: "Khoa" })),
+      makeDepartmentRepo({}),
+    );
 
     const rows = [
       { STT: "1", Khoa: "CNTT", "Mã Bộ Môn": "KTPM", "Bộ Môn": "Kỹ thuật phần mềm" },
@@ -76,31 +76,13 @@ describe("ImportDepartments", () => {
   });
 
   it("should skip existing departments", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async () => ({
-          id: "faculty-1",
-          code: "CNTT",
-          name: "Khoa CNTT",
-        })),
-      },
-      department: {
-        findUnique: mock.fn(async (args: any) => {
-          if (args.where.code === "KHMT") {
-            return { id: "existing-id", code: "KHMT", name: "Existing" };
-          }
-          return null;
-        }),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+    const useCase = new ImportDepartments(
+      makeFacultyRepo(() => ({ id: "faculty-1", code: "CNTT", name: "Khoa CNTT" })),
+      makeDepartmentRepo({
+        findByCode: (code) =>
+          code === "KHMT" ? { id: "existing-id", code: "KHMT", name: "Existing" } : null,
+      }),
+    );
 
     const rows = [
       { code: "KHMT", name: "Khoa học Máy tính", facultyCode: "CNTT" },
@@ -116,26 +98,10 @@ describe("ImportDepartments", () => {
   });
 
   it("should handle validation errors", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async () => ({
-          id: "faculty-1",
-          code: "CNTT",
-          name: "Khoa CNTT",
-        })),
-      },
-      department: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+    const useCase = new ImportDepartments(
+      makeFacultyRepo(() => ({ id: "faculty-1", code: "CNTT", name: "Khoa CNTT" })),
+      makeDepartmentRepo({}),
+    );
 
     const rows = [
       { code: "", name: "Khoa học Máy tính", facultyCode: "CNTT" }, // Invalid: empty code
@@ -155,30 +121,14 @@ describe("ImportDepartments", () => {
   });
 
   it("should handle missing facultyCode", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async () => ({
-          id: "faculty-1",
-          code: "CNTT",
-          name: "Khoa CNTT",
-        })),
-      },
-      department: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+    const useCase = new ImportDepartments(
+      makeFacultyRepo(() => ({ id: "faculty-1", code: "CNTT", name: "Khoa CNTT" })),
+      makeDepartmentRepo({}),
+    );
 
     const rows = [
       { code: "KHMT", name: "Khoa học Máy tính" }, // Missing facultyCode
-    ] as any[];
+    ] as unknown[];
 
     const result = await useCase.execute(rows);
 
@@ -191,27 +141,12 @@ describe("ImportDepartments", () => {
   });
 
   it("should handle invalid facultyCode", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async (args: any) => {
-          if (args.where.code === "INVALID") {
-            return null; // Faculty not found
-          }
-          return { id: "faculty-1", code: "CNTT", name: "Khoa CNTT" };
-        }),
-      },
-      department: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+    const useCase = new ImportDepartments(
+      makeFacultyRepo((code) =>
+        code === "INVALID" ? null : { id: "faculty-1", code: "CNTT", name: "Khoa CNTT" },
+      ),
+      makeDepartmentRepo({}),
+    );
 
     const rows = [
       { code: "KHMT", name: "Khoa học Máy tính", facultyCode: "INVALID" },
@@ -231,26 +166,10 @@ describe("ImportDepartments", () => {
   });
 
   it("should process large batches correctly", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async () => ({
-          id: "faculty-1",
-          code: "CNTT",
-          name: "Khoa CNTT",
-        })),
-      },
-      department: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => ({
-          id: "test-id",
-          ...args.data,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+    const useCase = new ImportDepartments(
+      makeFacultyRepo(() => ({ id: "faculty-1", code: "CNTT", name: "Khoa CNTT" })),
+      makeDepartmentRepo({}),
+    );
 
     // Create 600 rows to test batch processing (batch size is 500)
     const rows = Array.from({ length: 600 }, (_, i) => ({
@@ -268,31 +187,17 @@ describe("ImportDepartments", () => {
   });
 
   it("should handle database errors gracefully", async () => {
-    const mockPrisma = {
-      faculty: {
-        findUnique: mock.fn(async () => ({
-          id: "faculty-1",
-          code: "CNTT",
-          name: "Khoa CNTT",
-        })),
-      },
-      department: {
-        findUnique: mock.fn(async () => null),
-        create: mock.fn(async (args: any) => {
-          if (args.data.code === "ERROR") {
+    const useCase = new ImportDepartments(
+      makeFacultyRepo(() => ({ id: "faculty-1", code: "CNTT", name: "Khoa CNTT" })),
+      makeDepartmentRepo({
+        create: (data) => {
+          if (data.code === "ERROR") {
             throw new Error("Database error");
           }
-          return {
-            id: "test-id",
-            ...args.data,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-        }),
-      },
-    } as unknown as PrismaClient;
-
-    const useCase = new ImportDepartments(mockPrisma);
+          return { id: "test-id", ...data, createdAt: new Date(), updatedAt: new Date() };
+        },
+      }),
+    );
 
     const rows = [
       { code: "KHMT", name: "Valid Department", facultyCode: "CNTT" },

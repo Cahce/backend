@@ -54,7 +54,13 @@ export class ChangePasswordUseCase {
                 throw new InternalAuthError("Tài khoản SSO không thể đổi mật khẩu");
             }
 
-            // 3. Verify old password
+            // 3. New password must match its confirmation. Cheap check first so a
+            // mismatched confirmation fails fast without paying for two bcrypt compares.
+            if (command.newPassword !== command.confirmNewPassword) {
+                throw new PasswordsDoNotMatchError();
+            }
+
+            // 4. Verify old password
             const isOldPasswordValid = await this.passwordHasher.verify(
                 command.oldPassword,
                 user.passwordHash,
@@ -63,18 +69,13 @@ export class ChangePasswordUseCase {
                 throw new OldPasswordIncorrectError();
             }
 
-            // 4. Check if new password is different from old password
+            // 5. Check if new password is different from old password
             const isNewPasswordSameAsOld = await this.passwordHasher.verify(
                 command.newPassword,
                 user.passwordHash,
             );
             if (isNewPasswordSameAsOld) {
                 throw new NewPasswordSameAsOldError();
-            }
-
-            // 5. Check if new password matches confirmation
-            if (command.newPassword !== command.confirmNewPassword) {
-                throw new PasswordsDoNotMatchError();
             }
 
             // 6. Hash new password

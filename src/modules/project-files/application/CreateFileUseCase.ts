@@ -13,6 +13,7 @@ import { StoragePolicy } from '../domain/ProjectFile/Policies.js';
 import { ProjectAuthPolicy, type AuthContext } from '../../projects/domain/Project/Policies.js';
 import { buildProjectAuthContext } from '../../projects/application/ProjectAuthContext.js';
 import { detectKindFromPath } from '../domain/FileKindPolicy.js';
+import { validateProjectFilePath, InvalidPathError } from '../domain/PathValidator.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
@@ -61,16 +62,22 @@ export class CreateFileUseCase {
         return failure(FileErrors.UNAUTHORIZED.code, FileErrors.UNAUTHORIZED.message);
       }
 
-      // Validate path format
-      const pathValidation = this.validatePath(command.path);
-      if (!pathValidation.valid) {
-        return failure(FileErrors.INVALID_FILE_PATH.code, pathValidation.reason!);
+      // Validate + normalise path via the domain PathValidator (single source
+      // of truth; rejects backslashes, control chars, standalone '..', etc.).
+      let normalizedPath: string;
+      try {
+        normalizedPath = validateProjectFilePath(command.path);
+      } catch (err) {
+        if (err instanceof InvalidPathError) {
+          return failure(FileErrors.INVALID_FILE_PATH.code, err.message);
+        }
+        throw err;
       }
 
       // Check if file already exists at path
       const existingFile = await this.fileRepo.findByProjectIdAndPath(
         command.projectId,
-        command.path,
+        normalizedPath,
       );
 
       if (existingFile) {
@@ -82,7 +89,7 @@ export class CreateFileUseCase {
       const sha256 = crypto.createHash('sha256').update(command.content, 'utf8').digest('hex');
 
       // Determine file kind (use provided kind or auto-detect from path)
-      const fileKind = command.kind ?? detectKindFromPath(command.path);
+      const fileKind = command.kind ?? detectKindFromPath(normalizedPath);
 
       // Apply storage policy
       const storageMode = StoragePolicy.determineStorageMode(sizeBytes, fileKind);
@@ -90,7 +97,7 @@ export class CreateFileUseCase {
       // Create file via repository
       const file = await this.fileRepo.create({
         projectId: command.projectId,
-        path: command.path,
+        path: normalizedPath,
         kind: fileKind,
         content: command.content,
         mimeType: command.mimeType,
@@ -103,29 +110,5 @@ export class CreateFileUseCase {
     } catch (error) {
       return failure('INTERNAL_ERROR', 'Lỗi khi tạo tệp');
     }
-  }
-
-  /**
-   * Validate file path format
-   * Rejects: ../, ./, absolute paths, empty paths
-   */
-  private validatePath(path: string): { valid: boolean; reason?: string } {
-    if (!path || path.trim().length === 0) {
-      return { valid: false, reason: 'Đường dẫn không được để trống' };
-    }
-
-    if (path.includes('../')) {
-      return { valid: false, reason: 'Đường dẫn không được chứa ../' };
-    }
-
-    if (path.startsWith('./')) {
-      return { valid: false, reason: 'Đường dẫn không được bắt đầu bằng ./' };
-    }
-
-    if (path.startsWith('/')) {
-      return { valid: false, reason: 'Đường dẫn không được là đường dẫn tuyệt đối' };
-    }
-
-    return { valid: true };
   }
 }

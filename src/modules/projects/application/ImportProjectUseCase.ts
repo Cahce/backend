@@ -345,6 +345,7 @@ export class ImportProjectUseCase {
             mainPath,
             settings.compileOptions,
             settings.zoteroConfig,
+            settings.openalexConfig,
             new Date(),
           ),
         );

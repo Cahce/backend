@@ -93,17 +93,12 @@ export class CreateTemplateVersionUseCase {
           entryPath: storageResult.entryPath,
         });
 
-        // Rename storage directory to use actual version ID
-        // Note: For Phase 1, we keep the temp ID in storage key
-        // Future: Implement proper rename logic
-        const newStorageKey = `${input.templateId}/${version.id}`;
-
+        // Return the version as persisted. (storageKey is the temp-prefixed key
+        // actually written to disk + DB; the earlier `newStorageKey` override
+        // returned a path that disagreed with both and was never consumed.)
         return {
           success: true,
-          data: {
-            ...version,
-            storageKey: newStorageKey,
-          },
+          data: version,
         };
       } catch (error) {
         // Rollback storage on database error

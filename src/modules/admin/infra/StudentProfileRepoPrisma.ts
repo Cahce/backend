@@ -8,6 +8,7 @@
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import type { StudentProfileRepo } from '../domain/StudentManagement/Ports.js';
 import type {
+  Gender,
   StudentProfile,
   StudentProfileWithContext,
   CreateStudentData,
@@ -19,6 +20,48 @@ import type {
 } from '../domain/StudentManagement/Types.js';
 import type { PaginatedResult } from '../application/Types.js';
 import { Prisma } from '../../../generated/prisma/index.js';
+
+/**
+ * Build the Prisma where-clause for the student list query.
+ *
+ * Exported and pure so the filter logic is unit-testable without a DB.
+ * IMPORTANT: `majorId` and `facultyId` both constrain the related `class`, so
+ * they must be merged into a single `class` filter. The previous code assigned
+ * `whereClause.class` twice, so a majorId+facultyId request silently dropped the
+ * narrower majorId constraint and returned all students in the faculty.
+ */
+export function buildStudentWhereClause(filters: StudentFilters): Prisma.StudentWhereInput {
+  const where: Prisma.StudentWhereInput = {};
+
+  if (filters.search) {
+    where.OR = [
+      { fullName: { contains: filters.search, mode: 'insensitive' } },
+      { studentCode: { contains: filters.search, mode: 'insensitive' } },
+    ];
+  }
+
+  if (filters.classId) {
+    where.classId = filters.classId;
+  }
+
+  // majorId + facultyId both scope the related class — merge into one filter.
+  const classWhere: Prisma.ClassWhereInput = {};
+  if (filters.majorId) {
+    classWhere.majorId = filters.majorId;
+  }
+  if (filters.facultyId) {
+    classWhere.major = { facultyId: filters.facultyId };
+  }
+  if (Object.keys(classWhere).length > 0) {
+    where.class = classWhere;
+  }
+
+  if (filters.hasAccount !== undefined) {
+    where.accountId = filters.hasAccount ? { not: null } : null;
+  }
+
+  return where;
+}
 
 /**
  * Prisma-based Student Profile repository implementation
@@ -37,6 +80,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
           fullName: data.fullName,
           classId: data.classId,
           phone: data.phone ?? null,
+          gender: data.gender ?? null,
+          dateOfBirth: data.dateOfBirth ?? null,
+          address: data.address ?? null,
           accountId: data.accountId ?? null,
         },
       });
@@ -132,37 +178,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
     const pageSize = Math.min(filters.pageSize ?? 20, 100);
     const skip = (page - 1) * pageSize;
 
-    // Build where clause for search and filters
-    const whereClause: Prisma.StudentWhereInput = {};
-
-    if (filters.search) {
-      whereClause.OR = [
-        { fullName: { contains: filters.search, mode: 'insensitive' } },
-        { studentCode: { contains: filters.search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (filters.classId) {
-      whereClause.classId = filters.classId;
-    }
-
-    if (filters.majorId) {
-      whereClause.class = {
-        majorId: filters.majorId,
-      };
-    }
-
-    if (filters.facultyId) {
-      whereClause.class = {
-        major: {
-          facultyId: filters.facultyId,
-        },
-      };
-    }
-
-    if (filters.hasAccount !== undefined) {
-      whereClause.accountId = filters.hasAccount ? { not: null } : null;
-    }
+    // Build where clause via the pure, unit-tested helper (merges majorId +
+    // facultyId into one `class` filter — fixes the prior overwrite bug).
+    const whereClause = buildStudentWhereClause(filters);
 
     // Execute query with pagination, includes, and default ordering
     const [items, total] = await Promise.all([
@@ -215,6 +233,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
           ...(data.fullName !== undefined && { fullName: data.fullName }),
           ...(data.classId !== undefined && { classId: data.classId }),
           ...(data.phone !== undefined && { phone: data.phone }),
+          ...(data.gender !== undefined && { gender: data.gender }),
+          ...(data.dateOfBirth !== undefined && { dateOfBirth: data.dateOfBirth }),
+          ...(data.address !== undefined && { address: data.address }),
         },
       });
 
@@ -339,6 +360,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
     fullName: string;
     classId: string;
     phone: string | null;
+    gender: Gender | null;
+    dateOfBirth: Date | null;
+    address: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): StudentProfile {
@@ -349,6 +373,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
       fullName: prismaStudent.fullName,
       classId: prismaStudent.classId,
       phone: prismaStudent.phone,
+      gender: prismaStudent.gender,
+      dateOfBirth: prismaStudent.dateOfBirth,
+      address: prismaStudent.address,
       createdAt: prismaStudent.createdAt,
       updatedAt: prismaStudent.updatedAt,
     };
@@ -364,6 +391,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
     fullName: string;
     classId: string;
     phone: string | null;
+    gender: Gender | null;
+    dateOfBirth: Date | null;
+    address: string | null;
     createdAt: Date;
     updatedAt: Date;
     class: {
@@ -397,6 +427,9 @@ export class StudentProfileRepoPrisma implements StudentProfileRepo {
       fullName: prismaStudent.fullName,
       classId: prismaStudent.classId,
       phone: prismaStudent.phone,
+      gender: prismaStudent.gender,
+      dateOfBirth: prismaStudent.dateOfBirth,
+      address: prismaStudent.address,
       createdAt: prismaStudent.createdAt,
       updatedAt: prismaStudent.updatedAt,
       class: {

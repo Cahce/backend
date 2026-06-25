@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type {
     IPasswordHasher,
+    IRefreshTokenRepository,
     ITokenService,
     IUserRepository,
 } from "../domain/Ports.js";
@@ -22,6 +24,7 @@ export class LoginUseCase {
         private readonly userRepo: IUserRepository,
         private readonly passwordHasher: IPasswordHasher,
         private readonly tokenService: ITokenService,
+        private readonly refreshTokenRepo: IRefreshTokenRepository,
     ) {}
 
     async execute(command: LoginCommand): Promise<LoginResponse> {
@@ -51,17 +54,25 @@ export class LoginUseCase {
                 throw new InvalidCredentialsError();
             }
 
-            // 5. Generate JWT token
-            const accessToken = await this.tokenService.generate({
+            // 5. Generate access (short-lived JWT) + rotating refresh token.
+            const access = await this.tokenService.generateAccessToken({
                 userId: user.id,
                 email: user.email,
                 role: user.role,
+            });
+            const refresh = this.tokenService.generateRefreshToken();
+            await this.refreshTokenRepo.persist({
+                tokenHash: this.tokenService.hashRefreshToken(refresh.token),
+                userId: user.id,
+                familyId: randomUUID(), // new rotation family per login
+                expiresAt: refresh.expiresAt,
             });
 
             // 6. Return success result
             return {
                 success: true,
-                accessToken,
+                accessToken: access.token,
+                refreshToken: refresh.token,
                 user: {
                     id: user.id,
                     email: user.email,

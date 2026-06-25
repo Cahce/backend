@@ -1,0 +1,302 @@
+[
+  {
+    "id": "model-heading-numbering",
+    "code": "#set heading(numbering: \"1.1\")\n= Chương một\n== Mục con\n=== Tiểu mục",
+    "width": "300pt"
+  },
+  {
+    "id": "model-list-marker",
+    "code": "#list(marker: [→])[Mục một][Mục hai][Mục ba]",
+    "width": "300pt"
+  },
+  {
+    "id": "model-enum-numbering",
+    "code": "#enum(numbering: \"a)\")[Mục đầu][Mục sau][Mục cuối]",
+    "width": "300pt"
+  },
+  {
+    "id": "model-enum-start",
+    "code": "#enum(start: 5)[Năm][Sáu][Bảy]",
+    "width": "300pt"
+  },
+  {
+    "id": "model-terms-separator",
+    "code": "#set terms(separator: [ — ])\n/ Typst: ngôn ngữ soạn thảo\n/ PDF: định dạng xuất bản",
+    "width": "320pt"
+  },
+  {
+    "id": "model-table-fill",
+    "code": "#table(\n  columns: 3,\n  align: center,\n  fill: (_, y) => if y == 0 { rgb(\"#cce5ff\") },\n  [STT], [Tên], [Điểm],\n  [1], [An], [9.0],\n)",
+    "width": "320pt"
+  },
+  {
+    "id": "model-table-stroke",
+    "code": "#table(\n  columns: 2,\n  stroke: none,\n  [Họ tên], [Lớp],\n  [Nguyễn Văn A], [CNTT1],\n)",
+    "width": "320pt"
+  },
+  {
+    "id": "model-tablecell-colspan",
+    "code": "#table(\n  columns: 3,\n  table.cell(colspan: 3, fill: rgb(\"#cce5ff\"))[Bảng điểm học kỳ],\n  [1], [An], [9.0],\n  [2], [Bình], [8.5],\n)",
+    "width": "320pt"
+  },
+  {
+    "id": "model-figure-caption",
+    "code": "#figure(\n  rect(width: 4cm, height: 1.2cm, fill: luma(235)),\n  caption: [Sơ đồ khối hệ thống],\n)",
+    "width": "320pt"
+  },
+  {
+    "id": "model-figurecaption-position",
+    "code": "#figure(\n  rect(width: 4cm, height: 1.2cm, fill: luma(235)),\n  caption: figure.caption(position: top)[Chú thích đặt trên hình],\n)",
+    "width": "320pt"
+  },
+  {
+    "id": "model-par-justify",
+    "code": "#set par(justify: true, first-line-indent: 1.5em)\n#lorem(40)",
+    "width": "360pt"
+  },
+  {
+    "id": "model-quote-attribution",
+    "code": "#quote(block: true, attribution: [— A. Einstein])[\n  Trí tưởng tượng quan trọng hơn kiến thức.\n]",
+    "width": "340pt"
+  },
+  {
+    "id": "text-text-weight",
+    "code": "#text(weight: \"bold\")[Đậm] · #text(weight: \"light\")[mảnh] · thường",
+    "width": "auto"
+  },
+  {
+    "id": "text-text-style",
+    "code": "#text(style: \"italic\")[Chữ nghiêng] · chữ đứng",
+    "width": "auto"
+  },
+  {
+    "id": "text-text-size",
+    "code": "#text(size: 20pt)[To] · #text(size: 10pt)[nhỏ]",
+    "width": "auto"
+  },
+  {
+    "id": "text-text-fill",
+    "code": "#text(fill: blue)[Xanh] · #text(fill: red)[đỏ] · #text(fill: green)[lục]",
+    "width": "auto"
+  },
+  {
+    "id": "text-text-tracking",
+    "code": "#text(tracking: 3pt)[GIÃN] · bình thường",
+    "width": "auto"
+  },
+  {
+    "id": "text-underline-stroke",
+    "code": "#underline(stroke: 1.5pt + red)[Gạch chân đỏ dày]",
+    "width": "auto"
+  },
+  {
+    "id": "text-underline-offset",
+    "code": "#underline(offset: 4pt)[Nét gạch cách xa chữ]",
+    "width": "auto"
+  },
+  {
+    "id": "text-strike-stroke",
+    "code": "#strike(stroke: 2pt + red)[Đoạn bị gạch ngang đỏ]",
+    "width": "auto"
+  },
+  {
+    "id": "text-highlight-fill",
+    "code": "#highlight(fill: aqua)[tô lam] và #highlight(fill: yellow)[tô vàng]",
+    "width": "auto"
+  },
+  {
+    "id": "text-highlight-radius",
+    "code": "#highlight(fill: yellow, radius: 4pt)[Vùng tô bo góc]",
+    "width": "auto"
+  },
+  {
+    "id": "text-smallcaps-all",
+    "code": "#smallcaps(all: true)[Tiêu Đề ABC] · #smallcaps[Tiêu Đề ABC]",
+    "width": "auto"
+  },
+  {
+    "id": "layout-align-variants",
+    "code": "#align(left)[Căn trái]\n#align(center)[Căn giữa]\n#align(right)[Căn phải]",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-grid-fill",
+    "code": "#grid(\n  columns: (1fr, 1fr),\n  inset: 6pt,\n  stroke: 0.5pt,\n  fill: (_, y) => if y == 0 { luma(230) },\n  [Cột A], [Cột B],\n  [Dữ liệu 1], [Dữ liệu 2],\n)",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-gridcell-colspan",
+    "code": "#grid(\n  columns: 3,\n  inset: 6pt,\n  stroke: 0.5pt,\n  grid.cell(colspan: 3, fill: luma(230))[Tiêu đề trải 3 cột],\n  [a], [b], [c],\n)",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-columns-count",
+    "code": "#columns(2, gutter: 1.5em)[#lorem(40)]",
+    "width": "360pt"
+  },
+  {
+    "id": "layout-stack-dir",
+    "code": "#stack(\n  dir: ltr,\n  spacing: 1em,\n  rect(width: 1cm, height: 1cm, fill: red),\n  rect(width: 1cm, height: 1cm, fill: green),\n  rect(width: 1cm, height: 1cm, fill: blue),\n)",
+    "width": "auto"
+  },
+  {
+    "id": "layout-place-align",
+    "code": "#block(width: 100%, height: 2.5cm, stroke: 0.5pt)[\n  #place(top + right, dx: -4pt, dy: 4pt)[Góc phải trên]\n  #place(bottom + left, dx: 4pt, dy: -4pt)[Góc trái dưới]\n]",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-block-style",
+    "code": "#block(\n  fill: blue.lighten(80%),\n  stroke: 1pt + blue,\n  radius: 6pt,\n  inset: 10pt,\n)[Khối có nền, viền và bo góc.]",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-box-fill",
+    "code": "Một đoạn có #box(fill: yellow, inset: (x: 4pt, y: 2pt), radius: 3pt)[từ khóa] được tô nổi bật giữa dòng.",
+    "width": "320pt"
+  },
+  {
+    "id": "layout-pad-demo",
+    "code": "#block(stroke: 0.5pt)[\n  #pad(x: 1cm, y: 8pt)[Nội dung được đệm bên trong khung.]\n]",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-h-fr",
+    "code": "Trái #h(1fr) Giữa #h(1fr) Phải",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-rotate-reflow",
+    "code": "#box(inset: 6pt, stroke: 0.5pt)[#rotate(20deg, reflow: true)[Quay 20°]]",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-scale-xy",
+    "code": "#box(inset: 6pt)[#scale(x: 160%, y: 80%, reflow: true)[Kéo giãn]]",
+    "width": "300pt"
+  },
+  {
+    "id": "layout-repeat-gap",
+    "code": "Chương 1. Mở đầu #box(width: 1fr, repeat(gap: 3pt)[.]) 5",
+    "width": "300pt"
+  },
+  {
+    "id": "math-equation-numbering",
+    "code": "#set math.equation(numbering: \"(1)\")\n$ a^2 + b^2 = c^2 $",
+    "width": "300pt"
+  },
+  {
+    "id": "math-mat-delim",
+    "code": "$ mat(delim: \"[\", 1, 2; 3, 4) $",
+    "width": "auto"
+  },
+  {
+    "id": "math-mat-augment",
+    "code": "$ mat(augment: #2, 1, 0, 0, 5; 0, 1, 0, 3; 0, 0, 1, 8) $",
+    "width": "auto"
+  },
+  {
+    "id": "math-vec-delim",
+    "code": "$ vec(delim: \"[\", 1, 2, 3) $",
+    "width": "auto"
+  },
+  {
+    "id": "math-cases-reverse",
+    "code": "$ cases(reverse: #true, a, b, c) = x $",
+    "width": "auto"
+  },
+  {
+    "id": "math-cancel-cross",
+    "code": "$ cancel(x, cross: #true) quad cancel(y, inverted: #true) $",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-line-angle",
+    "code": "#line(length: 3.5cm, angle: 30deg, stroke: 1.5pt)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-line-stroke",
+    "code": "#line(length: 4cm, stroke: 3pt + maroon)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-rect-radius",
+    "code": "#rect(width: 3cm, height: 1.3cm, radius: 10pt, stroke: blue)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-rect-stroke-dashed",
+    "code": "#rect(width: 3cm, height: 1.3cm, stroke: (paint: blue, thickness: 1.5pt, dash: \"dashed\"))",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-rect-fill-gradient",
+    "code": "#rect(width: 3cm, height: 1.3cm, fill: gradient.linear(blue, purple))",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-rect-inset",
+    "code": "#rect(inset: 12pt, stroke: blue)[Nội dung có đệm rộng]",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-square-radius",
+    "code": "#square(size: 2cm, radius: 8pt, fill: green.lighten(80%), stroke: green)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-square-fill",
+    "code": "#square(size: 2cm, fill: gradient.linear(green, blue))",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-ellipse-size",
+    "code": "#ellipse(width: 4cm, height: 1.6cm, fill: orange.lighten(80%), stroke: orange)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-circle-fill",
+    "code": "#circle(radius: 22pt, fill: blue.lighten(60%))",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-circle-stroke",
+    "code": "#circle(radius: 22pt, stroke: 2pt + maroon)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-circle-radius",
+    "code": "#circle(radius: 18pt, fill: green.lighten(70%))",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-polygon-vertices",
+    "code": "#stack(dir: ltr, spacing: 10pt,\n  polygon.regular(fill: blue.lighten(80%), vertices: 3, size: 22pt),\n  polygon.regular(fill: blue.lighten(80%), vertices: 5, size: 22pt),\n  polygon.regular(fill: blue.lighten(80%), vertices: 6, size: 22pt),\n)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-stroke-dash",
+    "code": "#stack(dir: ttb, spacing: 8pt,\n  line(length: 4cm, stroke: (thickness: 1.5pt, dash: \"solid\")),\n  line(length: 4cm, stroke: (thickness: 1.5pt, dash: \"dashed\")),\n  line(length: 4cm, stroke: (thickness: 1.5pt, dash: \"dotted\")),\n)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-stroke-thickness",
+    "code": "#stack(dir: ttb, spacing: 8pt,\n  line(length: 4cm, stroke: 0.5pt),\n  line(length: 4cm, stroke: 1.5pt),\n  line(length: 4cm, stroke: 3pt),\n)",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-gradient-linear",
+    "code": "#rect(width: 5cm, height: 1.2cm, fill: gradient.linear(blue, red, angle: 45deg))",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-gradient-radial",
+    "code": "#circle(radius: 28pt, fill: gradient.radial(yellow, red))",
+    "width": "auto"
+  },
+  {
+    "id": "visualize-gradient-conic",
+    "code": "#circle(radius: 28pt, fill: gradient.conic(blue, purple, red))",
+    "width": "auto"
+  }
+]

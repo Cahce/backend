@@ -27,6 +27,9 @@ export const TeacherProfileSchema = z.object({
   academicRank: z.string(),
   academicDegree: z.string(),
   phone: z.string().nullable(),
+  gender: z.enum(["male", "female", "other"]).nullable(),
+  dateOfBirth: z.string().datetime().nullable(),
+  address: z.string().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

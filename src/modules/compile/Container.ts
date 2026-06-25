@@ -18,16 +18,10 @@ import { PrismaCompileArtifactRepository } from './infra/PrismaCompileArtifactRe
 import { PrismaProjectFileSnapshotAdapter } from './infra/PrismaProjectFileSnapshotAdapter.js';
 import { NodeTypstCompileService } from './infra/NodeTypstCompileService.js';
 import { InProcessCompileQueue } from './infra/InProcessCompileQueue.js';
-import type { ProjectAccessPolicy, OfficialCompileAccessPolicy } from './domain/Policies.js';
-import { CompileJobError } from './domain/Errors.js';
+import { PrismaCompileAccessRepository } from './infra/PrismaCompileAccessRepository.js';
 
 // Import project settings repository
 import { PrismaProjectSettingsRepository } from '../projects/infra/PrismaProjectSettingsRepository.js';
-// Reuse the single authorization source of truth from the projects domain.
-import {
-  resolveProjectAccess,
-  capabilitiesFor,
-} from '../projects/domain/Project/Policies.js';
 
 export interface CompileContainer {
   enqueueCompileJob: EnqueueCompileJob;
@@ -43,7 +37,9 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
   // Repositories
   const jobs = new PrismaCompileJobRepository(app.prisma);
   const artifacts = new PrismaCompileArtifactRepository(app.prisma);
-  const snapshot = new PrismaProjectFileSnapshotAdapter(app.prisma, app.storage);
+  const snapshot = new PrismaProjectFileSnapshotAdapter(app.prisma, app.storage, {
+    maxBytes: app.config.compile.maxSnapshotBytes,
+  });
   const settingsRepo = new PrismaProjectSettingsRepository(app.prisma);
 
   // Services
@@ -56,7 +52,7 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
     snapshot,
     compiler,
     app.storage,
-    Number(process.env.COMPILE_TIMEOUT_MS ?? 60000),
+    app.config.compile.timeoutMs,
     app.log,
   );
 
@@ -72,68 +68,9 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
   // Start queue
   queue.start();
 
-  // Access policy (reuse the projects-domain resolver as the single source of truth).
-  // Implements both the read policy (compile job/artifact views) and the official
-  // compile gate (enqueue).
-  const accessPolicy: ProjectAccessPolicy & OfficialCompileAccessPolicy = {
-    // READ access (view compile jobs/artifacts): owner or any member.
-    async requireProjectAccess(projectId: string, userId: string): Promise<void> {
-      const project = await app.prisma.project.findUnique({
-        where: { id: projectId },
-        include: {
-          members: {
-            where: { userId },
-          },
-        },
-      });
-
-      if (!project) {
-        throw new Error('PROJECT_NOT_FOUND');
-      }
-
-      if (project.ownerId !== userId && project.members.length === 0) {
-        throw new Error('PROJECT_ACCESS_DENIED');
-      }
-    },
-
-    // OFFICIAL compile/export: requires write-level access (owner or editor
-    // member). Admin oversight (non-owner) and viewers are denied. Throws a
-    // CompileJobError so the route maps it to a clean 403/404.
-    async requireOfficialCompileAccess(
-      projectId: string,
-      userId: string,
-      userRole: 'admin' | 'teacher' | 'student',
-    ): Promise<void> {
-      const project = await app.prisma.project.findUnique({
-        where: { id: projectId },
-        include: {
-          members: {
-            where: { userId },
-            select: { role: true },
-          },
-        },
-      });
-
-      if (!project) {
-        throw new CompileJobError('PROJECT_NOT_FOUND', 'Không tìm thấy dự án');
-      }
-
-      const membershipRole = project.members[0]?.role ?? null;
-      const level = resolveProjectAccess({
-        ownerId: project.ownerId,
-        userId,
-        role: userRole,
-        membershipRole,
-      });
-
-      if (!capabilitiesFor(level).canCompileOfficial) {
-        throw new CompileJobError(
-          'PROJECT_ACCESS_DENIED',
-          'Bạn không có quyền biên dịch/xuất bản dự án này',
-        );
-      }
-    },
-  };
+  // Access policy: read (compile job/artifact views) + official compile gate
+  // (enqueue/export). Implemented in compile/infra so wiring stays query-free.
+  const accessPolicy = new PrismaCompileAccessRepository(app.prisma);
 
   // Use cases
   const enqueueCompileJob = new EnqueueCompileJob(jobs, accessPolicy, queue);
@@ -146,7 +83,7 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
     queue,
     app.storage,
     getMainPath,
-    Number(process.env.COMPILE_TIMEOUT_MS ?? 60000) + 15000,
+    app.config.compile.timeoutMs + 15000,
   );
 
   // Helper to get main path from settings

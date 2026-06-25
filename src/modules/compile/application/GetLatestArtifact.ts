@@ -7,7 +7,7 @@
 import type { Readable } from 'node:stream';
 import type { CompileJobRepository } from '../domain/CompileJobRepository.js';
 import type { CompileArtifactRepository } from '../domain/CompileArtifactRepository.js';
-import type { ProjectAccessPolicy } from '../domain/Policies.js';
+import type { ProjectAccessPolicy } from '../../projects/domain/access/ProjectAccessPolicies.js';
 import type { BlobStorage, BlobMetadata } from '../../../shared/storage/BlobStorage.js';
 import { CompileJobError, CompileErrors } from '../domain/Errors.js';
 

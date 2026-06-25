@@ -4,8 +4,9 @@
  * Centralized dependency wiring for the OpenAlex module.
  */
 
+import type { PrismaClient } from "../../generated/prisma/index.js";
 import type { BibliographyService } from "../bibliography/application/BibliographyService.js";
-import type { ProjectWriteAccessPolicy } from "../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../projects/domain/access/ProjectAccessPolicies.js";
 
 // Infrastructure
 import { OpenAlexApiClient } from "./infra/OpenAlexApiClient.js";
@@ -26,7 +27,7 @@ export class OpenAlexContainer {
   public readonly importToBibFile: ImportToBibFile;
 
   constructor(
-    prisma: any,
+    prisma: PrismaClient,
     bibliography: BibliographyService,
     projectAccess: ProjectWriteAccessPolicy,
     openalexMailto?: string

@@ -7,7 +7,7 @@
 import type { PrismaClient } from "../../generated/prisma/index.js";
 import type { SecretCipher } from "../../shared/crypto/SecretCipher.js";
 import type { BibliographyService } from "../bibliography/application/BibliographyService.js";
-import type { ProjectAccessPolicy, ProjectWriteAccessPolicy } from "../compile/domain/Policies.js";
+import type { ProjectAccessPolicy, ProjectWriteAccessPolicy } from "../projects/domain/access/ProjectAccessPolicies.js";
 
 // Infrastructure
 import { ZoteroApiClient } from "./infra/ZoteroApiClient.js";

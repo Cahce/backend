@@ -39,6 +39,7 @@ export class MockProjectSettingsRepo implements ProjectSettingsRepository {
       'main.typ',
       {},
       null,
+      null,
       new Date(),
     );
     this.settings.set(projectId, defaultSettings);

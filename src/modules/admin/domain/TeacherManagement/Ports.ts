@@ -20,6 +20,12 @@ export interface TeacherProfileRepo {
   create(data: CreateTeacherData): Promise<TeacherProfile>;
 
   /**
+   * List every existing teacherCode (used by the import auto-code generator
+   * to follow the dominant prefix/digit-width pattern when "Mã GV" is omitted).
+   */
+  listAllTeacherCodes(): Promise<string[]>;
+
+  /**
    * Find teacher by ID
    */
   findById(id: string): Promise<TeacherProfileWithContext | null>;

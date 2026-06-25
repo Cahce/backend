@@ -134,6 +134,7 @@ export class CreateProjectUseCase {
             entryPath,
             settings.compileOptions,
             settings.zoteroConfig,
+            settings.openalexConfig,
             new Date(),
           );
           await this.settingsRepo.update(updatedSettings);
@@ -182,6 +183,7 @@ export class CreateProjectUseCase {
             entryPath,
             settings.compileOptions,
             settings.zoteroConfig,
+            settings.openalexConfig,
             new Date(),
           );
           await this.settingsRepo.update(updatedSettings);

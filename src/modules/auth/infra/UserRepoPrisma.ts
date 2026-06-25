@@ -1,5 +1,5 @@
 import type { PrismaClient } from "../../../generated/prisma/index.js";
-import type { IUserRepository, UserDto } from "../domain/Ports.js";
+import type { IUserRepository, AuthUser } from "../domain/Ports.js";
 
 /**
  * Prisma implementation of user repository
@@ -7,7 +7,7 @@ import type { IUserRepository, UserDto } from "../domain/Ports.js";
 export class UserRepoPrisma implements IUserRepository {
     constructor(private readonly prisma: PrismaClient) {}
 
-    async findByEmail(email: string): Promise<UserDto | null> {
+    async findByEmail(email: string): Promise<AuthUser | null> {
         const user = await this.prisma.user.findUnique({
             where: { email },
             select: {
@@ -34,7 +34,7 @@ export class UserRepoPrisma implements IUserRepository {
         };
     }
 
-    async findById(id: string): Promise<UserDto | null> {
+    async findById(id: string): Promise<AuthUser | null> {
         const user = await this.prisma.user.findUnique({
             where: { id },
             select: {

@@ -5,7 +5,7 @@
  */
 
 import type { FileRepo } from '../../domain/ProjectFile/Ports.js';
-import type { File, FileKind, StorageMode } from '../../domain/ProjectFile/Types.js';
+import type { File, FileMetadata, FileKind, StorageMode } from '../../domain/ProjectFile/Types.js';
 import { StorageMode as StorageModeEnum } from '../../domain/ProjectFile/Types.js';
 
 /**
@@ -126,6 +126,21 @@ export class MockFileRepo implements FileRepo {
       .filter(f => f.projectId === projectId)
       .sort((a, b) => a.path.localeCompare(b.path));
     return files;
+  }
+
+  async listMetadataByProjectId(projectId: string): Promise<FileMetadata[]> {
+    const files = await this.listByProjectId(projectId);
+    return files.map((f) => ({
+      id: f.id,
+      projectId: f.projectId,
+      path: f.path,
+      kind: f.kind,
+      mimeType: f.mimeType,
+      sizeBytes: f.sizeBytes,
+      lastEditedAt: f.lastEditedAt,
+      createdAt: f.createdAt,
+      updatedAt: f.updatedAt,
+    }));
   }
 
   async update(data: {

@@ -30,6 +30,13 @@ export interface GetLatestProjectArtifactForAdminResult {
 /** Extra error code beyond the shared CompileErrors set. */
 const COMPILE_FAILED = 'COMPILE_FAILED';
 
+/**
+ * Periodic DB re-check interval while awaiting a compile job. The queue's
+ * settle signal normally wakes us sooner; this is the backstop (was a fixed
+ * 400ms poll, which issued ~185 queries over a 75s budget).
+ */
+const SETTLE_FALLBACK_MS = 2000;
+
 export class GetLatestProjectArtifactForAdmin {
   constructor(
     private readonly jobs: CompileJobRepository,
@@ -105,15 +112,32 @@ export class GetLatestProjectArtifactForAdmin {
     return artifact;
   }
 
-  /** Poll the job until it reaches success/failed, or the budget elapses. */
+  /**
+   * Wait for the job to reach success/failed, or the budget to elapse.
+   *
+   * Event-assisted: arms the queue's `waitForSettle` signal ONCE up front so we
+   * wake the instant the worker finishes the job, instead of hammering the DB
+   * every 400ms. A periodic re-check (every {@link SETTLE_FALLBACK_MS}) is the
+   * correctness backstop for the race where the job settled before we armed, or
+   * a queue without `waitForSettle` support.
+   */
   private async pollUntilSettled(jobId: string) {
     const deadline = Date.now() + this.timeoutMs;
+    const settled = this.queue.waitForSettle?.(jobId);
+
     let job = await this.jobs.findById(jobId);
     while (Date.now() < deadline) {
       if (job && (job.status === 'success' || job.status === 'failed')) {
         return job;
       }
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      const waitMs = Math.min(SETTLE_FALLBACK_MS, Math.max(0, deadline - Date.now()));
+      await Promise.race([
+        // Resolves once, when the worker finishes the job (fast path).
+        settled ?? new Promise<void>(() => {}),
+        // Periodic re-check backstop (also the only signal if waitForSettle is
+        // unsupported or the settle was missed).
+        new Promise((resolve) => setTimeout(resolve, waitMs)),
+      ]);
       job = await this.jobs.findById(jobId);
     }
     return job;

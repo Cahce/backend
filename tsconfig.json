@@ -22,19 +22,7 @@
         ],
         "types": [
             "node"
-        ],
-        "baseUrl": ".",
-        "paths": {
-            "@modules/*": [
-                "src/modules/*"
-            ],
-            "@shared/*": [
-                "src/shared/*"
-            ],
-            "@config": [
-                "src/config/index.ts"
-            ]
-        }
+        ]
     },
     "include": [
         "src/**/*.ts",

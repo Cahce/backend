@@ -22,7 +22,7 @@ import {
   hasForbiddenExtension,
 } from "../domain/AllowedMimeTypes.js";
 import { validateProjectFilePath, InvalidPathError } from "../domain/PathValidator.js";
-import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
 
 // ---------------------------------------------------------------------------
 // Errors

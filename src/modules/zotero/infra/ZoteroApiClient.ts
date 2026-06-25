@@ -306,6 +306,59 @@ export class ZoteroApiClient implements ZoteroApiPort {
   }
 
   /**
+   * Batch-fetch items by key, chunked into groups of ≤50 (Zotero's itemKey
+   * filter limit). Missing keys are simply absent from the response — far fewer
+   * round-trips than one getItem per key.
+   */
+  async getItemsByKeys(
+    libraryType: "user" | "group",
+    libraryId: string,
+    itemKeys: string[],
+    apiKey: string
+  ): Promise<ZoteroItem[]> {
+    if (itemKeys.length === 0) {
+      return [];
+    }
+    const CHUNK_SIZE = 50;
+    const collected: ZoteroItem[] = [];
+
+    for (let i = 0; i < itemKeys.length; i += CHUNK_SIZE) {
+      const chunk = itemKeys.slice(i, i + CHUNK_SIZE);
+      const params = new URLSearchParams({
+        itemKey: chunk.join(","),
+        format: "json",
+        limit: String(chunk.length),
+      });
+      const url = `${this.baseUrl}/${libraryType}s/${libraryId}/items?${params.toString()}`;
+
+      try {
+        const response = await this.fetchWithRetry(url, {
+          method: "GET",
+          headers: this.buildHeaders(apiKey),
+        });
+
+        if (!response.ok) {
+          throw await this.handleErrorResponse(response);
+        }
+
+        const data = (await response.json()) as any[];
+        collected.push(...this.parseItems(data));
+      } catch (error) {
+        if (
+          error instanceof ZoteroAuthError ||
+          error instanceof ZoteroLibraryNotFoundError ||
+          error instanceof ZoteroRateLimitError
+        ) {
+          throw error;
+        }
+        throw new ZoteroSyncError(`Không thể lấy item theo khóa: ${(error as Error).message}`);
+      }
+    }
+
+    return collected;
+  }
+
+  /**
    * Create items in a Zotero library (write). Requires a write-enabled API key.
    * Sends an idempotency `Zotero-Write-Token` header.
    */

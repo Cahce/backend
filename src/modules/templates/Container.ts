@@ -20,7 +20,6 @@ import { DeleteTemplateUseCase } from './application/DeleteTemplateUseCase.js';
 import { ListPublicTemplatesUseCase } from './application/ListPublicTemplatesUseCase.js';
 import { CreateTemplateVersionUseCase } from './application/CreateTemplateVersionUseCase.js';
 import { ListVersionsByTemplateUseCase } from './application/ListVersionsByTemplateUseCase.js';
-import { DeactivateTemplateVersionUseCase } from './application/DeactivateTemplateVersionUseCase.js';
 import { UpdateTemplateVersionUseCase } from './application/UpdateTemplateVersionUseCase.js';
 import { GetTemplateVersionFileUseCase } from './application/GetTemplateVersionFileUseCase.js';
 import { MaterializeTemplateVersionUseCase } from './application/MaterializeTemplateVersionUseCase.js';
@@ -47,8 +46,6 @@ export class TemplatesContainer {
   public listPublicTemplates: ListPublicTemplatesUseCase;
   public createTemplateVersion: CreateTemplateVersionUseCase;
   public listVersionsByTemplate: ListVersionsByTemplateUseCase;
-  /** @deprecated use `updateTemplateVersion` with `{ isActive: false }` */
-  public deactivateTemplateVersion: DeactivateTemplateVersionUseCase;
   public updateTemplateVersion: UpdateTemplateVersionUseCase;
   public getTemplateVersionFile: GetTemplateVersionFileUseCase;
   public materializeTemplateVersion: MaterializeTemplateVersionUseCase;
@@ -77,7 +74,6 @@ export class TemplatesContainer {
     this.listPublicTemplates = new ListPublicTemplatesUseCase(this.templateRepo);
     this.createTemplateVersion = new CreateTemplateVersionUseCase(this.templateRepo, this.storage);
     this.listVersionsByTemplate = new ListVersionsByTemplateUseCase(this.templateRepo);
-    this.deactivateTemplateVersion = new DeactivateTemplateVersionUseCase(this.templateRepo);
     this.updateTemplateVersion = new UpdateTemplateVersionUseCase(this.templateRepo);
     this.getTemplateVersionFile = new GetTemplateVersionFileUseCase(
       this.templateRepo,

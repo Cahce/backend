@@ -25,6 +25,7 @@ import { projectSettingsRoutes } from "./modules/projects/delivery/http/ProjectS
 import { ProjectsContainer } from "./modules/projects/Container.js";
 import { ProjectFilesContainer } from "./modules/project-files/Container.js";
 import { FileRepoPrisma } from "./modules/project-files/infra/FileRepoPrisma.js";
+import { PrismaProjectAccessRepository } from "./modules/projects/infra/PrismaProjectAccessRepository.js";
 import { teacherProfileRoutes } from "./modules/teachers/delivery/http/Profile/Routes.js";
 import { compileRoutes } from "./modules/compile/delivery/http/Routes.js";
 import { buildCompileContainer } from "./modules/compile/Container.js";
@@ -44,7 +45,8 @@ import { captureRoutes } from "./modules/capture/delivery/http/Routes.js";
 import type { LibraryWriterPort } from "./modules/capture/domain/Ports.js";
 import { OpenAlexApiClient } from "./modules/openalex/infra/OpenAlexApiClient.js";
 import { OpenAlexIdentifierFallback } from "./modules/capture/infra/OpenAlexIdentifierFallback.js";
-import type { ProjectAccessPolicy, ProjectWriteAccessPolicy } from "./modules/compile/domain/Policies.js";
+import type { ProjectAccessPolicy, ProjectWriteAccessPolicy } from "./modules/projects/domain/access/ProjectAccessPolicies.js";
+import { toErrorResponse, errorEnvelope } from "./shared/http/domainError.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
     const app = Fastify({
@@ -65,6 +67,50 @@ export async function buildApp(): Promise<FastifyInstance> {
         //   configured in plugins/Multipart.ts.
         keepAliveTimeout: 72_000,
         bodyLimit: 1_048_576,
+    });
+
+    // Global error handler — guarantees every uncaught error returns the
+    // standard `{ error: { code, message } }` envelope with a Vietnamese
+    // message, instead of leaking Fastify's default 500/English shape.
+    //
+    // - Zod `.parse()` throws → 400 VALIDATION_ERROR + first issue message
+    //   (this is what made the admin Account route return a raw 500 before).
+    // - Fastify JSON-schema (ajv) validation → 400 VALIDATION_ERROR.
+    // - Known domain error codes → their mapped status.
+    // - Other framework 4xx (413 payload too large, 415, malformed JSON) →
+    //   preserve the status with a Vietnamese message.
+    // - Anything else → 500 INTERNAL_ERROR (logged).
+    // Auth (401/403) is replied directly inside JWT.ts and never reaches here.
+    const MESSAGE_BY_STATUS: Record<number, string> = {
+        400: "Dữ liệu không hợp lệ",
+        404: "Không tìm thấy tài nguyên",
+        413: "Tệp tải lên vượt quá giới hạn cho phép",
+        415: "Định dạng tệp không được hỗ trợ",
+    };
+    app.setErrorHandler((err, req, reply) => {
+        const fastifyErr = err as { statusCode?: number; validation?: unknown };
+
+        // Fastify schema (ajv) validation failures carry a `validation` array and
+        // an English message — normalize to our Vietnamese envelope.
+        if (fastifyErr.validation != null) {
+            return reply.code(400).send(errorEnvelope("VALIDATION_ERROR"));
+        }
+
+        const mapped = toErrorResponse(err);
+        if (mapped.status !== 500) {
+            return reply.code(mapped.status).send(mapped.body);
+        }
+
+        // toErrorResponse couldn't classify it. Respect a framework-provided 4xx.
+        const sc = fastifyErr.statusCode;
+        if (typeof sc === "number" && sc >= 400 && sc < 500) {
+            return reply
+                .code(sc)
+                .send(errorEnvelope("HTTP_ERROR", MESSAGE_BY_STATUS[sc]));
+        }
+
+        req.log.error({ err }, "Unhandled error");
+        return reply.code(500).send(errorEnvelope("INTERNAL_ERROR"));
     });
 
     // Plugin registration order matters
@@ -153,50 +199,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     const bibliographyService = new BibliographyService(projectFilesContainer.getFileRepo());
 
     // Build project access policy (shared by binary upload, Zotero, OpenAlex,
-    // Capture, and zip export). Implements both the read policy (owner or any
-    // member) and the write policy (owner or editor member) so content-mutating
-    // surfaces deny viewer-members and admin oversight, consistent with the
-    // projects-module ProjectAuthPolicy.
-    const projectAccessPolicy: ProjectAccessPolicy & ProjectWriteAccessPolicy = {
-        // READ: owner or any member.
-        async requireProjectAccess(projectId: string, userId: string): Promise<void> {
-            const project = await app.prisma.project.findUnique({
-                where: { id: projectId },
-                include: { members: true },
-            });
-
-            if (!project) {
-                throw new Error("PROJECT_NOT_FOUND");
-            }
-
-            // Check if user is owner or member
-            const isOwner = project.ownerId === userId;
-            const isMember = project.members.some(m => m.userId === userId);
-
-            if (!isOwner && !isMember) {
-                throw new Error("PROJECT_ACCESS_DENIED");
-            }
-        },
-
-        // WRITE: owner or editor member only (viewers + admin oversight denied).
-        async requireWriteAccess(projectId: string, userId: string): Promise<void> {
-            const project = await app.prisma.project.findUnique({
-                where: { id: projectId },
-                include: { members: { where: { userId } } },
-            });
-
-            if (!project) {
-                throw new Error("PROJECT_NOT_FOUND");
-            }
-
-            const isOwner = project.ownerId === userId;
-            const isEditor = project.members.some(m => m.role === "editor");
-
-            if (!isOwner && !isEditor) {
-                throw new Error("PROJECT_ACCESS_DENIED");
-            }
-        },
-    };
+    // Capture, and zip export) — owner-or-member read + owner-or-editor write.
+    // Implemented in projects/infra so the composition root stays query-free.
+    const projectAccessPolicy: ProjectAccessPolicy & ProjectWriteAccessPolicy =
+        new PrismaProjectAccessRepository(app.prisma);
 
     // Wire binary file upload now that BlobStorage + project access policy
     // are both available. Use case is null in projectFilesContainer until this
@@ -265,7 +271,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     // Build Zotero container
     const secretCipher = new SecretCipher(app.config.auth.jwtSecret);
     const zoteroContainer = new ZoteroContainer(
-        app.prisma as any,
+        app.prisma,
         secretCipher,
         bibliographyService,
         projectAccessPolicy,
@@ -274,7 +280,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Build OpenAlex container
     const openalexContainer = new OpenAlexContainer(
-        app.prisma as any,
+        app.prisma,
         bibliographyService,
         projectAccessPolicy,
         app.config.bibliography.openalexMailto,

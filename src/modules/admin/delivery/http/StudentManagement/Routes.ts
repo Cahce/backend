@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { AdminContainer } from "../../../Container.js";
-import { ImportStudents } from "../../../application/import/ImportStudents.js";
 import { FileParser } from "../../../infra/FileParser.js";
 import {
     CreateStudentRequestSchema,
@@ -33,7 +32,7 @@ export async function studentManagementRoutes(app: FastifyInstance) {
     const deleteStudentUseCase = container.deleteStudentProfileUseCase;
     const linkAccountUseCase = container.linkAccountToStudentUseCase;
     const unlinkAccountUseCase = container.unlinkAccountFromStudentUseCase;
-    const importStudents = new ImportStudents(app.prisma);
+    const importStudents = container.importStudents;
 
     // POST /api/v1/admin/students - create student
     app.post<{ Body: CreateStudentRequestDto }>(

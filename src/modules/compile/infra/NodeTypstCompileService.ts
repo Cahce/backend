@@ -5,12 +5,12 @@
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler';
 import { config } from '../../../config/index.js';
 import { withTimeout } from '../../../shared/async/withTimeout.js';
 import type { TypstCompileService, TypstCompileInput, TypstCompileResult } from '../domain/TypstCompileService.js';
-import type { CompileDiagnostic } from '../domain/CompileDiagnostic.js';
+import { parseTypstDiagnostics } from './diagnosticMapping.js';
 
 export class NodeTypstCompileService implements TypstCompileService {
   async compile(input: TypstCompileInput): Promise<TypstCompileResult> {
@@ -52,8 +52,10 @@ export class NodeTypstCompileService implements TypstCompileService {
         // Check if compilation has errors
         if (compileResult.hasError()) {
           const error = compileResult.takeError();
-          const diagnostics = error ? this.parseDiagnostics(error.shortDiagnostics, input.workDir) : [];
-          
+          const diagnostics = error
+            ? parseTypstDiagnostics(this.collectDiagnostics(compiler, error), input.workDir)
+            : [];
+
           return {
             ok: false,
             diagnostics,
@@ -82,7 +84,9 @@ export class NodeTypstCompileService implements TypstCompileService {
 
         // Check for warnings
         const warnings = compileResult.takeWarnings();
-        const warningDiagnostics = warnings ? this.parseDiagnostics(warnings.shortDiagnostics, input.workDir) : [];
+        const warningDiagnostics = warnings
+          ? parseTypstDiagnostics(this.collectDiagnostics(compiler, warnings), input.workDir)
+          : [];
 
         return {
           ok: true,
@@ -117,56 +121,23 @@ export class NodeTypstCompileService implements TypstCompileService {
     }
   }
 
-  private parseDiagnostics(typstDiagnostics: any[], workDir?: string): CompileDiagnostic[] {
-    return typstDiagnostics.map((diag) => {
-      const diagnostic: CompileDiagnostic = {
-        severity: this.mapSeverity(diag.severity),
-        message: diag.message || 'Unknown error',
-      };
-
-      // Add file and range if available — normalize to project-relative path
-      if (diag.span) {
-        if (diag.span.path && workDir) {
-          const rel = relative(workDir, diag.span.path).replace(/\\/g, '/');
-          diagnostic.file = rel.startsWith('..') ? undefined : rel;
-        } else if (diag.span.path) {
-          diagnostic.file = diag.span.path;
-        }
-        if (diag.span.start && diag.span.end) {
-          diagnostic.range = {
-            start: {
-              line: diag.span.start.line || 1,
-              column: diag.span.start.column || 1,
-            },
-            end: {
-              line: diag.span.end.line || 1,
-              column: diag.span.end.column || 1,
-            },
-          };
-        }
-      }
-
-      // Add hints if available
-      if (diag.hints && Array.isArray(diag.hints)) {
-        diagnostic.hints = diag.hints;
-      }
-
-      return diagnostic;
-    });
-  }
-
-  private mapSeverity(severity: string | undefined): 'error' | 'warning' | 'hint' | 'info' {
-    switch (severity?.toLowerCase()) {
-      case 'error':
-        return 'error';
-      case 'warning':
-        return 'warning';
-      case 'hint':
-        return 'hint';
-      case 'info':
-        return 'info';
-      default:
-        return 'error';
+  /**
+   * Collect the richest available raw diagnostics for a compiler error/warning
+   * object. `fetchDiagnostics` carries source ranges; `shortDiagnostics` does
+   * not (`range: null`). Prefer the former, fall back to the latter if it is
+   * missing or throws — so a diagnostics-formatting hiccup never masks a real
+   * compile error or fails an otherwise-successful warning-only compile.
+   */
+  private collectDiagnostics(compiler: NodeCompiler, nodeError: unknown): unknown[] {
+    try {
+      const fetched = (
+        compiler as unknown as { fetchDiagnostics?: (err: unknown) => unknown }
+      ).fetchDiagnostics?.(nodeError);
+      if (Array.isArray(fetched)) return fetched;
+    } catch {
+      // fall through to shortDiagnostics
     }
+    const short = (nodeError as { shortDiagnostics?: unknown }).shortDiagnostics;
+    return Array.isArray(short) ? short : [];
   }
 }

@@ -17,9 +17,9 @@ import type { Readable } from 'node:stream';
 
 import type { ProjectRepo } from '../domain/Project/Ports.js';
 import type { FileRepo } from '../../project-files/domain/ProjectFile/Ports.js';
-import { FileKind, StorageMode } from '../../project-files/domain/ProjectFile/Types.js';
+import { StorageMode } from '../../project-files/domain/ProjectFile/Types.js';
 import type { BlobStorage } from '../../../shared/storage/BlobStorage.js';
-import type { ProjectAccessPolicy } from '../../compile/domain/Policies.js';
+import type { ProjectAccessPolicy } from '../domain/access/ProjectAccessPolicies.js';
 import { ProjectErrors } from '../domain/Project/Errors.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
@@ -163,7 +163,3 @@ export class ExportProjectUseCase {
     }
   }
 }
-
-// FileKind isn't directly used here, but keep import to keep type narrow in
-// case future logic needs to filter by kind.
-void FileKind;

@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { AdminContainer } from "../../../Container.js";
-import { ImportTeachers } from "../../../application/import/ImportTeachers.js";
 import { FileParser } from "../../../infra/FileParser.js";
 import {
     CreateTeacherRequestSchema,
@@ -33,7 +32,7 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
     const deleteTeacherUseCase = container.deleteTeacherProfileUseCase;
     const linkAccountUseCase = container.linkAccountToTeacherUseCase;
     const unlinkAccountUseCase = container.unlinkAccountFromTeacherUseCase;
-    const importTeachers = new ImportTeachers(app.prisma);
+    const importTeachers = container.importTeachers;
 
     // POST /api/v1/admin/teachers - create teacher
     app.post<{ Body: CreateTeacherRequestDto }>(

@@ -1,8 +1,8 @@
 // Use case for creating a student profile
 // No framework dependencies
 
-import bcrypt from 'bcrypt';
 import type { Result } from '../Types.js';
+import type { PasswordHasher } from '../../domain/shared/PasswordHasher.js';
 import { success, failure } from '../Types.js';
 import type { StudentProfile, CreateStudentData } from '../../domain/StudentManagement/Types.js';
 import type { StudentProfileRepo } from '../../domain/StudentManagement/Ports.js';
@@ -30,7 +30,8 @@ export class CreateStudentProfileUseCase {
   constructor(
     private readonly studentRepo: StudentProfileRepo,
     private readonly classRepo: ClassRepo,
-    private readonly accountRepo: AdminAccountRepo
+    private readonly accountRepo: AdminAccountRepo,
+    private readonly passwordHasher: PasswordHasher
   ) {}
 
   async execute(data: CreateStudentDataWithAccount): Promise<Result<StudentProfile>> {
@@ -124,7 +125,7 @@ export class CreateStudentProfileUseCase {
         if (existingEmailAccount) {
           return failure(AccountErrors.EMAIL_EXISTS.code, AccountErrors.EMAIL_EXISTS.message);
         }
-        const hashedPassword = await bcrypt.hash(account.password, 10);
+        const hashedPassword = await this.passwordHasher.hash(account.password);
         const newAccount = await this.accountRepo.create({
           email: normalizedEmail,
           passwordHash: hashedPassword,

@@ -23,9 +23,11 @@ export class DeleteFacultyUseCase {
         return failure(error.code, error.message);
       }
 
-      // Check for child entities
-      const hasDepartments = await this.facultyRepo.hasChildDepartments(id);
-      const hasMajors = await this.facultyRepo.hasChildMajors(id);
+      // Check for child entities (two independent COUNTs — run in parallel).
+      const [hasDepartments, hasMajors] = await Promise.all([
+        this.facultyRepo.hasChildDepartments(id),
+        this.facultyRepo.hasChildMajors(id),
+      ]);
 
       // Apply deletion policy
       const policyResult = FacultyPolicy.canDeleteFaculty(hasDepartments, hasMajors);

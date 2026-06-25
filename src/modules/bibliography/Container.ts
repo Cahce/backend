@@ -2,7 +2,7 @@
  * Bibliography module container.
  */
 
-import type { ProjectAccessPolicy } from "../compile/domain/Policies.js";
+import type { ProjectAccessPolicy } from "../projects/domain/access/ProjectAccessPolicies.js";
 import type { BibliographyService } from "./application/BibliographyService.js";
 import { CheckDuplicates } from "./application/CheckDuplicates.js";
 

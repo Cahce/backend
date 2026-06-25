@@ -1,5 +1,5 @@
-import bcrypt from 'bcrypt';
 import type { AdminAccountRepo } from '../../domain/AccountManagement/Ports.js';
+import type { PasswordHasher } from '../../domain/shared/PasswordHasher.js';
 import type { Account } from '../../domain/AccountManagement/Types.js';
 import { AccountErrors } from '../../domain/AccountManagement/Errors.js';
 import type { Result } from '../Types.js';
@@ -11,7 +11,10 @@ export interface ResetAccountPasswordCommand {
 }
 
 export class ResetAccountPasswordUseCase {
-  constructor(private readonly accountRepo: AdminAccountRepo) {}
+  constructor(
+    private readonly accountRepo: AdminAccountRepo,
+    private readonly passwordHasher: PasswordHasher,
+  ) {}
 
   async execute(command: ResetAccountPasswordCommand): Promise<Result<Account>> {
     const { id, newPassword } = command;
@@ -21,7 +24,7 @@ export class ResetAccountPasswordUseCase {
       return failure(AccountErrors.ACCOUNT_NOT_FOUND.code, AccountErrors.ACCOUNT_NOT_FOUND.message);
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await this.passwordHasher.hash(newPassword);
     const updated = await this.accountRepo.resetPassword(id, passwordHash);
     return success(updated);
   }

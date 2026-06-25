@@ -230,17 +230,19 @@ describe('RenameFileUseCase', () => {
     }
   });
 
-  it('should reject absolute newPath', async () => {
+  it('should reject newPath with a backslash (stronger domain validation)', async () => {
     const command = {
       projectId: 'project-1',
       oldPath: 'old-name.typ',
-      newPath: '/absolute/path.typ',
+      newPath: 'bad\\name.typ',
       userId: 'user-123',
       userRole: 'student' as const,
     };
 
     const result = await useCase.execute(command);
 
+    // The previous weak inline validator accepted backslashes; the domain
+    // PathValidator (now the single source of truth) rejects them.
     assert.strictEqual(result.success, false);
     if (!result.success) {
       assert.strictEqual(result.error.code, FileErrors.INVALID_FILE_PATH.code);

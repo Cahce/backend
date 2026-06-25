@@ -19,18 +19,36 @@ export const LoginRequestSchema = z.object({
 
 export type LoginRequestDto = z.infer<typeof LoginRequestSchema>;
 
+const AuthUserSchema = z.object({
+    id: z.string(),
+    email: z.string(),
+    role: z.enum(["admin", "student", "teacher"]),
+    permissions: z.array(z.string()).describe("Danh sách quyền (RBAC) suy ra từ vai trò"),
+    mustChangePassword: z.boolean().describe("Bắt buộc đổi mật khẩu trước khi sử dụng"),
+});
+
 export const LoginResponseSchema = z.object({
-    accessToken: z.string().describe("JWT access token"),
-    user: z.object({
-        id: z.string(),
-        email: z.string(),
-        role: z.enum(["admin", "student", "teacher"]),
-        permissions: z.array(z.string()).describe("Danh sách quyền (RBAC) suy ra từ vai trò"),
-        mustChangePassword: z.boolean().describe("Bắt buộc đổi mật khẩu trước khi sử dụng"),
-    }),
+    accessToken: z.string().describe("JWT access token (ngắn hạn)"),
+    refreshToken: z.string().describe("Refresh token (xoay vòng, đổi ở /auth/refresh)"),
+    user: AuthUserSchema,
 });
 
 export type LoginResponseDto = z.infer<typeof LoginResponseSchema>;
+
+// Refresh
+export const RefreshRequestSchema = z.object({
+    refreshToken: z.string().min(1, "refreshToken là bắt buộc").describe("Refresh token hiện tại"),
+});
+
+export type RefreshRequestDto = z.infer<typeof RefreshRequestSchema>;
+
+export const RefreshResponseSchema = z.object({
+    accessToken: z.string().describe("JWT access token mới"),
+    refreshToken: z.string().describe("Refresh token mới (token cũ bị thu hồi)"),
+    user: AuthUserSchema,
+});
+
+export type RefreshResponseDto = z.infer<typeof RefreshResponseSchema>;
 
 // Get Current User
 export const GetCurrentUserResponseSchema = z.object({
@@ -108,6 +126,9 @@ export const UserWithProfileResponseSchema = z.object({
         studentCode: z.string(),
         fullName: z.string(),
         phone: z.string().nullable(),
+        gender: z.enum(["male", "female", "other"]).nullable(),
+        dateOfBirth: z.string().nullable(),
+        address: z.string().nullable(),
         class: z.object({
             id: z.string(),
             name: z.string(),
@@ -129,6 +150,9 @@ export const UserWithProfileResponseSchema = z.object({
         teacherCode: z.string(),
         fullName: z.string(),
         phone: z.string().nullable(),
+        gender: z.enum(["male", "female", "other"]).nullable(),
+        dateOfBirth: z.string().nullable(),
+        address: z.string().nullable(),
         academicRank: z.string(),
         academicDegree: z.string(),
         department: z.object({
@@ -145,3 +169,13 @@ export const UserWithProfileResponseSchema = z.object({
 });
 
 export type UserWithProfileResponseDto = z.infer<typeof UserWithProfileResponseSchema>;
+
+// Update Own Profile (self-service personal info: gender/dateOfBirth/phone/address)
+export const UpdateOwnProfileRequestSchema = z.object({
+    gender: z.enum(["male", "female", "other"]).nullable().optional(),
+    dateOfBirth: z.coerce.date().nullable().optional(),
+    phone: z.string().trim().max(20, "Số điện thoại tối đa 20 ký tự").nullable().optional(),
+    address: z.string().trim().max(255, "Địa chỉ tối đa 255 ký tự").nullable().optional(),
+});
+
+export type UpdateOwnProfileRequestDto = z.infer<typeof UpdateOwnProfileRequestSchema>;

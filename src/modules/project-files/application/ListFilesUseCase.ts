@@ -30,14 +30,14 @@ export interface ListFilesCommand {
  */
 export class ListFilesUseCase {
   constructor(
-    private readonly FileRepo: FileRepo,
-    private readonly ProjectRepo: ProjectRepo,
+    private readonly fileRepo: FileRepo,
+    private readonly projectRepo: ProjectRepo,
   ) {}
 
   async execute(command: ListFilesCommand): Promise<Result<FileMetadata[]>> {
     try {
       // Verify project exists
-      const project = await this.ProjectRepo.findById(command.projectId);
+      const project = await this.projectRepo.findById(command.projectId);
 
       if (!project) {
         return failure(FileErrors.PROJECT_NOT_FOUND.code, FileErrors.PROJECT_NOT_FOUND.message);
@@ -45,7 +45,7 @@ export class ListFilesUseCase {
 
       // Enforce authorization (resolves ProjectMember / advisor relations).
       const authContext: AuthContext = await buildProjectAuthContext(
-        this.ProjectRepo,
+        this.projectRepo,
         project,
         command.userId,
         command.userRole,
@@ -55,21 +55,9 @@ export class ListFilesUseCase {
         return failure(FileErrors.UNAUTHORIZED.code, FileErrors.UNAUTHORIZED.message);
       }
 
-      // List files by project ID
-      const files = await this.FileRepo.listByProjectId(command.projectId);
-
-      // Map to FileMetadata (exclude textContent and storageKey)
-      const metadata: FileMetadata[] = files.map((file) => ({
-        id: file.id,
-        projectId: file.projectId,
-        path: file.path,
-        kind: file.kind,
-        mimeType: file.mimeType,
-        sizeBytes: file.sizeBytes,
-        lastEditedAt: file.lastEditedAt,
-        createdAt: file.createdAt,
-        updatedAt: file.updatedAt,
-      }));
+      // List file metadata only — avoids loading every file's textContent
+      // (@db.Text), which the tree discards anyway. Hot path on workspace open.
+      const metadata = await this.fileRepo.listMetadataByProjectId(command.projectId);
 
       return success(metadata);
     } catch (error) {

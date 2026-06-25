@@ -1,16 +1,32 @@
 /**
  * Import To Bib File Use Case
- * 
+ *
  * Imports OpenAlex works to a project's .bib file.
  * Tracks import history to prevent duplicates.
+ *
+ * Performance: the dedupe pre-pass is a single batched query, OpenAlex works are
+ * fetched with bounded concurrency (not one serial await per id), and all import
+ * log rows are flushed once via createMany — instead of the previous
+ * three-N+1 pattern (per-id findFirst + per-id HTTP + per-id INSERT).
  */
 
-import type { OpenAlexApiPort, OpenAlexImportLogRepo } from "../domain/Ports.js";
+import type {
+  OpenAlexApiPort,
+  OpenAlexImportLogRepo,
+  OpenAlexImportLogCreateInput,
+} from "../domain/Ports.js";
 import type { BibliographyService } from "../../bibliography/application/BibliographyService.js";
-import type { ProjectWriteAccessPolicy } from "../../compile/domain/Policies.js";
+import type { ProjectWriteAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
 import { mapOpenAlexWorkToBibEntry } from "../domain/Mapping.js";
 import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
 import { normalizeDoi } from "../../bibliography/domain/DuplicateDetection.js";
+import { mapWithConcurrency } from "../../../shared/async/mapWithConcurrency.js";
+
+/**
+ * Max simultaneous OpenAlex work fetches. Bounded so a 50-id import neither
+ * serializes (slow) nor fires 50 requests at once (rate-limit risk).
+ */
+const OPENALEX_FETCH_CONCURRENCY = 5;
 
 /**
  * Command to import works to .bib file
@@ -61,11 +77,25 @@ export class ImportToBibFile {
       failed: [],
     };
 
-    // Check for duplicates first
+    // Import-log rows are accumulated and flushed once via createMany at the end.
+    const logRows: OpenAlexImportLogCreateInput[] = [];
+
+    // Dedupe pre-pass: ONE query for all ids (previously one findFirst per id).
+    const existingLogs = await this.importLogRepo.findImportedByProjectAndOpenAlexIds(
+      projectId,
+      openAlexIds,
+    );
+    const existingLogByOpenAlexId = new Map<string, (typeof existingLogs)[number]>();
+    for (const log of existingLogs) {
+      if (!existingLogByOpenAlexId.has(log.openAlexId)) {
+        existingLogByOpenAlexId.set(log.openAlexId, log);
+      }
+    }
+
     const toImport: string[] = [];
     const existingImportKeys = new Map<string, string>();
     for (const openAlexId of openAlexIds) {
-      const existing = await this.importLogRepo.findByProjectAndOpenAlexId(projectId, openAlexId);
+      const existing = existingLogByOpenAlexId.get(openAlexId);
       if (existing) {
         existingImportKeys.set(openAlexId, existing.citationKey);
 
@@ -74,9 +104,7 @@ export class ImportToBibFile {
             openAlexId,
             existingKey: existing.citationKey,
           });
-          
-          // Log the skip
-          await this.importLogRepo.create({
+          logRows.push({
             userId,
             projectId,
             openAlexId,
@@ -95,42 +123,72 @@ export class ImportToBibFile {
       }
     }
 
-    // If nothing to import, return early
+    // Nothing to fetch — flush any skip logs and return.
     if (toImport.length === 0) {
+      await this.importLogRepo.createMany(logRows);
       return result;
     }
 
     // Read existing .bib file
     const existing = await this.bibliography.readBibFile(projectId, targetBibPath);
-    const existingKeys = new Set(existing.map(e => e.key));
+    const existingKeys = new Set(existing.map((e) => e.key));
     const existingByDoi = new Map<string, string>();
     for (const entry of existing) {
       const doi = normalizeDoi(entry.fields.doi);
       if (doi) existingByDoi.set(doi, entry.key);
     }
 
-    // Fetch and process works
-    const newEntries = [];
-    for (const openAlexId of toImport) {
+    // Fetch works with bounded concurrency (previously fully serial awaits).
+    const fetched = await mapWithConcurrency(
+      toImport,
+      OPENALEX_FETCH_CONCURRENCY,
+      async (openAlexId) => {
+        try {
+          const work = await this.apiClient.getWorkById(openAlexId);
+          return { openAlexId, ok: true as const, work };
+        } catch (error) {
+          return {
+            openAlexId,
+            ok: false as const,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      },
+    );
+
+    // Process results SEQUENTIALLY in original order so citation-key dedup
+    // (which mutates existingKeys) stays deterministic.
+    const newEntries: Array<{ entry: ReturnType<typeof mapOpenAlexWorkToBibEntry> }> = [];
+    for (const item of fetched) {
+      if (!item.ok) {
+        logRows.push({
+          userId,
+          projectId,
+          openAlexId: item.openAlexId,
+          citationKey: "",
+          targetBibPath,
+          status: "failed",
+          errorMessage: item.error,
+        });
+        result.failed.push({ openAlexId: item.openAlexId, errorMessage: item.error });
+        continue;
+      }
+
       try {
-        const work = await this.apiClient.getWorkById(openAlexId);
+        const work = item.work;
         const entry = mapOpenAlexWorkToBibEntry(work);
         const doi = normalizeDoi(work.doi);
         const existingKey =
-          existingImportKeys.get(openAlexId) ||
+          existingImportKeys.get(item.openAlexId) ||
           (doi ? existingByDoi.get(doi) : undefined) ||
           (existingKeys.has(entry.key) ? entry.key : undefined);
 
         if (existingKey && conflictMode === "skip") {
-          result.skippedDuplicate.push({
-            openAlexId,
-            existingKey,
-          });
-
-          await this.importLogRepo.create({
+          result.skippedDuplicate.push({ openAlexId: item.openAlexId, existingKey });
+          logRows.push({
             userId,
             projectId,
-            openAlexId,
+            openAlexId: item.openAlexId,
             citationKey: existingKey,
             targetBibPath,
             doi: work.doi,
@@ -138,7 +196,6 @@ export class ImportToBibFile {
             year: work.publication_year,
             status: "skipped_duplicate",
           });
-
           continue;
         }
 
@@ -149,14 +206,13 @@ export class ImportToBibFile {
         }
         existingKeys.add(entry.key);
         if (doi) existingByDoi.set(doi, entry.key);
-        
-        newEntries.push({ work, entry });
-        
-        // Log successful import
-        await this.importLogRepo.create({
+
+        newEntries.push({ entry });
+
+        logRows.push({
           userId,
           projectId,
-          openAlexId,
+          openAlexId: item.openAlexId,
           citationKey: entry.key,
           targetBibPath,
           doi: work.doi,
@@ -164,40 +220,32 @@ export class ImportToBibFile {
           year: work.publication_year,
           status: "imported",
         });
-        
-        result.imported.push({
-          openAlexId,
-          citationKey: entry.key,
-        });
+
+        result.imported.push({ openAlexId: item.openAlexId, citationKey: entry.key });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        
-        // Log failed import
-        await this.importLogRepo.create({
+        logRows.push({
           userId,
           projectId,
-          openAlexId,
+          openAlexId: item.openAlexId,
           citationKey: "",
           targetBibPath,
           status: "failed",
           errorMessage,
         });
-        
-        result.failed.push({
-          openAlexId,
-          errorMessage,
-        });
+        result.failed.push({ openAlexId: item.openAlexId, errorMessage });
       }
     }
 
-    // If we have new entries, write to file
+    // Write bib first (content is the source of truth), then flush all logs once.
     if (newEntries.length > 0) {
       const merged = this.bibliography.mergeEntries(
         existing,
-        newEntries.map(({ entry }) => entry)
+        newEntries.map(({ entry }) => entry),
       );
       await this.bibliography.writeBibFile(projectId, targetBibPath, merged);
     }
+    await this.importLogRepo.createMany(logRows);
 
     return result;
   }
