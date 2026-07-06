@@ -1,10 +1,3 @@
-/**
- * Compile module — admin routes
- *
- * Admin-only PDF download for project oversight. Registered under prefix
- * `/api/v1/admin` in app.ts. Streams the latest compiled PDF of any project;
- * no compile is triggered here.
- */
 
 import type { FastifyInstance } from 'fastify';
 import type { CompileContainer } from '../../Container.js';
@@ -12,7 +5,6 @@ import { ErrorResponseJsonSchema } from './Dto.js';
 import { CompileJobError } from '../../domain/Errors.js';
 
 export async function adminCompileRoutes(app: FastifyInstance, container: CompileContainer) {
-  // GET /api/v1/admin/projects/:projectId/artifact — latest compiled PDF
   app.get<{ Params: { projectId: string } }>(
     '/projects/:projectId/artifact',
     {

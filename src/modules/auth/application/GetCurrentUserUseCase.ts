@@ -3,10 +3,6 @@ import { AuthError, InternalAuthError, UnauthorizedError } from "../domain/AuthE
 import { getPermissionsForRole } from "../../../shared/auth/Permissions.js";
 import type { AuthUserView } from "./Types.js";
 
-/**
- * Get current user use case
- * Returns user information from JWT token payload
- */
 
 export interface GetCurrentUserCommand {
     userId: string;
@@ -32,18 +28,15 @@ export class GetCurrentUserUseCase {
 
     async execute(command: GetCurrentUserCommand): Promise<GetCurrentUserResponse> {
         try {
-            // Find user by ID from token
             const user = await this.userRepo.findById(command.userId);
             if (!user) {
                 throw new UnauthorizedError();
             }
 
-            // Check if account is active
             if (!user.isActive) {
                 throw new UnauthorizedError();
             }
 
-            // Return user information
             return {
                 success: true,
                 user: {
@@ -55,7 +48,6 @@ export class GetCurrentUserUseCase {
                 },
             };
         } catch (error) {
-            // Handle domain errors
             if (error instanceof AuthError) {
                 return {
                     success: false,
@@ -66,7 +58,6 @@ export class GetCurrentUserUseCase {
                 };
             }
 
-            // Handle unexpected errors
             console.error("Get current user error:", error);
             const internalError = new InternalAuthError();
             return {

@@ -6,11 +6,6 @@ import type { TeacherProfileRepo } from "../../../domain/TeacherManagement/Ports
 import type { AdminAccountRepo } from "../../../domain/AccountManagement/Ports.js";
 import type { PasswordHasher } from "../../../domain/shared/PasswordHasher.js";
 
-/**
- * Build an ImportTeachers wired to in-memory fakes of its domain ports.
- * `teacherCreates` / `userCreates` capture the data passed to repo.create so
- * tests can assert on the auto-generated teacherCodes.
- */
 function buildUseCase(opts: {
   existingTeacherCodes?: string[];
   teacherCreates?: Record<string, unknown>[];

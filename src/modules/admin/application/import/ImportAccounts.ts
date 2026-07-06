@@ -8,9 +8,6 @@ import { ImportService, type ImportResult, type GeneratedPassword } from "./Impo
 import { EnvEmailPolicy } from "../../domain/AccountManagement/Policies.js";
 import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
 
-/**
- * Account import row schema
- */
 const AccountImportRowSchema = z.object({
   email: z.string().min(1, "Email không được để trống"),
   password: z.string().optional(),
@@ -28,9 +25,6 @@ const AccountImportRowSchema = z.object({
 
 type AccountImportRow = z.infer<typeof AccountImportRowSchema>;
 
-/**
- * Vietnamese headers for the downloadable accounts template.
- */
 const ACCOUNT_HEADER_MAP: HeaderMap = {
   Email: "email",
   "Mật Khẩu": "password",
@@ -40,12 +34,6 @@ const ACCOUNT_HEADER_MAP: HeaderMap = {
   "Mã liên kết": "linkCode",
 };
 
-/**
- * Import accounts from CSV with optional linking to teacher/student.
- *
- * Application use case — depends only on domain ports (account/teacher/student
- * repos + PasswordHasher), never on Prisma or bcrypt directly.
- */
 export class ImportAccounts {
   private readonly emailPolicy = new EnvEmailPolicy();
 
@@ -70,7 +58,6 @@ export class ImportAccounts {
           try {
             const parsed = AccountImportRowSchema.parse(row);
 
-            // Validate email for role
             const emailValidation = this.emailPolicy.validate(parsed.email, parsed.role);
             if (!emailValidation.ok) {
               return {
@@ -80,7 +67,6 @@ export class ImportAccounts {
               };
             }
 
-            // Validate linkType and linkCode consistency
             if (parsed.linkType && !parsed.linkCode) {
               return {
                 ok: false,
@@ -157,7 +143,6 @@ export class ImportAccounts {
           const parsed = AccountImportRowSchema.parse(row);
           const normalizedEmail = EnvEmailPolicy.normalize(parsed.email);
 
-          // Generate or use provided password
           let password = parsed.password;
           let isGenerated = false;
           if (!password) {
@@ -174,7 +159,6 @@ export class ImportAccounts {
             isActive: parsed.isActive !== false,
           });
 
-          // Link to teacher or student if specified
           if (parsed.linkType && resolvedKeys?.linkEntityId && resolvedKeys.linkEntityId !== "") {
             if (parsed.linkType === "teacher") {
               await this.accountRepo.linkToTeacher(account.id, resolvedKeys.linkEntityId);
@@ -185,7 +169,7 @@ export class ImportAccounts {
 
           if (isGenerated) {
             generatedPasswords.push({
-              row: 0, // Will be set by caller
+              row: 0,
               email: normalizedEmail,
               password,
             });

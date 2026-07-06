@@ -1,29 +1,3 @@
-/**
- * Admin — Classes CRUD API Test
- * Script: npm run test:api:admin:classes
- *
- * ┌─────┬───────────────────────────────────────────────┬────────┬──────────────────────────┐
- * │ #   │ Test case                                      │ Expect │ error.code               │
- * ├─────┼───────────────────────────────────────────────┼────────┼──────────────────────────┤
- * │  1  │ Login admin / student                         │ 200    │ —                        │
- * │  2  │ Setup: Faculty → Major fixture                 │ 200    │ —                        │
- * │  3  │ GET /classes no token → 401                   │ 401    │ UNAUTHENTICATED          │
- * │  4  │ GET /classes student token → 403              │ 403    │ FORBIDDEN                │
- * │  5  │ POST /classes happy (with majorId)             │ 200    │ —                        │
- * │  6  │ POST /classes missing name → 400              │ 400    │ VALIDATION_ERROR         │
- * │  7  │ POST /classes missing code → 400              │ 400    │ VALIDATION_ERROR         │
- * │  8  │ POST /classes bad majorId → 404               │ 404    │ MAJOR_NOT_FOUND          │
- * │  9  │ POST /classes duplicate code → DUPLICATE      │ 4xx    │ DUPLICATE_CODE           │
- * │ 10  │ GET /classes list contains new item           │ 200    │ —                        │
- * │ 11  │ GET /classes/:id found                        │ 200    │ —                        │
- * │ 12  │ GET /classes/:id not-found → 404              │ 404    │ CLASS_NOT_FOUND          │
- * │ 13  │ PUT /classes/:id update                       │ 200    │ —                        │
- * │ 14  │ DELETE /classes/:id no children → 200         │ 200    │ —                        │
- * │ 15  │ GET /classes/:id after delete → 404           │ 404    │ CLASS_NOT_FOUND          │
- * └─────┴───────────────────────────────────────────────┴────────┴──────────────────────────┘
- *
- * Note: delete-restrict (Class with Student) tested in students script teardown.
- */
 
 import {
   api, loginAdmin, loginStudent,
@@ -48,7 +22,6 @@ async function run() {
     await test('1. Login admin', async () => { await loginAdmin(); });
     const studentToken = await loginStudent();
 
-    // ── Fixture: Faculty → Major ──────────────────────────────────────────
     await test('2a. Setup Faculty', async () => {
       const r = await api('POST', `${BASE}/faculties`, {
         body: { name: `FAC for Class ${sfx}`, code: `FAC_C_${sfx}` },
@@ -65,7 +38,6 @@ async function run() {
       majorId = (r.data as { id: string }).id;
     });
 
-    // ── RBAC ─────────────────────────────────────────────────────────────
     await test('3. GET /classes no token → 401', async () => {
       expectStatus(await api('GET', `${BASE}/classes`, { token: null }), 401);
     });
@@ -77,7 +49,6 @@ async function run() {
       expectErrorCode(r, 'FORBIDDEN');
     });
 
-    // ── Create ────────────────────────────────────────────────────────────
     await test('5. POST /classes happy', async () => {
       const r = await api('POST', `${BASE}/classes`, {
         body: { name: `Lớp Test ${sfx}`, code: `CLS_${sfx}`, majorId },
@@ -115,7 +86,6 @@ async function run() {
       expectErrorCode(r, 'DUPLICATE_CODE');
     });
 
-    // ── List / Get ────────────────────────────────────────────────────────
     await test('10. GET /classes list contains new item', async () => {
       const r = await api('GET', `${BASE}/classes?pageSize=100`);
       expectCreateOk(r);
@@ -133,7 +103,6 @@ async function run() {
       expectErrorCode(r, 'CLASS_NOT_FOUND');
     });
 
-    // ── Update ────────────────────────────────────────────────────────────
     await test('13. PUT /classes/:id update name', async () => {
       const r = await api('PUT', `${BASE}/classes/${classId}`, {
         body: { name: `Lớp Updated ${sfx}` },
@@ -142,7 +111,6 @@ async function run() {
       assert((r.data as { name: string }).name === `Lớp Updated ${sfx}`, 'name updated');
     });
 
-    // ── Delete ────────────────────────────────────────────────────────────
     await test('14. DELETE /classes/:id no children → 200', async () => {
       expectStatus(await api('DELETE', `${BASE}/classes/${classId}`), 200);
       classId = '';

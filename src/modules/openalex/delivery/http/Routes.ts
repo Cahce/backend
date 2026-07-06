@@ -1,8 +1,3 @@
-/**
- * OpenAlex HTTP Routes
- * 
- * Fastify route handlers for OpenAlex integration endpoints.
- */
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { OpenAlexContainer } from "../../Container.js";
@@ -28,14 +23,7 @@ import {
 } from "../../domain/Errors.js";
 import { reconstructAbstract } from "../../domain/Mapping.js";
 
-/**
- * Register OpenAlex routes
- */
 export async function openalexRoutes(app: FastifyInstance, container: OpenAlexContainer) {
-  /**
-   * GET /openalex/works
-   * Search for works
-   */
   app.get(
     "/openalex/works",
     {
@@ -81,10 +69,6 @@ export async function openalexRoutes(app: FastifyInstance, container: OpenAlexCo
     }
   );
 
-  /**
-   * GET /openalex/works/:openAlexId
-   * Get a single work by ID
-   */
   app.get(
     "/openalex/works/:openAlexId",
     {
@@ -121,10 +105,6 @@ export async function openalexRoutes(app: FastifyInstance, container: OpenAlexCo
     }
   );
 
-  /**
-   * POST /openalex/projects/:projectId/import
-   * Import works to project .bib file
-   */
   app.post(
     "/openalex/projects/:projectId/import",
     {
@@ -160,17 +140,12 @@ export async function openalexRoutes(app: FastifyInstance, container: OpenAlexCo
   );
 }
 
-/**
- * Map OpenAlex work to DTO
- */
 function mapWorkToDto(work: OpenAlexWork) {
-  // Extract authors
   const authors = (work.authorships || []).map((a) => ({
     name: a.author?.display_name || "Unknown",
     position: a.author_position || "unknown",
   }));
 
-  // Reconstruct abstract
   const abstract = reconstructAbstract(work.abstract_inverted_index);
 
   return {
@@ -195,9 +170,6 @@ function mapWorkToDto(work: OpenAlexWork) {
   };
 }
 
-/**
- * Handle errors and map to HTTP responses
- */
 function handleError(error: unknown, reply: FastifyReply) {
   if (error instanceof OpenAlexNotFoundError) {
     return reply.code(404).send({
@@ -235,7 +207,6 @@ function handleError(error: unknown, reply: FastifyReply) {
     });
   }
 
-  // Check for project access errors
   if (error instanceof Error) {
     if (error.message.includes("PROJECT_ACCESS_DENIED") || error.message.includes("FORBIDDEN")) {
       return reply.code(403).send({
@@ -256,7 +227,6 @@ function handleError(error: unknown, reply: FastifyReply) {
     }
   }
 
-  // Generic error
   reply.log.error({ err: error }, "Unhandled error in OpenAlex routes");
   return reply.code(500).send({
     error: {

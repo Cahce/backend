@@ -1,24 +1,6 @@
-/**
- * Bilingual header normalization + small import helpers.
- *
- * Spreadsheet import files in this project may carry either English internal
- * keys (legacy CSV / English templates) or the Vietnamese headers used in the
- * downloadable templates (e.g. "Mã khoa", "Họ và Tên"). The Zod schemas in
- * each Import<Resource>.ts use case operate on English keys only, so rows are
- * normalized through `normalizeRow` before validation.
- */
 
 export type HeaderMap = Record<string, string>;
 
-/**
- * Map Vietnamese / aliased header keys onto internal English keys.
- *
- * - Match is case-insensitive and whitespace-trimmed against the headerMap.
- * - Keys not present in the map are kept as-is so existing English-keyed rows
- *   still validate.
- * - Empty-string values become `undefined` so Zod `.optional()` works.
- * - Non-string keys (defensive) are silently dropped.
- */
 export function normalizeRow(
   row: Record<string, unknown>,
   headerMap: HeaderMap,
@@ -45,12 +27,6 @@ export function normalizeRow(
   return out;
 }
 
-/**
- * Extract the alphanumeric local-part of an email and lower-case it.
- * Used as fallback for teacher code generation when DB has no pattern yet.
- *
- * "Kieu.Tuan-Dung@tlu.edu.vn" -> "kieutuandung"
- */
 export function slugFromEmailLocal(email: string): string {
   const at = email.indexOf("@");
   const local = at === -1 ? email : email.slice(0, at);
@@ -59,20 +35,6 @@ export function slugFromEmailLocal(email: string): string {
 
 const CODE_PATTERN = /^([A-Za-z]+)(\d+)$/;
 
-/**
- * Stateful generator that produces the next sequential code in the dominant
- * `<prefix><digits>` pattern observed in the existing codes.
- *
- * - Empty input → starts at "GV001".
- * - Mixed prefixes → picks the most frequent prefix; ties broken by lexicographic order.
- * - Digit width is the max width seen for the chosen prefix.
- * - Codes that don't match the pattern are ignored when picking prefix/max.
- *
- * Call `next()` to consume the current candidate and advance the counter;
- * call `peek()` to inspect without advancing. `reserve(code)` marks a code as
- * taken so subsequent `next()` calls skip past it — useful when a row already
- * provided a code that happens to land in our generated range.
- */
 export class SequentialCodeGenerator {
   private readonly prefix: string;
   private readonly width: number;
@@ -151,9 +113,6 @@ export class SequentialCodeGenerator {
   }
 }
 
-/**
- * One-shot helper for callers that only need a single next code.
- */
 export function nextSequentialCode(existingCodes: ReadonlyArray<string>): string {
   return new SequentialCodeGenerator(existingCodes).next();
 }

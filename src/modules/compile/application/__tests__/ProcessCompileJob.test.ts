@@ -52,7 +52,6 @@ function makeArtifactRepo(): CompileArtifactRepository {
 
 function makeSnapshot(files: { path: string; content: string }[] = []): ProjectFileSnapshotPort {
   return {
-    // Port now returns AsyncIterable (B-8): yield each fixture file in turn.
     listFiles: async function* () {
       for (const file of files) {
         yield file;
@@ -74,7 +73,6 @@ function makeCompiler(result: { ok: boolean; diagnostics?: any[] }): TypstCompil
   return {
     compile: async (input: TypstCompileInput) => {
       if (result.ok) {
-        // Write a dummy PDF so ProcessCompileJob can readFile(outputPath)
         await writeFile(input.outputPath, Buffer.from('%PDF-1.4 dummy'));
       }
       return { ok: result.ok, diagnostics: result.diagnostics ?? [] };

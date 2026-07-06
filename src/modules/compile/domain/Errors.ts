@@ -1,6 +1,3 @@
-/**
- * Compile module domain errors
- */
 
 export class CompileJobError extends Error {
   constructor(

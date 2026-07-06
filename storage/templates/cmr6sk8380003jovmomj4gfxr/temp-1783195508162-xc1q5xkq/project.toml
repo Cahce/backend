@@ -1,0 +1,4 @@
+# project.toml — Siêu dữ liệu cho TLU Scholar Editor.
+# Hệ thống đọc `name` để đặt tên dự án và `entry` để xác định tệp biên dịch chính.
+name = "Mẫu Đồ án tốt nghiệp — Xây dựng Phần mềm / Website"
+entry = "main.typ"

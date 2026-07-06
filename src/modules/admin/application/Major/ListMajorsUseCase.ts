@@ -1,9 +1,3 @@
-/**
- * List Majors Use Case
- * 
- * Application layer orchestration for listing majors with pagination, search, and filters.
- * Pagination sanitization is handled at delivery layer; this use case applies safe defaults.
- */
 
 import type { MajorRepo } from '../../domain/Major/Ports.js';
 import type { MajorWithContext, MajorFilters } from '../../domain/Major/Types.js';
@@ -19,7 +13,6 @@ export class ListMajorsUseCase {
 
   async execute(filters: MajorFilters): Promise<Result<PaginatedResult<MajorWithContext>>> {
     try {
-      // Apply safe pagination defaults
       const page = Math.max(filters.page ?? DEFAULT_PAGE, 1);
       const pageSize = Math.min(
         Math.max(filters.pageSize ?? DEFAULT_PAGE_SIZE, 1),

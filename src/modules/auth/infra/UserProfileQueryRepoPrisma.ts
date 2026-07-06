@@ -1,10 +1,3 @@
-/**
- * Prisma implementation of the user-profile query port.
- *
- * Owns the nested student/teacher profile select. Queries by the unique
- * `email` directly so a single round-trip returns the user + profile (the
- * previous use case did two: findByEmail then a second findUnique by id).
- */
 
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { IUserProfileQuery, UserWithProfile } from "../domain/UserProfile.js";

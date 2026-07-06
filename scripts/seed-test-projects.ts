@@ -1,16 +1,9 @@
-/**
- * Seed Test Projects with Typst Files
- * 
- * Creates sample projects with Typst files for testing compile API on Swagger.
- * Run with: npx tsx scripts/seed-test-projects.ts
- */
 
 import { PrismaClient } from '../src/generated/prisma/index.js';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import dotenv from 'dotenv';
 
-// Load environment variables
 dotenv.config();
 
 const connectionString = process.env.DATABASE_URL;
@@ -22,7 +15,6 @@ const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-// Sample Typst content
 const SAMPLE_TYPST_SIMPLE = `= Xin Chào Thế Giới
 
 Đây là tài liệu Typst đơn giản để test compile API.
@@ -187,7 +179,6 @@ const SAMPLE_TYPST_ERROR = `= Tài Liệu Có Lỗi
 async function main() {
   console.log('🌱 Starting test projects seeding...\n');
 
-  // Get existing users
   const student = await prisma.user.findUnique({
     where: { email: '2251172560@e.tlu.edu.vn' },
   });
@@ -205,7 +196,6 @@ async function main() {
   console.log(`   - Student: ${student.email}`);
   console.log(`   - Teacher: ${teacher.email}\n`);
 
-  // 1. Create Simple Project
   console.log('📁 Creating Simple Project...');
   const simpleProject = await prisma.project.upsert({
     where: { id: 'test-simple-project' },
@@ -239,7 +229,6 @@ async function main() {
   console.log(`   - ID: ${simpleProject.id}`);
   console.log(`   - Files: main.typ\n`);
 
-  // 2. Create Math Project
   console.log('📁 Creating Math Project...');
   const mathProject = await prisma.project.upsert({
     where: { id: 'test-math-project' },
@@ -273,7 +262,6 @@ async function main() {
   console.log(`   - ID: ${mathProject.id}`);
   console.log(`   - Files: main.typ\n`);
 
-  // 3. Create Thesis Project
   console.log('📁 Creating Thesis Project...');
   const thesisProject = await prisma.project.upsert({
     where: { id: 'test-thesis-project' },
@@ -307,7 +295,6 @@ async function main() {
   console.log(`   - ID: ${thesisProject.id}`);
   console.log(`   - Files: main.typ\n`);
 
-  // 4. Create Error Project (for testing error handling)
   console.log('📁 Creating Error Project...');
   const errorProject = await prisma.project.upsert({
     where: { id: 'test-error-project' },
@@ -341,7 +328,6 @@ async function main() {
   console.log(`   - ID: ${errorProject.id}`);
   console.log(`   - Files: main.typ\n`);
 
-  // 5. Create Teacher's Project
   console.log('📁 Creating Teacher Project...');
   const teacherProject = await prisma.project.upsert({
     where: { id: 'test-teacher-project' },
@@ -392,7 +378,6 @@ Cách viết công thức toán học trong Typst.
   console.log(`   - ID: ${teacherProject.id}`);
   console.log(`   - Files: main.typ\n`);
 
-  // Summary
   console.log('📊 Seeding Summary:');
   console.log('   ✅ 5 test projects created');
   console.log('   ✅ 5 Typst files created');

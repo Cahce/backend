@@ -1,15 +1,3 @@
-/**
- * GetLatestProjectArtifactForAdmin use case
- *
- * Returns the latest compiled PDF of a project for an admin. Follows
- * Overleaf's model: if a cached artifact already exists it is streamed
- * immediately; otherwise the project is compiled **on demand** server-side
- * (bundled Typst engine), the artifact is persisted (long-term cache), and
- * then streamed. Subsequent downloads reuse the cached artifact.
- *
- * Admin access is enforced at the route (`requireAdmin`); no owner/member
- * check here.
- */
 
 import type { Readable } from 'node:stream';
 import type { CompileJobRepository } from '../domain/CompileJobRepository.js';
@@ -27,14 +15,8 @@ export interface GetLatestProjectArtifactForAdminResult {
   metadata: BlobMetadata;
 }
 
-/** Extra error code beyond the shared CompileErrors set. */
 const COMPILE_FAILED = 'COMPILE_FAILED';
 
-/**
- * Periodic DB re-check interval while awaiting a compile job. The queue's
- * settle signal normally wakes us sooner; this is the backstop (was a fixed
- * 400ms poll, which issued ~185 queries over a 75s budget).
- */
 const SETTLE_FALLBACK_MS = 2000;
 
 export class GetLatestProjectArtifactForAdmin {
@@ -50,10 +32,8 @@ export class GetLatestProjectArtifactForAdmin {
   async execute(
     cmd: GetLatestProjectArtifactForAdminCommand,
   ): Promise<GetLatestProjectArtifactForAdminResult> {
-    // 1. Cached artifact? Stream it (instant path).
     let artifact = await this.artifacts.findLatestByProjectId(cmd.projectId);
 
-    // 2. None yet → compile on demand and persist.
     if (!artifact) {
       artifact = await this.compileAndGetArtifact(cmd.projectId);
     }
@@ -73,7 +53,6 @@ export class GetLatestProjectArtifactForAdmin {
   private async compileAndGetArtifact(projectId: string) {
     const entryPath = await this.getMainPath(projectId);
 
-    // Reuse an in-flight job for the same entry (dedupe), else enqueue one.
     let job = await this.jobs.findActiveByEntry(projectId, entryPath);
     if (!job) {
       job = await this.jobs.create({ projectId, entryPath, format: 'pdf', engine: 'node' });
@@ -112,15 +91,6 @@ export class GetLatestProjectArtifactForAdmin {
     return artifact;
   }
 
-  /**
-   * Wait for the job to reach success/failed, or the budget to elapse.
-   *
-   * Event-assisted: arms the queue's `waitForSettle` signal ONCE up front so we
-   * wake the instant the worker finishes the job, instead of hammering the DB
-   * every 400ms. A periodic re-check (every {@link SETTLE_FALLBACK_MS}) is the
-   * correctness backstop for the race where the job settled before we armed, or
-   * a queue without `waitForSettle` support.
-   */
   private async pollUntilSettled(jobId: string) {
     const deadline = Date.now() + this.timeoutMs;
     const settled = this.queue.waitForSettle?.(jobId);
@@ -132,10 +102,7 @@ export class GetLatestProjectArtifactForAdmin {
       }
       const waitMs = Math.min(SETTLE_FALLBACK_MS, Math.max(0, deadline - Date.now()));
       await Promise.race([
-        // Resolves once, when the worker finishes the job (fast path).
         settled ?? new Promise<void>(() => {}),
-        // Periodic re-check backstop (also the only signal if waitForSettle is
-        // unsupported or the settle was missed).
         new Promise((resolve) => setTimeout(resolve, waitMs)),
       ]);
       job = await this.jobs.findById(jobId);

@@ -1,8 +1,3 @@
-/**
- * Get Faculty By Id Use Case
- * 
- * Application layer orchestration for retrieving a single faculty by ID.
- */
 
 import type { FacultyRepo } from '../../domain/Faculty/Ports.js';
 import type { Faculty } from '../../domain/Faculty/Types.js';

@@ -1,7 +1,3 @@
-/**
- * Comprehensive Auth API Test Script
- * Tests all authentication endpoints
- */
 
 interface TestResult {
     name: string;
@@ -28,9 +24,9 @@ async function runTests() {
     console.log("=".repeat(60));
 
     let accessToken = "";
+    let refreshToken = "";
     let userId = "";
 
-    // Test 1: Login with valid credentials
     await test("Login with valid credentials (admin)", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/login", {
             method: "POST",
@@ -51,12 +47,12 @@ async function runTests() {
         }
 
         accessToken = data.accessToken;
+        refreshToken = data.refreshToken;
         userId = data.user.id;
         console.log(`  Token: ${accessToken.substring(0, 30)}...`);
         console.log(`  User: ${data.user.email} (${data.user.role})`);
     });
 
-    // Test 2: Get current user
     await test("Get current user with valid token", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/me", {
             method: "GET",
@@ -75,7 +71,46 @@ async function runTests() {
         console.log(`  User: ${data.user.email} (${data.user.role})`);
     });
 
-    // Test 3: Get current user without token
+    await test("Refresh returns rotated tokens + full user", async () => {
+        const response = await fetch("http://localhost:3000/api/v1/auth/refresh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refreshToken }),
+        });
+
+        if (response.status !== 200) {
+            throw new Error(`Expected 200, got ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data.accessToken || !data.refreshToken) {
+            throw new Error("Missing accessToken or refreshToken in response");
+        }
+        const user = data.user;
+        if (!user) {
+            throw new Error("Missing user in refresh response");
+        }
+        for (const field of ["id", "email", "role", "permissions", "mustChangePassword"]) {
+            if (!(field in user)) {
+                throw new Error(
+                    `Refresh response user is missing "${field}" — response schema is stripping fields`,
+                );
+            }
+        }
+        if (!Array.isArray(user.permissions) || user.permissions.length === 0) {
+            throw new Error("Refresh response user.permissions must be a non-empty array for admin");
+        }
+        if (user.id !== userId) {
+            throw new Error("User data mismatch");
+        }
+
+        accessToken = data.accessToken;
+        refreshToken = data.refreshToken;
+        console.log(
+            `  Rotated. User: ${user.email} (${user.role}), permissions: ${user.permissions.length}`,
+        );
+    });
+
     await test("Get current user without token (should fail)", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/me", {
             method: "GET",
@@ -88,7 +123,6 @@ async function runTests() {
         console.log(`  Correctly rejected: ${response.status}`);
     });
 
-    // Test 4: Change password
     await test("Change password with valid old password", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/change-password", {
             method: "POST",
@@ -112,7 +146,6 @@ async function runTests() {
         console.log(`  ${data.message}`);
     });
 
-    // Test 5: Login with new password
     await test("Login with new password", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/login", {
             method: "POST",
@@ -132,7 +165,6 @@ async function runTests() {
         console.log(`  New token: ${accessToken.substring(0, 30)}...`);
     });
 
-    // Test 6: Change password with wrong old password
     await test("Change password with wrong old password (should fail)", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/change-password", {
             method: "POST",
@@ -155,7 +187,6 @@ async function runTests() {
         console.log(`  Correctly rejected: ${data.error.message}`);
     });
 
-    // Test 7: Change password with mismatched confirmation
     await test("Change password with mismatched confirmation (should fail)", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/change-password", {
             method: "POST",
@@ -178,7 +209,6 @@ async function runTests() {
         console.log(`  Correctly rejected: ${data.error.message}`);
     });
 
-    // Test 8: Change password to same as old (should fail)
     await test("Change password to same as old (should fail)", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/change-password", {
             method: "POST",
@@ -201,7 +231,6 @@ async function runTests() {
         console.log(`  Correctly rejected: ${data.error.message}`);
     });
 
-    // Test 9: Logout
     await test("Logout and revoke token", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/logout", {
             method: "POST",
@@ -220,7 +249,6 @@ async function runTests() {
         console.log(`  ${data.message}`);
     });
 
-    // Test 10: Use revoked token (should fail)
     await test("Use revoked token (should fail)", async () => {
         const response = await fetch("http://localhost:3000/api/v1/auth/me", {
             method: "GET",
@@ -234,9 +262,7 @@ async function runTests() {
         console.log(`  Correctly rejected: ${response.status}`);
     });
 
-    // Reset password back to 123456 for next test run
     await test("Reset password back to 123456", async () => {
-        // Login with new password
         const loginResponse = await fetch("http://localhost:3000/api/v1/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -249,7 +275,6 @@ async function runTests() {
         const loginData = await loginResponse.json();
         const newToken = loginData.accessToken;
 
-        // Change password back
         const response = await fetch("http://localhost:3000/api/v1/auth/change-password", {
             method: "POST",
             headers: {

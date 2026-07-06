@@ -1,7 +1,3 @@
-/**
- * Templates Public API Test
- * Tests the complete user flow: login → list templates → create project with template → verify files
- */
 
 const BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
 const ADMIN_EMAIL = 'admin@tlu.edu.vn';
@@ -73,7 +69,6 @@ async function runTests() {
   console.log('='.repeat(60));
   console.log('');
 
-  // ===== STEP 1: SETUP - LOGIN AS ADMIN =====
   await test('Step 1: Login as admin', async () => {
     const result = await apiRequest('POST', '/api/v1/auth/login', {
       email: ADMIN_EMAIL,
@@ -88,7 +83,6 @@ async function runTests() {
     console.log(`  Admin: ${result.data.user.email}`);
   });
 
-  // ===== STEP 2: SETUP - CREATE TEMPLATE =====
   await test('Step 2: Create test template (admin)', async () => {
     const timestamp = new Date().toISOString();
     const result = await apiRequest(
@@ -111,7 +105,6 @@ async function runTests() {
     console.log(`  Template ID: ${testTemplateId}`);
   });
 
-  // ===== STEP 3: SETUP - UPLOAD VERSION =====
   await test('Step 3: Upload template version (admin)', async () => {
     const typstContent = `= Mẫu Luận Văn Tốt Nghiệp
 
@@ -170,7 +163,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  Version ID: ${testVersionId}`);
   });
 
-  // ===== STEP 4: LOGIN AS STUDENT =====
   await test('Step 4: Login as student', async () => {
     const result = await apiRequest('POST', '/api/v1/auth/login', {
       email: STUDENT_EMAIL,
@@ -185,7 +177,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  Student: ${result.data.user.email}`);
   });
 
-  // ===== STEP 5: LIST PUBLIC TEMPLATES =====
   await test('Step 5: List public templates (student)', async () => {
     const result = await apiRequest('GET', '/api/v1/templates', undefined, studentToken);
 
@@ -210,7 +201,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  Test template found with version: ${foundTemplate.latestVersion.versionNumber}`);
   });
 
-  // ===== STEP 6: GET TEMPLATE BY ID =====
   await test('Step 6: Get template by ID (student)', async () => {
     const result = await apiRequest(
       'GET',
@@ -230,7 +220,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  Retrieved: ${result.data.name}`);
   });
 
-  // ===== STEP 7: CREATE PROJECT WITH TEMPLATE =====
   await test('Step 7: Create project with template version', async () => {
     const timestamp = new Date().toISOString();
     const result = await apiRequest(
@@ -257,7 +246,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  Title: ${result.data.title}`);
   });
 
-  // ===== STEP 8: VERIFY PROJECT FILES =====
   await test('Step 8: Verify project files from template', async () => {
     const result = await apiRequest(
       'GET',
@@ -287,7 +275,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  main.typ found: ${mainFile.path}`);
   });
 
-  // ===== STEP 9: VERIFY PROJECT SETTINGS =====
   await test('Step 9: Verify project settings mainPath', async () => {
     const result = await apiRequest(
       'GET',
@@ -311,7 +298,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  mainPath: ${result.data.settings.mainPath}`);
   });
 
-  // ===== STEP 10: READ FILE CONTENT =====
   await test('Step 10: Read main.typ content', async () => {
     const result = await apiRequest(
       'GET',
@@ -336,7 +322,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  ✓ Content matches template`);
   });
 
-  // ===== STEP 11: ERROR CASES =====
   await test('Step 11a: Create project with invalid template version (400)', async () => {
     const fakeVersionId = '00000000-0000-0000-0000-000000000000';
     const result = await apiRequest(
@@ -368,7 +353,6 @@ Danh sách tài liệu tham khảo.
   });
 
   await test('Step 11c: Get inactive template (404)', async () => {
-    // Deactivate template
     await apiRequest(
       'PATCH',
       `/api/v1/admin/templates/${testTemplateId}`,
@@ -389,7 +373,6 @@ Danh sách tài liệu tham khảo.
 
     console.log(`  ✓ Correctly returned 404 for inactive template`);
 
-    // Reactivate for cleanup
     await apiRequest(
       'PATCH',
       `/api/v1/admin/templates/${testTemplateId}`,
@@ -398,7 +381,6 @@ Danh sách tài liệu tham khảo.
     );
   });
 
-  // ===== STEP 12: CLEANUP =====
   await test('Step 12a: Cleanup - Delete project', async () => {
     const result = await apiRequest(
       'DELETE',
@@ -429,7 +411,6 @@ Danh sách tài liệu tham khảo.
     console.log(`  ✓ Template deleted: ${testTemplateId}`);
   });
 
-  // ===== SUMMARY =====
   console.log('');
   console.log('='.repeat(60));
   const passed = results.filter((r) => r.passed).length;

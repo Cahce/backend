@@ -1,5 +1,3 @@
-// Use case for listing student profiles with filters and pagination
-// No framework dependencies
 
 import type { Result, PaginatedResult } from '../Types.js';
 import { success, failure } from '../Types.js';
@@ -15,7 +13,6 @@ export class ListStudentProfilesUseCase {
 
   async execute(filters: StudentFilters): Promise<Result<PaginatedResult<StudentProfileWithContext>>> {
     try {
-      // Apply safe pagination defaults
       const page = Math.max(filters.page ?? DEFAULT_PAGE, 1);
       const pageSize = Math.min(
         Math.max(filters.pageSize ?? DEFAULT_PAGE_SIZE, 1),

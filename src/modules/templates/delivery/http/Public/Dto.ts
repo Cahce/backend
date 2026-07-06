@@ -2,16 +2,9 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// Extend Zod with OpenAPI support
 extendZodWithOpenApi(z);
 
-/**
- * =========================
- * Response DTOs
- * =========================
- */
 
-// Public Template Response (with latest version)
 export const PublicTemplateResponseSchema = z
   .object({
     id: z.string().openapi({
@@ -66,7 +59,6 @@ export const PublicTemplateResponseSchema = z
 
 export type PublicTemplateResponseDto = z.infer<typeof PublicTemplateResponseSchema>;
 
-// List Public Templates Response
 export const ListPublicTemplatesResponseSchema = z
   .object({
     templates: z.array(PublicTemplateResponseSchema).openapi({
@@ -77,7 +69,6 @@ export const ListPublicTemplatesResponseSchema = z
 
 export type ListPublicTemplatesResponseDto = z.infer<typeof ListPublicTemplatesResponseSchema>;
 
-// Error Response
 export const ErrorResponseSchema = z
   .object({
     error: z.object({
@@ -95,11 +86,6 @@ export const ErrorResponseSchema = z
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
   const s = schema as Record<string, unknown>;

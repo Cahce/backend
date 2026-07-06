@@ -1,6 +1,3 @@
-/**
- * Unit Tests for GetAdminProjectDetailUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -18,7 +15,7 @@ function detailRow(): AdminProjectDetailRow {
     lastEditedAt: new Date('2026-02-03T00:00:00.000Z'),
     fileCount: 2,
     hasPdf: true,
-    owner: null, // orphan project — must not crash
+    owner: null,
     mainPath: 'main.typ',
     totalSizeBytes: 1234,
     latestArtifact: {

@@ -13,7 +13,6 @@ async function checkDbState() {
   try {
     console.log('=== Checking Database State ===\n');
 
-    // Check if Teacher table exists and its structure
     const teacherCheck = await pool.query(`
       SELECT column_name, data_type, is_nullable
       FROM information_schema.columns
@@ -24,7 +23,6 @@ async function checkDbState() {
     console.log('Teacher table columns:');
     console.table(teacherCheck.rows);
 
-    // Check if Student table exists and its structure
     const studentCheck = await pool.query(`
       SELECT column_name, data_type, is_nullable
       FROM information_schema.columns
@@ -35,7 +33,6 @@ async function checkDbState() {
     console.log('\nStudent table columns:');
     console.table(studentCheck.rows);
 
-    // Check if legacy tables exist
     const legacyTeacherCheck = await pool.query(`
       SELECT column_name, data_type, is_nullable
       FROM information_schema.columns
@@ -56,7 +53,6 @@ async function checkDbState() {
     console.log('\nStudent_Legacy table columns:');
     console.table(legacyStudentCheck.rows);
 
-    // Check row counts
     const teacherCount = await pool.query('SELECT COUNT(*) FROM "Teacher"');
     const studentCount = await pool.query('SELECT COUNT(*) FROM "Student"');
     const legacyTeacherCount = await pool.query('SELECT COUNT(*) FROM "Teacher_Legacy"');

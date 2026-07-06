@@ -1,8 +1,3 @@
-/**
- * CompileJob domain entity
- * 
- * Represents a Typst compilation job with state machine transitions.
- */
 
 import { CompileJobError, CompileErrors } from './Errors.js';
 import type { CompileDiagnostic } from './CompileDiagnostic.js';
@@ -37,9 +32,6 @@ export class CompileJob {
     return this._updatedAt;
   }
 
-  /**
-   * Transition from queued to running
-   */
   start(): void {
     if (this._status !== 'queued') {
       throw new CompileJobError(
@@ -51,9 +43,6 @@ export class CompileJob {
     this._updatedAt = new Date();
   }
 
-  /**
-   * Transition from running to success
-   */
   succeed(artifactId: string): void {
     if (this._status !== 'running') {
       throw new CompileJobError(
@@ -66,9 +55,6 @@ export class CompileJob {
     this._updatedAt = new Date();
   }
 
-  /**
-   * Transition from running or queued to failed
-   */
   fail(diagnostics: ReadonlyArray<CompileDiagnostic>): void {
     if (this._status !== 'running' && this._status !== 'queued') {
       throw new CompileJobError(

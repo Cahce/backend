@@ -1,8 +1,3 @@
-/**
- * Zotero HTTP Routes
- * 
- * Fastify route handlers for Zotero integration endpoints.
- */
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ZoteroContainer } from "../../Container.js";
@@ -37,15 +32,7 @@ import {
   ZoteroAlreadyConnectedError,
 } from "../../domain/Errors.js";
 
-/**
- * Register Zotero routes
- */
 export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContainer) {
-  /**
-   * POST /zotero/connections/verify
-   * Validate a Zotero API key and return the libraries it can access.
-   * Does NOT persist anything — used by the connection UI before commit.
-   */
   app.post(
     "/zotero/connections/verify",
     {
@@ -75,10 +62,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
     }
   );
 
-  /**
-   * POST /zotero/connections
-   * Connect Zotero account
-   */
   app.post(
     "/zotero/connections",
     {
@@ -124,10 +107,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
     }
   );
 
-  /**
-   * GET /zotero/connections/me
-   * Get my Zotero connection
-   */
   app.get(
     "/zotero/connections/me",
     {
@@ -178,10 +157,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
     }
   );
 
-  /**
-   * DELETE /zotero/connections/me
-   * Disconnect Zotero account
-   */
   app.delete(
     "/zotero/connections/me",
     {
@@ -215,10 +190,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
     }
   );
 
-  /**
-   * GET /zotero/collections
-   * List Zotero collections
-   */
   app.get(
     "/zotero/collections",
     {
@@ -252,7 +223,7 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
           key: c.key,
           name: c.name,
           parentKey: c.parentCollection === false ? null : (c.parentCollection || null),
-          numItems: 0, // Zotero API doesn't provide this in collection list
+          numItems: 0,
         }));
 
         return reply.send({ collections: dtos });
@@ -262,10 +233,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
     }
   );
 
-  /**
-   * GET /zotero/items
-   * List Zotero items
-   */
   app.get(
     "/zotero/items",
     {
@@ -322,10 +289,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
     }
   );
 
-  /**
-   * POST /zotero/projects/:projectId/sync
-   * Sync Zotero items to project .bib file
-   */
   app.post(
     "/zotero/projects/:projectId/sync",
     {
@@ -378,10 +341,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
     }
   );
 
-  /**
-   * GET /zotero/projects/:projectId/sync-logs
-   * Get sync logs for a project
-   */
   app.get(
     "/zotero/projects/:projectId/sync-logs",
     {
@@ -435,9 +394,6 @@ export async function zoteroRoutes(app: FastifyInstance, container: ZoteroContai
   );
 }
 
-/**
- * Handle errors and map to HTTP responses
- */
 function handleError(error: unknown, reply: FastifyReply) {
   if (error instanceof ZoteroNotConnectedError) {
     return reply.code(404).send({
@@ -511,7 +467,6 @@ function handleError(error: unknown, reply: FastifyReply) {
     });
   }
 
-  // Check for project access errors
   if (error instanceof Error) {
     if (error.message.includes("PROJECT_ACCESS_DENIED") || error.message.includes("FORBIDDEN")) {
       return reply.code(403).send({
@@ -532,7 +487,6 @@ function handleError(error: unknown, reply: FastifyReply) {
     }
   }
 
-  // Generic error
   reply.log.error({ err: error }, "Unhandled error in Zotero routes");
   return reply.code(500).send({
     error: {

@@ -1,8 +1,3 @@
-/**
- * Update File Use Case
- * 
- * Application layer orchestration for updating a file's content.
- */
 
 import * as crypto from 'node:crypto';
 import type { FileRepo } from '../domain/ProjectFile/Ports.js';
@@ -14,9 +9,6 @@ import { buildProjectAuthContext } from '../../projects/application/ProjectAuthC
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
-/**
- * Command for updating a file
- */
 export interface UpdateFileCommand {
   projectId: string;
   path: string;
@@ -25,11 +17,6 @@ export interface UpdateFileCommand {
   userRole: 'admin' | 'teacher' | 'student';
 }
 
-/**
- * Update File Use Case
- * 
- * Updates a file's content, recomputes size and hash, and updates lastEditedAt.
- */
 export class UpdateFileUseCase {
   constructor(
     private readonly fileRepo: FileRepo,
@@ -38,14 +25,12 @@ export class UpdateFileUseCase {
 
   async execute(command: UpdateFileCommand): Promise<Result<File>> {
     try {
-      // Verify project exists
       const project = await this.projectRepo.findById(command.projectId);
 
       if (!project) {
         return failure(FileErrors.PROJECT_NOT_FOUND.code, FileErrors.PROJECT_NOT_FOUND.message);
       }
 
-      // Enforce authorization (resolves ProjectMember / advisor relations).
       const authContext: AuthContext = await buildProjectAuthContext(
         this.projectRepo,
         project,
@@ -57,7 +42,6 @@ export class UpdateFileUseCase {
         return failure(FileErrors.UNAUTHORIZED.code, FileErrors.UNAUTHORIZED.message);
       }
 
-      // Find file by project ID and path
       const existingFile = await this.fileRepo.findByProjectIdAndPath(
         command.projectId,
         command.path,
@@ -67,12 +51,9 @@ export class UpdateFileUseCase {
         return failure(FileErrors.FILE_NOT_FOUND.code, FileErrors.FILE_NOT_FOUND.message);
       }
 
-      // Recompute size and hash
       const sizeBytes = Buffer.byteLength(command.content, 'utf8');
       const sha256 = crypto.createHash('sha256').update(command.content, 'utf8').digest('hex');
 
-      // Update file via repository
-      // Stage 1: storageMode remains inline (no migration to object storage)
       const file = await this.fileRepo.update({
         projectId: command.projectId,
         path: command.path,

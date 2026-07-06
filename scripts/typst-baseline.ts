@@ -1,11 +1,3 @@
-/**
- * Typst upgrade baseline / verification probe (spec: typst-version-upgrade, T0 + T6).
- * Records the installed typst.ts version, the bundled Typst LANGUAGE version
- * (#sys.version), and a real project's compile result (pages / timing /
- * diagnostics) so before↔after can be compared across the upgrade.
- *
- *   npx tsx scripts/typst-baseline.ts [projectId]
- */
 import { createRequire } from 'node:module';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
@@ -38,7 +30,6 @@ async function main(): Promise<void> {
   const fontDir = resolve(config.compile.fontDirs);
   const compiler = NodeCompiler.create({ fontArgs: [{ fontPaths: [fontDir] }] });
 
-  // --- package + language versions ---
   const pkgNode = require('@myriaddreamin/typst-ts-node-compiler/package.json').version;
   const pkgTs = require('@myriaddreamin/typst.ts/package.json').version;
   let sysVersion: unknown = '(query failed)';
@@ -56,7 +47,6 @@ async function main(): Promise<void> {
   console.log('@myriaddreamin/typst.ts               =', pkgTs);
   console.log('Typst language (#sys.version)         =', JSON.stringify(sysVersion));
 
-  // --- real project compile ---
   const settings = await prisma.projectSettings.findUnique({ where: { projectId } });
   const files = await prisma.file.findMany({
     where: { projectId, kind: { in: getCompilationKinds() } },

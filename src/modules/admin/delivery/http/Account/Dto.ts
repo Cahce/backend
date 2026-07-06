@@ -3,9 +3,6 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { ZMSG } from "../../../../../shared/validation/ZodMessages.js";
 import type { UserRole } from "../../../domain/AccountManagement/Types.js";
 
-/**
- * Request DTOs
- */
 export const CreateAccountRequestSchema = z.object({
   email: z.string().min(1, ZMSG.required("Email")).email(ZMSG.emailInvalid),
   password: z.string().min(8, ZMSG.minLen("Mật khẩu", 8)),
@@ -46,9 +43,6 @@ export const ListAccountsQuerySchema = z.object({
 
 export type ListAccountsQuery = z.infer<typeof ListAccountsQuerySchema>;
 
-/**
- * Response DTOs
- */
 export interface AccountLinkResponse {
   type: "teacher" | "student";
   id: string;
@@ -78,10 +72,6 @@ export interface MessageResponse {
   message: string;
 }
 
-/**
- * JSON Schemas derived from Zod for Fastify route validation.
- * Do not pass raw Zod schemas to Fastify — they are not valid JSON Schema.
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
   const s = schema as Record<string, unknown>;

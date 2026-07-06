@@ -1,8 +1,3 @@
-/**
- * OpenAlex Import Log Repository - Prisma Implementation
- * 
- * Implements OpenAlexImportLogRepo using Prisma ORM.
- */
 
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type {

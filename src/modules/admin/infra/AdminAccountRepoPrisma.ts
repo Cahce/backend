@@ -1,9 +1,3 @@
-/**
- * Prisma implementation of AdminAccountRepo.
- *
- * Infrastructure layer implementation of the AdminAccountRepo port.
- * Application/domain code must depend only on the port, never on PrismaClient.
- */
 
 import type { PrismaClient, UserRole as PrismaUserRole } from '../../../generated/prisma/index.js';
 import type { AdminAccountRepo } from '../domain/AccountManagement/Ports.js';
@@ -71,7 +65,6 @@ const PROFILE_INCLUDE = {
 export class AdminAccountRepoPrisma implements AdminAccountRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  // --- Profile-aware lookups -----------------------------------------------
 
   async findByIdWithProfile(id: string): Promise<AccountWithProfile | null> {
     const user = await this.prisma.user.findUnique({
@@ -91,7 +84,6 @@ export class AdminAccountRepoPrisma implements AdminAccountRepo {
     return this.mapToAccountWithProfile(user);
   }
 
-  // --- Account CRUD --------------------------------------------------------
 
   async findById(id: string): Promise<AccountWithLink | null> {
     const user = await this.prisma.user.findUnique({
@@ -216,7 +208,6 @@ export class AdminAccountRepoPrisma implements AdminAccountRepo {
     });
   }
 
-  // --- Mapping helpers -----------------------------------------------------
 
   private mapToAccount(user: PrismaUser): Account {
     return {

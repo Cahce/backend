@@ -1,8 +1,3 @@
-/**
- * ProcessCompileJob use case
- * 
- * Worker handler that processes a compile job.
- */
 
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -35,25 +30,18 @@ export class ProcessCompileJob {
       return;
     }
 
-    // Start job
     job.start();
     await this.jobs.save(job);
 
     const startMs = Date.now();
     const workDir = await mkdtemp(join(tmpdir(), 'typst-'));
     try {
-      // Stream project files to temp directory one at a time. The snapshot
-      // adapter yields each file and enforces a cumulative byte ceiling
-      // (MAX_SNAPSHOT_BYTES) — throws SnapshotTooLargeError if a project
-      // exceeds the limit, which propagates to the catch below and surfaces
-      // as a failed job (instead of OOM'ing the worker).
       for await (const f of this.snapshot.listFiles(job.projectId)) {
         const dest = join(workDir, f.path);
         await mkdir(dirname(dest), { recursive: true });
         await writeFile(dest, f.content);
       }
 
-      // Compile
       const outputPath = join(workDir, 'output.pdf');
       const result = await this.compiler.compile({
         workDir,
@@ -69,14 +57,11 @@ export class ProcessCompileJob {
         return;
       }
 
-      // Read PDF
       const pdf = await readFile(outputPath);
 
-      // Store artifact
       const storageKey = randomUUID();
       const meta = await this.storage.put(storageKey, pdf, 'application/pdf');
 
-      // Create artifact record
       const artifact = await this.artifacts.create({
         projectId: job.projectId,
         jobId: job.id,
@@ -99,7 +84,6 @@ export class ProcessCompileJob {
       await this.jobs.save(job);
       this.log?.info({ jobId, projectId: job.projectId, status: 'failed', durationMs: Date.now() - startMs });
     } finally {
-      // Clean up temp directory
       await rm(workDir, { recursive: true, force: true });
     }
   }

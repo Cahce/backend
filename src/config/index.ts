@@ -6,29 +6,20 @@ const EnvSchema = z.object({
     HOST: z.string().default("0.0.0.0"),
     DATABASE_URL: z.string().min(1),
     JWT_SECRET: z.string().min(1),
-    // Access token lifetime (short) + refresh token lifetime ("force re-login"
-    // window). @fastify/jwt expiresIn syntax: "15m", "1h", "1d", "900s".
     JWT_ACCESS_TTL: z.string().default("15m"),
     JWT_REFRESH_TTL: z.string().default("1d"),
     SWAGGER_ROUTE_PREFIX: z.string().default("/docs"),
-    // Blob Storage
     BLOB_STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     STORAGE_DIR: z.string().default("./.storage"),
-    // Template Storage
     TEMPLATE_STORAGE_DIR: z.string().default("./storage/templates"),
-    // Compile
     COMPILE_WORKER_ENABLED: z.coerce.boolean().default(true),
     COMPILE_TIMEOUT_MS: z.coerce.number().default(60000),
     COMPILE_FONT_DIRS: z.string().default('./var/fonts'),
-    // Hard byte ceiling for a project-file compile snapshot (cumulative).
-    MAX_SNAPSHOT_BYTES: z.coerce.number().default(256 * 1024 * 1024), // 256 MB
-    // Bibliography Integration
+    MAX_SNAPSHOT_BYTES: z.coerce.number().default(256 * 1024 * 1024),
     ZOTERO_API_BASE: z.string().default("https://api.zotero.org"),
     OPENALEX_MAILTO: z.string().default(""),
-    // Zotero translation-server (self-hosted metadata extractor) base URL.
     TRANSLATION_SERVER_URL: z.string().default("http://localhost:1969"),
-    // Binary File Upload
-    MAX_UPLOAD_SIZE_BYTES: z.coerce.number().default(10 * 1024 * 1024), // 10 MB
+    MAX_UPLOAD_SIZE_BYTES: z.coerce.number().default(50 * 1024 * 1024),
 });
 
 const env = EnvSchema.parse(process.env);

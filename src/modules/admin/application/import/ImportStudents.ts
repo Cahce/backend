@@ -8,9 +8,6 @@ import { ImportService, type ImportResult, type GeneratedPassword } from "./Impo
 import { EnvEmailPolicy } from "../../domain/AccountManagement/Policies.js";
 import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
 
-/**
- * Student import row schema
- */
 const StudentImportRowSchema = z.object({
   studentCode: z.string().min(1, "Mã sinh viên không được để trống"),
   fullName: z.string().min(1, "Tên sinh viên không được để trống"),
@@ -22,9 +19,6 @@ const StudentImportRowSchema = z.object({
 
 type StudentImportRow = z.infer<typeof StudentImportRowSchema>;
 
-/**
- * Matches columns in "Mẫu Import Sinh viên.xlsx" (STT ignored).
- */
 const STUDENT_HEADER_MAP: HeaderMap = {
   "Mã sinh viên": "studentCode",
   "Họ và Tên": "fullName",
@@ -34,12 +28,6 @@ const STUDENT_HEADER_MAP: HeaderMap = {
   "Số điện thoại": "phone",
 };
 
-/**
- * Import students from CSV with optional account creation.
- *
- * Application use case — depends only on domain ports (class/account/student
- * repos + PasswordHasher), never on Prisma or bcrypt directly.
- */
 export class ImportStudents {
   private readonly emailPolicy = new EnvEmailPolicy();
 
@@ -110,7 +98,6 @@ export class ImportStudents {
             throw new Error("Class ID not resolved");
           }
 
-          // Handle optional account creation / linking.
           let accountId: string | undefined;
 
           if (row.accountEmail) {
@@ -144,7 +131,7 @@ export class ImportStudents {
 
               if (isGenerated) {
                 generatedPasswords.push({
-                  row: 0, // Will be set by caller
+                  row: 0,
                   email: normalizedEmail,
                   password,
                 });

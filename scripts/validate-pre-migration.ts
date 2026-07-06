@@ -17,7 +17,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
   try {
     console.log('=== Pre-Migration Validation ===\n');
 
-    // 1. Check for null or duplicate userId in Teacher
     console.log('1. Validating Teacher.userId...');
     const teacherNullCount = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count FROM "Teacher" WHERE "userId" IS NULL
@@ -41,7 +40,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       });
     }
 
-    // 2. Check for null or duplicate userId in Student
     console.log('2. Validating Student.userId...');
     const studentNullCount = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count FROM "Student" WHERE "userId" IS NULL
@@ -65,7 +63,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       });
     }
 
-    // 3. Check for null required fields in Teacher
     console.log('3. Validating Teacher required fields...');
     const teacherNullFields = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count 
@@ -76,7 +73,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       result.warnings.push(`Found ${teacherNullFields[0].count} Teacher records with NULL teacherCode or fullName (will use defaults)`);
     }
 
-    // 4. Check for null required fields in Student
     console.log('4. Validating Student required fields...');
     const studentNullFields = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count 
@@ -87,7 +83,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       result.warnings.push(`Found ${studentNullFields[0].count} Student records with NULL studentCode or fullName (will use defaults)`);
     }
 
-    // 5. Check for duplicate teacherCode
     console.log('5. Validating Teacher.teacherCode uniqueness...');
     const teacherCodeDuplicates = await prisma.$queryRaw<Array<{ teacherCode: string; count: bigint }>>`
       SELECT "teacherCode", COUNT(*) as count 
@@ -104,7 +99,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       });
     }
 
-    // 6. Check for duplicate studentCode
     console.log('6. Validating Student.studentCode uniqueness...');
     const studentCodeDuplicates = await prisma.$queryRaw<Array<{ studentCode: string; count: bigint }>>`
       SELECT "studentCode", COUNT(*) as count 
@@ -121,7 +115,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       });
     }
 
-    // 7. Validate Department name uniqueness (if using name-based mapping)
     console.log('7. Validating Department.name uniqueness...');
     const departmentNameDuplicates = await prisma.$queryRaw<Array<{ name: string; count: bigint }>>`
       SELECT "name", COUNT(*) as count 
@@ -137,7 +130,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       });
     }
 
-    // 8. Validate AcademicClass name uniqueness (if using name-based mapping)
     console.log('8. Validating AcademicClass.name uniqueness...');
     const classNameDuplicates = await prisma.$queryRaw<Array<{ name: string; count: bigint }>>`
       SELECT "name", COUNT(*) as count 
@@ -153,7 +145,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
       });
     }
 
-    // 9. Check row counts
     console.log('9. Recording baseline row counts...');
     const teacherCount = await prisma.teacher.count();
     const studentCount = await prisma.student.count();
@@ -164,7 +155,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
     console.log(`  - Student: ${studentCount}`);
     console.log(`  - ProjectAdvisor: ${advisorCount}`);
 
-    // Print results
     console.log('\n=== Validation Results ===\n');
     
     if (result.warnings.length > 0) {
@@ -196,7 +186,6 @@ async function validatePreMigration(): Promise<ValidationResult> {
   return result;
 }
 
-// Run validation
 validatePreMigration().then(result => {
   process.exit(result.passed ? 0 : 1);
 });

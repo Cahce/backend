@@ -3,10 +3,6 @@ import type { ITokenService } from "../domain/Ports.js";
 import type { UserRole } from "../../../shared/auth/Types.js";
 import { randomUUID, randomBytes, createHash } from "crypto";
 
-/**
- * Parse an @fastify/jwt-style TTL ("15m" | "1h" | "1d" | "900s" | bare seconds)
- * to milliseconds. Used to compute `expiresAt` alongside the signed `exp`.
- */
 export function parseTtlMs(ttl: string): number {
     const match = /^(\d+)\s*([smhd])$/.exec(ttl.trim());
     if (!match) {
@@ -19,12 +15,6 @@ export function parseTtlMs(ttl: string): number {
     return value * unitMs[match[2]];
 }
 
-/**
- * Fastify JWT implementation of the token service.
- *
- * - Access token: short-lived JWT signed with `expiresIn = config.auth.accessTtl`.
- * - Refresh token: opaque random string (NOT a JWT); only its SHA-256 hash is stored.
- */
 export class JwtTokenServiceFastify implements ITokenService {
     constructor(private readonly app: FastifyInstance) {}
 

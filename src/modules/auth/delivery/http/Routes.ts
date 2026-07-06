@@ -26,10 +26,37 @@ import {
     type UpdateOwnProfileRequestDto,
 } from "./Dto.js";
 
-/**
- * JSON Schema definitions for Swagger/OpenAPI
- * Note: These are manually maintained but validated at runtime by Zod schemas in Dto.ts
- */
+
+const userResponseSchema = {
+    type: "object",
+    properties: {
+        id: {
+            type: "string",
+            examples: ["cmnztabnn0000e8vmyzb8gqtn"],
+        },
+        email: {
+            type: "string",
+            examples: ["admin@tlu.edu.vn"],
+        },
+        role: {
+            type: "string",
+            enum: ["admin", "student", "teacher"],
+            examples: ["admin"],
+        },
+        permissions: {
+            type: "array",
+            items: { type: "string" },
+            description: "Danh sách quyền (RBAC) suy ra từ vai trò",
+            examples: [["admin:access", "users:manage"]],
+        },
+        mustChangePassword: {
+            type: "boolean",
+            description: "Bắt buộc đổi mật khẩu trước khi sử dụng",
+            examples: [false],
+        },
+    },
+} as const;
+
 const schemas = {
     loginRequest: {
         type: "object",
@@ -60,35 +87,7 @@ const schemas = {
                 type: "string",
                 description: "Refresh token (xoay vòng, đổi ở /auth/refresh)",
             },
-            user: {
-                type: "object",
-                properties: {
-                    id: {
-                        type: "string",
-                        examples: ["cmnztabnn0000e8vmyzb8gqtn"],
-                    },
-                    email: {
-                        type: "string",
-                        examples: ["admin@tlu.edu.vn"],
-                    },
-                    role: {
-                        type: "string",
-                        enum: ["admin", "student", "teacher"],
-                        examples: ["admin"],
-                    },
-                    permissions: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Danh sách quyền (RBAC) suy ra từ vai trò",
-                        examples: [["admin:access", "users:manage"]],
-                    },
-                    mustChangePassword: {
-                        type: "boolean",
-                        description: "Bắt buộc đổi mật khẩu trước khi sử dụng",
-                        examples: [false],
-                    },
-                },
-            },
+            user: userResponseSchema,
         },
     },
     refreshRequest: {
@@ -103,41 +102,13 @@ const schemas = {
         properties: {
             accessToken: { type: "string", description: "Access token mới (ngắn hạn)" },
             refreshToken: { type: "string", description: "Refresh token mới (token cũ bị thu hồi)" },
-            user: { type: "object", description: "Thông tin người dùng" },
+            user: userResponseSchema,
         },
     },
     currentUserResponse: {
         type: "object",
         properties: {
-            user: {
-                type: "object",
-                properties: {
-                    id: {
-                        type: "string",
-                        examples: ["cmnztabnn0000e8vmyzb8gqtn"],
-                    },
-                    email: {
-                        type: "string",
-                        examples: ["admin@tlu.edu.vn"],
-                    },
-                    role: {
-                        type: "string",
-                        enum: ["admin", "student", "teacher"],
-                        examples: ["admin"],
-                    },
-                    permissions: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Danh sách quyền (RBAC) suy ra từ vai trò",
-                        examples: [["admin:access", "users:manage"]],
-                    },
-                    mustChangePassword: {
-                        type: "boolean",
-                        description: "Bắt buộc đổi mật khẩu trước khi sử dụng",
-                        examples: [false],
-                    },
-                },
-            },
+            user: userResponseSchema,
         },
     },
     changePasswordRequest: {
@@ -297,12 +268,9 @@ const schemas = {
     },
 } as const;
 
+export { schemas as authResponseSchemas };
 
-/**
- * Auth module HTTP routes
- */
 export async function authRoutes(app: FastifyInstance) {
-    // Wire dependencies
     const userRepo = new UserRepoPrisma(app.prisma);
     const userProfileQuery = new UserProfileQueryRepoPrisma(app.prisma);
     const passwordHasher = new PasswordHasherBcrypt();
@@ -325,7 +293,6 @@ export async function authRoutes(app: FastifyInstance) {
     const userProfileMutation = new UserProfileMutationRepoPrisma(app.prisma);
     const updateOwnProfileUseCase = new UpdateOwnProfileUseCase(userProfileMutation);
 
-    // POST /api/v1/auth/login
     app.post<{ Body: LoginRequestDto }>(
         "/login",
         {
@@ -343,7 +310,6 @@ export async function authRoutes(app: FastifyInstance) {
             },
         },
         async (request, reply) => {
-            // Validate request body
             const parseResult = LoginRequestSchema.safeParse(request.body);
 
             if (!parseResult.success) {
@@ -356,10 +322,8 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
-            // Execute use case
             const result = await loginUseCase.execute(parseResult.data);
 
-            // Map result to HTTP response
             if (result.success) {
                 return reply.code(200).send({
                     accessToken: result.accessToken,
@@ -368,7 +332,6 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
-            // Map error codes to HTTP status codes
             const statusCode = getStatusCodeForError(result.error.code);
             return reply.code(statusCode).send({
                 error: result.error,
@@ -376,7 +339,6 @@ export async function authRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/auth/me
     app.get(
         "/me",
         {
@@ -395,10 +357,8 @@ export async function authRoutes(app: FastifyInstance) {
         async (request, reply) => {
             const userId = request.user.sub;
 
-            // Execute use case
             const result = await getCurrentUserUseCase.execute({ userId });
 
-            // Map result to HTTP response
             if (result.success) {
                 return reply.code(200).send({
                     user: result.user,
@@ -412,7 +372,6 @@ export async function authRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/auth/user/:email
     app.get<{ Params: GetUserByEmailParamsDto }>(
         "/user/:email",
         {
@@ -445,7 +404,6 @@ export async function authRoutes(app: FastifyInstance) {
             const requesterId = request.user.sub;
             const requesterRole = request.user.role;
 
-            // Validate params
             const parseResult = GetUserByEmailParamsSchema.safeParse(request.params);
 
             if (!parseResult.success) {
@@ -458,14 +416,12 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
-            // Execute use case
             const result = await getUserByEmailUseCase.execute({
                 email: parseResult.data.email,
                 requesterId,
                 requesterRole,
             });
 
-            // Map result to HTTP response
             if (result.success) {
                 return reply.code(200).send({
                     ...result.data,
@@ -481,9 +437,6 @@ export async function authRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/auth/refresh — exchange a valid refresh token for a new pair.
-    // PUBLIC: no `verify` preHandler (the access token may be expired/absent);
-    // it authenticates via the refresh token in the body.
     app.post<{ Body: RefreshRequestDto }>(
         "/refresh",
         {
@@ -525,7 +478,6 @@ export async function authRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/auth/logout
     app.post<{ Body: { refreshToken?: string } }>(
         "/logout",
         {
@@ -544,17 +496,11 @@ export async function authRoutes(app: FastifyInstance) {
         async (request, reply) => {
             const jti = request.user.jti;
             const userId = request.user.sub;
-            // Access tokens are now signed with `exp`; pass it so the revocation
-            // row's lifetime matches the token's real expiry (self-cleaning).
             const tokenExpSeconds = (request.user as { exp?: number }).exp;
-            // Optional: the client sends its refresh token so its whole family is
-            // revoked (the session cannot be silently refreshed after logout).
             const refreshToken = request.body?.refreshToken;
 
-            // Execute use case
             const result = await logoutUseCase.execute({ jti, userId, tokenExpSeconds, refreshToken });
 
-            // Map result to HTTP response
             if (result.success) {
                 return reply.code(200).send({
                     message: result.message,
@@ -568,7 +514,6 @@ export async function authRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/auth/change-password
     app.post<{ Body: ChangePasswordRequestDto }>(
         "/change-password",
         {
@@ -589,7 +534,6 @@ export async function authRoutes(app: FastifyInstance) {
         async (request, reply) => {
             const userId = request.user.sub;
 
-            // Validate request body
             const parseResult = ChangePasswordRequestSchema.safeParse(request.body);
 
             if (!parseResult.success) {
@@ -602,13 +546,11 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
-            // Execute use case
             const result = await changePasswordUseCase.execute({
                 userId,
                 ...parseResult.data,
             });
 
-            // Map result to HTTP response
             if (result.success) {
                 return reply.code(200).send({
                     message: result.message,
@@ -626,9 +568,6 @@ export async function authRoutes(app: FastifyInstance) {
         },
     );
 
-    // PUT /api/v1/auth/me/profile — self-service update of personal info
-    // (gender / dateOfBirth / phone / address) on the caller's own
-    // student or teacher profile. Identity/academic fields stay admin-managed.
     app.put<{ Body: UpdateOwnProfileRequestDto }>(
         "/me/profile",
         {
@@ -689,9 +628,6 @@ export async function authRoutes(app: FastifyInstance) {
     );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
     switch (errorCode) {
         case "VALIDATION_ERROR":

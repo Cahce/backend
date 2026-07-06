@@ -1,12 +1,3 @@
-/**
- * Translation Server Client
- *
- * Infrastructure adapter for a self-hosted Zotero `translation-server`
- * (https://github.com/zotero/translation-server). Converts a web page URL or
- * an identifier into Zotero-format items using Zotero's own translators.
- *
- * Mirrors the fetch + timeout + retry pattern of `OpenAlexApiClient`.
- */
 
 import type { TranslationServerPort } from "../domain/Ports.js";
 import type { CaptureItem } from "../domain/Types.js";
@@ -38,11 +29,9 @@ export class TranslationServerClient implements TranslationServerPort {
     this.retryDelay = config.retryDelay ?? 500;
   }
 
-  /** Extract metadata from a web page URL (POST /web, body = URL). */
   async web(url: string): Promise<CaptureItem[]> {
     const response = await this.post("/web", url, "text/plain");
 
-    // 300 = multiple translatable items on the page (e.g. a results list).
     if (response.status === 300) {
       return this.resolveMultiple(response);
     }
@@ -50,17 +39,11 @@ export class TranslationServerClient implements TranslationServerPort {
     return this.parseItemsResponse(response);
   }
 
-  /** Resolve a DOI / PMID / arXiv ID / ISBN (POST /search, body = identifier). */
   async search(identifier: string): Promise<CaptureItem[]> {
     const response = await this.post("/search", identifier, "text/plain");
     return this.parseItemsResponse(response);
   }
 
-  /**
-   * Handle the translation-server "multiple choices" (300) response by
-   * selecting the first candidate and re-posting the selection — single-paper
-   * capture only needs one item.
-   */
   private async resolveMultiple(response: Response): Promise<CaptureItem[]> {
     let payload: { items?: Record<string, string> } & Record<string, unknown>;
     try {
@@ -88,7 +71,6 @@ export class TranslationServerClient implements TranslationServerPort {
   }
 
   private async parseItemsResponse(response: Response): Promise<CaptureItem[]> {
-    // 400/404 → translation-server could not recognise the input.
     if (response.status === 400 || response.status === 404) {
       throw new TranslationNoResultError();
     }
@@ -157,12 +139,6 @@ export class TranslationServerClient implements TranslationServerPort {
     }
   }
 
-  /**
-   * Normalize a translation-server item (Zotero API JSON, flat fields) into the
-   * CaptureItem/ZoteroItem shape. translation-server returns fields at the top
-   * level (itemType, title, creators, date, DOI, url, ...), so we copy the
-   * known fields.
-   */
   private normalizeItem(raw: Record<string, unknown>): CaptureItem {
     const r = raw as Record<string, any>;
     return {

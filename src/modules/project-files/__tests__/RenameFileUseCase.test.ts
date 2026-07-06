@@ -1,6 +1,3 @@
-/**
- * Unit Tests for RenameFileUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -68,8 +65,8 @@ describe('RenameFileUseCase', () => {
     assert.strictEqual(result.success, true);
     if (result.success) {
       assert.strictEqual(result.data.path, 'new-name.typ');
-      assert.strictEqual(result.data.textContent, 'content'); // Content preserved
-      assert.strictEqual(result.data.sizeBytes, 7); // Metadata preserved
+      assert.strictEqual(result.data.textContent, 'content');
+      assert.strictEqual(result.data.sizeBytes, 7);
     }
   });
 
@@ -128,7 +125,6 @@ describe('RenameFileUseCase', () => {
   });
 
   it('should return FILE_ALREADY_EXISTS when file exists at newPath', async () => {
-    // Add another file at the target path
     const conflictFile: File = {
       id: 'file-2',
       projectId: 'project-1',
@@ -241,8 +237,6 @@ describe('RenameFileUseCase', () => {
 
     const result = await useCase.execute(command);
 
-    // The previous weak inline validator accepted backslashes; the domain
-    // PathValidator (now the single source of truth) rejects them.
     assert.strictEqual(result.success, false);
     if (!result.success) {
       assert.strictEqual(result.error.code, FileErrors.INVALID_FILE_PATH.code);

@@ -1,6 +1,3 @@
-/**
- * Unit Tests for ListAdminProjectsUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -74,7 +71,7 @@ describe('ListAdminProjectsUseCase', () => {
       assert.strictEqual(result.data.total, 25);
       assert.strictEqual(result.data.page, 2);
       assert.strictEqual(result.data.pageSize, 10);
-      assert.strictEqual(result.data.totalPages, 3); // ceil(25/10)
+      assert.strictEqual(result.data.totalPages, 3);
       assert.strictEqual(result.data.items.length, 1);
       const item = result.data.items[0];
       assert.strictEqual(item.createdAt, '2026-01-02T03:04:05.000Z');

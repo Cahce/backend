@@ -6,11 +6,7 @@ import {
   ErrorResponseJsonSchema,
 } from './Dto.js';
 
-/**
- * Public template routes (for authenticated users)
- */
 export async function publicTemplateRoutes(app: FastifyInstance, container: TemplatesContainer) {
-  // GET /api/v1/templates - list public templates
   app.get(
     '/templates',
     {
@@ -65,7 +61,6 @@ export async function publicTemplateRoutes(app: FastifyInstance, container: Temp
     },
   );
 
-  // GET /api/v1/templates/:id - get template by id (only if active)
   app.get<{ Params: { id: string } }>(
     '/templates/:id',
     {
@@ -105,13 +100,11 @@ export async function publicTemplateRoutes(app: FastifyInstance, container: Temp
       },
     },
     async (request, reply) => {
-      // Public detail never returns usageCount — skip the usage aggregation.
       const result = await container.getTemplateById.execute(request.params.id, {
         includeUsage: false,
       });
 
       if (result.success) {
-        // Only return if active
         if (!result.data.isActive) {
           return reply.code(404).send({
             error: {
@@ -121,7 +114,6 @@ export async function publicTemplateRoutes(app: FastifyInstance, container: Temp
           });
         }
 
-        // Get latest version
         const versionsResult = await container.listVersionsByTemplate.execute(request.params.id);
         const latestVersion =
           versionsResult.success && versionsResult.data.versions.length > 0

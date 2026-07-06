@@ -10,9 +10,6 @@ import {
 const MAX_PER_FILE = 20 * 1024 * 1024;
 const MAX_EXPANDED = 200 * 1024 * 1024;
 
-// A real 2-file tar.gz (main.typ + chapters/intro.typ) captured from GNU tar,
-// embedded so this test exercises the archive-wasm (LibArchive) path without
-// depending on a `tar` CLI being present in CI.
 const TGZ_BASE64 =
   'H4sIAAAAAAAAA+3VMQ6CMBTG8c6eosG99FXaTh7AYxAkQqKFQBm8vTBhUGNMKGj8fgtJl77kzwMRs+Bkz2rNpJFkNY3PESOtiBKlpLX9uSVjGdfhR2Osa33acM6KKnWnJS78LiLOirT2edOGexE+7k80HKH/Au76l843lfDXeu47hsAmSV73p2l/ZUzfX849yDN/3n/PD0P2zdpzwDpEfElLF2LrR2/3f2cm+y+Nxv4vYlu67Nwdcx49/gcifBUAAAAAAAAAAAAAAAAAAH7GDUEjdmQAKAAA';
 

@@ -17,14 +17,10 @@ import {
     MessageResponseJsonSchema,
 } from "./Dto.js";
 
-/**
- * Major module HTTP routes
- */
 export async function majorRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
     const importMajors = container.importMajors;
 
-    // POST /api/v1/admin/majors - create major
     app.post<{ Body: CreateMajorRequestDto }>(
         "/majors",
         {
@@ -91,7 +87,6 @@ export async function majorRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/majors - list majors with pagination, search, and filters
     app.get<{ Querystring: ListMajorsQueryDto }>(
         "/majors",
         {
@@ -150,7 +145,6 @@ export async function majorRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/majors/:id - get major by id
     app.get<{ Params: { id: string } }>(
         "/majors/:id",
         {
@@ -206,7 +200,6 @@ export async function majorRoutes(app: FastifyInstance) {
         },
     );
 
-    // PUT /api/v1/admin/majors/:id - update major
     app.put<{ Params: { id: string }; Body: UpdateMajorRequestDto }>(
         "/majors/:id",
         {
@@ -283,7 +276,6 @@ export async function majorRoutes(app: FastifyInstance) {
         },
     );
 
-    // DELETE /api/v1/admin/majors/:id - delete major
     app.delete<{ Params: { id: string } }>(
         "/majors/:id",
         {
@@ -345,7 +337,6 @@ export async function majorRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/admin/majors/import - import majors from XLSX or CSV file
     app.post(
         "/majors/import",
         {
@@ -414,7 +405,6 @@ export async function majorRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Validate MIME type
                 const mimeValidation = FileParser.validateMimeType(data.mimetype);
                 if (!mimeValidation.valid) {
                     return reply.code(400).send({
@@ -425,7 +415,6 @@ export async function majorRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Reject .xlsm files (with macros)
                 if (data.filename.toLowerCase().endsWith(".xlsm")) {
                     return reply.code(400).send({
                         error: {
@@ -435,11 +424,9 @@ export async function majorRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Read file buffer
                 const buffer = await data.toBuffer();
 
-                // Check file size (5MB limit)
-                const maxSize = 5 * 1024 * 1024; // 5MB
+                const maxSize = 5 * 1024 * 1024;
                 if (buffer.length > maxSize) {
                     return reply.code(413).send({
                         error: {
@@ -449,10 +436,8 @@ export async function majorRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Parse file (auto-detect XLSX or CSV)
                 const parsed = FileParser.parseSpreadsheet(buffer, data.mimetype);
 
-                // Check row limit (5000 rows)
                 const maxRows = 5000;
                 if (parsed.rows.length > maxRows) {
                     return reply.code(413).send({
@@ -463,7 +448,6 @@ export async function majorRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Execute import
                 const result = await importMajors.execute(parsed.rows);
 
                 return reply.code(200).send(result);
@@ -478,7 +462,6 @@ export async function majorRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/majors/import/template - download template
     app.get<{ Querystring: { format?: "xlsx" | "csv" } }>(
         "/majors/import/template",
         {
@@ -545,9 +528,6 @@ export async function majorRoutes(app: FastifyInstance) {
     );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
     switch (errorCode) {
         case "VALIDATION_ERROR":

@@ -1,14 +1,3 @@
-/**
- * Shared HTTP error mapping.
- *
- * Single source of truth for mapping a domain error code → HTTP status and
- * building the standard `{ error: { code, message } }` envelope. Domain use
- * cases throw `new Error(<CODE>)` (or a typed error whose `.code` is the domain
- * code); delivery catches and calls {@link toErrorResponse} so every route
- * returns the same contract instead of leaking a 500.
- *
- * Framework-free (returns plain data); the route performs `reply.code().send()`.
- */
 
 export interface ErrorEnvelope {
     error: { code: string; message: string };
@@ -47,12 +36,10 @@ const MESSAGE_BY_CODE: Record<string, string> = {
     INTERNAL_ERROR: "Lỗi hệ thống",
 };
 
-/** Map a known domain error code to an HTTP status (defaults to 500). */
 export function domainErrorToStatus(code: string): number {
     return STATUS_BY_CODE[code] ?? 500;
 }
 
-/** Build the standard error envelope; uses a known message when none is given. */
 export function errorEnvelope(code: string, message?: string): ErrorEnvelope {
     return {
         error: {
@@ -81,11 +68,6 @@ function extractCode(err: unknown): string {
     return "INTERNAL_ERROR";
 }
 
-/**
- * Map any caught error to `{ status, body }`. Recognizes Zod validation errors
- * (→ 400) and known domain codes; anything unknown maps to 500 INTERNAL_ERROR
- * (the caller should log the original error in that case).
- */
 export function toErrorResponse(err: unknown): { status: number; body: ErrorEnvelope } {
     if (isZodError(err)) {
         const message = err.issues[0]?.message ?? MESSAGE_BY_CODE.VALIDATION_ERROR;

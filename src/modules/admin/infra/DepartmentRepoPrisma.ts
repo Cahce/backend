@@ -1,9 +1,3 @@
-/**
- * Prisma implementation of Department repository
- * 
- * Infrastructure layer implementation of DepartmentRepo port.
- * Handles all Department data access operations using Prisma.
- */
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import type { DepartmentRepo } from '../domain/Department/Ports.js';
@@ -17,15 +11,9 @@ import type {
 import type { PaginatedResult } from '../domain/shared/Pagination.js';
 import { Prisma } from '../../../generated/prisma/index.js';
 
-/**
- * Prisma-based Department repository implementation
- */
 export class DepartmentRepoPrisma implements DepartmentRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Create a new Department
-   */
   async create(data: CreateDepartmentData): Promise<Department> {
     try {
       const department = await this.prisma.department.create({
@@ -38,14 +26,11 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
 
       return this.mapToDepartment(department);
     } catch (error) {
-      // Handle Prisma unique constraint violation
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - code already exists
           throw new Error('DUPLICATE_CODE');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation - facultyId does not exist
           throw new Error('FACULTY_NOT_FOUND');
         }
       }
@@ -53,9 +38,6 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     }
   }
 
-  /**
-   * Find Department by ID with enriched context
-   */
   async findById(id: string): Promise<DepartmentWithContext | null> {
     const department = await this.prisma.department.findUnique({
       where: { id },
@@ -71,10 +53,6 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     return this.mapToDepartmentWithContext(department);
   }
 
-  /**
-   * Find Department by code
-   * Used for duplicate code checking during create/update
-   */
   async findByCode(code: string): Promise<Department | null> {
     const department = await this.prisma.department.findUnique({
       where: { code },
@@ -87,16 +65,11 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     return this.mapToDepartment(department);
   }
 
-  /**
-   * Find all Departments with optional filters and enriched context
-   * Results are ordered by updatedAt descending (newest first)
-   */
   async findAll(filters: DepartmentFilters): Promise<PaginatedResult<DepartmentWithContext>> {
     const page = filters.page ?? 1;
     const pageSize = Math.min(filters.pageSize ?? 20, 100);
     const skip = (page - 1) * pageSize;
 
-    // Build where clause for search and facultyId filter
     const whereClause: Prisma.DepartmentWhereInput = {};
 
     if (filters.search) {
@@ -110,14 +83,13 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
       whereClause.facultyId = filters.facultyId;
     }
 
-    // Execute query with pagination, Faculty include, and default ordering
     const [items, total] = await Promise.all([
       this.prisma.department.findMany({
         where: whereClause,
         include: {
           faculty: true,
         },
-        orderBy: { updatedAt: 'desc' }, // Default ordering: newest first
+        orderBy: { updatedAt: 'desc' },
         skip,
         take: pageSize,
       }),
@@ -133,9 +105,6 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     };
   }
 
-  /**
-   * Update an existing Department
-   */
   async update(id: string, data: UpdateDepartmentData): Promise<Department> {
     try {
       const department = await this.prisma.department.update({
@@ -149,18 +118,14 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
 
       return this.mapToDepartment(department);
     } catch (error) {
-      // Handle Prisma unique constraint violation
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - code already exists
           throw new Error('DUPLICATE_CODE');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation - facultyId does not exist
           throw new Error('FACULTY_NOT_FOUND');
         }
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('DEPARTMENT_NOT_FOUND');
         }
       }
@@ -168,10 +133,6 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     }
   }
 
-  /**
-   * Delete a Department
-   * Should only be called after checking deletion policies
-   */
   async delete(id: string): Promise<void> {
     try {
       await this.prisma.department.delete({
@@ -180,11 +141,9 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('DEPARTMENT_NOT_FOUND');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation
           throw new Error('HAS_LINKED_ENTITIES');
         }
       }
@@ -192,10 +151,6 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     }
   }
 
-  /**
-   * Check if Department has any linked Teachers
-   * Used by deletion policy to prevent orphaned data
-   */
   async hasLinkedTeachers(id: string): Promise<boolean> {
     const count = await this.prisma.teacher.count({
       where: { departmentId: id },
@@ -203,9 +158,6 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     return count > 0;
   }
 
-  /**
-   * Map Prisma Department model to domain Department type
-   */
   private mapToDepartment(prismaDepartment: {
     id: string;
     name: string;
@@ -224,9 +176,6 @@ export class DepartmentRepoPrisma implements DepartmentRepo {
     };
   }
 
-  /**
-   * Map Prisma Department with Faculty include to domain DepartmentWithContext type
-   */
   private mapToDepartmentWithContext(prismaDepartment: {
     id: string;
     name: string;

@@ -17,14 +17,10 @@ import {
     MessageResponseJsonSchema,
 } from "./Dto.js";
 
-/**
- * Department module HTTP routes
- */
 export async function departmentRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
     const importDepartments = container.importDepartments;
 
-    // POST /api/v1/admin/departments - create department
     app.post<{ Body: CreateDepartmentRequestDto }>(
         "/departments",
         {
@@ -91,7 +87,6 @@ export async function departmentRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/departments - list departments with pagination, search, and filters
     app.get<{ Querystring: ListDepartmentsQueryDto }>(
         "/departments",
         {
@@ -150,7 +145,6 @@ export async function departmentRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/departments/:id - get department by id
     app.get<{ Params: { id: string } }>(
         "/departments/:id",
         {
@@ -206,7 +200,6 @@ export async function departmentRoutes(app: FastifyInstance) {
         },
     );
 
-    // PUT /api/v1/admin/departments/:id - update department
     app.put<{ Params: { id: string }; Body: UpdateDepartmentRequestDto }>(
         "/departments/:id",
         {
@@ -283,7 +276,6 @@ export async function departmentRoutes(app: FastifyInstance) {
         },
     );
 
-    // DELETE /api/v1/admin/departments/:id - delete department
     app.delete<{ Params: { id: string } }>(
         "/departments/:id",
         {
@@ -345,7 +337,6 @@ export async function departmentRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/admin/departments/import - import departments from XLSX or CSV file
     app.post(
         "/departments/import",
         {
@@ -414,7 +405,6 @@ export async function departmentRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Validate MIME type
                 const mimeValidation = FileParser.validateMimeType(data.mimetype);
                 if (!mimeValidation.valid) {
                     return reply.code(400).send({
@@ -425,7 +415,6 @@ export async function departmentRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Reject .xlsm files (with macros)
                 if (data.filename.toLowerCase().endsWith(".xlsm")) {
                     return reply.code(400).send({
                         error: {
@@ -435,11 +424,9 @@ export async function departmentRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Read file buffer
                 const buffer = await data.toBuffer();
 
-                // Check file size (5MB limit)
-                const maxSize = 5 * 1024 * 1024; // 5MB
+                const maxSize = 5 * 1024 * 1024;
                 if (buffer.length > maxSize) {
                     return reply.code(413).send({
                         error: {
@@ -449,10 +436,8 @@ export async function departmentRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Parse file (auto-detect XLSX or CSV)
                 const parsed = FileParser.parseSpreadsheet(buffer, data.mimetype);
 
-                // Check row limit (5000 rows)
                 const maxRows = 5000;
                 if (parsed.rows.length > maxRows) {
                     return reply.code(413).send({
@@ -463,7 +448,6 @@ export async function departmentRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Execute import
                 const result = await importDepartments.execute(parsed.rows);
 
                 return reply.code(200).send(result);
@@ -478,7 +462,6 @@ export async function departmentRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/departments/import/template - download template
     app.get<{ Querystring: { format?: "xlsx" | "csv" } }>(
         "/departments/import/template",
         {
@@ -545,9 +528,6 @@ export async function departmentRoutes(app: FastifyInstance) {
     );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
     switch (errorCode) {
         case "VALIDATION_ERROR":

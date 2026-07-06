@@ -2,18 +2,14 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// Extend Zod with OpenAPI support
+import { TemplateCategory } from '../../../domain/Project/Types.js';
+
 extendZodWithOpenApi(z);
 
-/**
- * =========================
- * Request DTOs
- * =========================
- */
 
-// Template Category Schema
 export const TemplateCategorySchema = z.enum([
   'thesis',
+  'project',
   'report',
   'proposal',
   'paper',
@@ -21,7 +17,6 @@ export const TemplateCategorySchema = z.enum([
   'other',
 ]);
 
-// Create Project Request
 export const CreateProjectRequestSchema = z
   .object({
     title: z
@@ -48,7 +43,6 @@ export const CreateProjectRequestSchema = z
 
 export type CreateProjectRequestDto = z.infer<typeof CreateProjectRequestSchema>;
 
-// Update Project Request
 export const UpdateProjectRequestSchema = z
   .object({
     title: z
@@ -69,13 +63,27 @@ export const UpdateProjectRequestSchema = z
 
 export type UpdateProjectRequestDto = z.infer<typeof UpdateProjectRequestSchema>;
 
-/**
- * =========================
- * Response DTOs
- * =========================
- */
+export const ImportProjectQuerySchema = z.object({
+  category: z
+    .enum(TemplateCategory)
+    .optional()
+    .openapi({
+      description: "Loại dự án cho dự án được tạo (mặc định 'other')",
+      example: TemplateCategory.Thesis,
+    }),
+  title: z
+    .string()
+    .optional()
+    .openapi({
+      description:
+        'Tên dự án (tùy chọn) — để trống sẽ lấy tên trong project.toml, rồi đến tên tệp nén, cuối cùng "Imported <ngày>"',
+      example: 'Đồ án tốt nghiệp 2026',
+    }),
+});
 
-// Project Response
+export type ImportProjectQueryDto = z.infer<typeof ImportProjectQuerySchema>;
+
+
 export const ProjectResponseSchema = z
   .object({
     id: z.string().openapi({
@@ -106,9 +114,6 @@ export const ProjectResponseSchema = z
       description: 'Thời gian chỉnh sửa cuối (ISO 8601)',
       example: '2024-01-15T10:30:00.000Z',
     }),
-    // Caller's capabilities on this project. Returned by the detail endpoint
-    // (GET /projects/:id) so the workspace can render read-only vs editable.
-    // Backend remains the authoritative enforcer of every mutation.
     access: z
       .object({
         level: z.enum(['owner', 'editor', 'viewer', 'advisor', 'adminOversight']).openapi({
@@ -127,7 +132,6 @@ export const ProjectResponseSchema = z
 
 export type ProjectResponseDto = z.infer<typeof ProjectResponseSchema>;
 
-// Project List Response
 export const ProjectListResponseSchema = z
   .object({
     projects: z.array(ProjectResponseSchema).openapi({
@@ -138,7 +142,6 @@ export const ProjectListResponseSchema = z
 
 export type ProjectListResponseDto = z.infer<typeof ProjectListResponseSchema>;
 
-// Error Response
 export const ErrorResponseSchema = z
   .object({
     error: z.object({
@@ -156,7 +159,6 @@ export const ErrorResponseSchema = z
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
 
-// Message Response
 export const MessageResponseSchema = z
   .object({
     message: z.string().openapi({
@@ -168,13 +170,6 @@ export const MessageResponseSchema = z
 
 export type MessageResponseDto = z.infer<typeof MessageResponseSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- * Dùng cho schema.body / schema.querystring / schema.response
- * Không nhét raw Zod schema trực tiếp vào Fastify.
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
   const s = schema as Record<string, unknown>;

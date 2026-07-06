@@ -1,12 +1,3 @@
-/**
- * Prisma implementation of {@link AdminProjectRepo}.
- *
- * Read-only queries for the admin project oversight feature. Joins the project
- * owner to its student/teacher profile (and academic unit) so the admin UI can
- * show who owns each project. Mirrors the filter/pagination style of
- * `admin/infra/StudentProfileRepoPrisma.findAll` (single findMany + count run
- * in parallel).
- */
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import { Prisma } from '../../../generated/prisma/index.js';
@@ -23,7 +14,6 @@ import type {
 } from '../domain/Project/AdminProjectPorts.js';
 import { ADMIN_PROJECT_CATEGORIES } from '../domain/Project/AdminProjectPorts.js';
 
-// Owner join shared by list + detail queries.
 const ownerInclude = {
   owner: {
     include: {
@@ -112,7 +102,6 @@ export class AdminProjectRepoPrisma implements AdminProjectRepo {
   }
 
   async stats(ownerRole?: ProjectOwnerRole): Promise<AdminProjectStats> {
-    // Exclude template "source projects" from every oversight count.
     const notSource: Prisma.ProjectWhereInput = { templateSources: { none: {} } };
     const roleWhere: Prisma.ProjectWhereInput = ownerRole
       ? { AND: [notSource, { owner: { is: { role: ownerRole } } }] }
@@ -143,15 +132,9 @@ export class AdminProjectRepoPrisma implements AdminProjectRepo {
     return { total, byRole: { student, teacher }, byCategory };
   }
 
-  /**
-   * Build the Prisma `where` from filters. Uses an `AND` array so that owner
-   * sub-filters (facultyId, search) compose instead of overwriting each other.
-   */
   private buildWhere(f: AdminProjectFilters): Prisma.ProjectWhereInput {
     const and: Prisma.ProjectWhereInput[] = [];
 
-    // Exclude template "source projects" (admin-owned authoring copies) — they
-    // aren't real student/teacher work and shouldn't appear in oversight.
     and.push({ templateSources: { none: {} } });
 
     if (f.ownerRole) {

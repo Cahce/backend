@@ -1,6 +1,3 @@
-/**
- * Unit Tests for UpdateProjectUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';

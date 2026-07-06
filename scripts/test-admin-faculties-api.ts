@@ -1,31 +1,3 @@
-/**
- * Admin — Faculties CRUD API Test
- * Script: npm run test:api:admin:faculties
- *
- * Cases per resource:
- * ┌─────┬───────────────────────────────────────────────┬────────┬─────────────────────────┐
- * │ #   │ Test case                                      │ Expect │ error.code              │
- * ├─────┼───────────────────────────────────────────────┼────────┼─────────────────────────┤
- * │  1  │ Login admin                                    │ 200    │ —                       │
- * │  2  │ Login student (for 403 tests)                  │ 200    │ —                       │
- * │  3  │ GET /faculties no token → 401                  │ 401    │ UNAUTHENTICATED         │
- * │  4  │ GET /faculties student token → 403             │ 403    │ FORBIDDEN               │
- * │  5  │ GET /faculties admin token → 200               │ 200    │ —                       │
- * │  6  │ POST /faculties happy (create)                 │ 200    │ —                       │
- * │  7  │ POST /faculties missing name → 400             │ 400    │ VALIDATION_ERROR        │
- * │  8  │ POST /faculties missing code → 400             │ 400    │ VALIDATION_ERROR        │
- * │  9  │ POST /faculties duplicate code → 409/422       │ 4xx    │ DUPLICATE_CODE          │
- * │ 10  │ GET /faculties list (contains new item)        │ 200    │ —                       │
- * │ 11  │ GET /faculties/:id found                       │ 200    │ —                       │
- * │ 12  │ GET /faculties/:id not-found                   │ 404    │ FACULTY_NOT_FOUND       │
- * │ 13  │ PUT /faculties/:id update                      │ 200    │ —                       │
- * │ 14  │ PUT /faculties/:id not-found                   │ 404    │ FACULTY_NOT_FOUND       │
- * │ 15  │ DELETE /faculties/:id with child → restrict    │ 4xx    │ HAS_CHILD_DEPARTMENTS   │
- * │ 16  │ DELETE /faculties/:id after child removed      │ 200    │ —                       │
- * │ 17  │ GET /faculties/:id after delete → 404          │ 404    │ FACULTY_NOT_FOUND       │
- * │ 18  │ GET /faculties/import/template → 200           │ 200    │ —                       │
- * └─────┴───────────────────────────────────────────────┴────────┴─────────────────────────┘
- */
 
 import {
   api, loginAdmin, loginStudent, getStudentToken,
@@ -38,21 +10,19 @@ const BASE = '/admin';
 const sfx = uniqueSuffix();
 
 let facultyId = '';
-let childDeptId = '';  // for delete-restrict test
+let childDeptId = '';
 
 async function run() {
   console.log('='.repeat(60));
   console.log('ADMIN — FACULTIES API TEST');
   console.log('='.repeat(60));
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
   await test('1. Login admin', async () => {
     await loginAdmin();
   });
 
   const studentToken = await loginStudent();
 
-  // ── RBAC ──────────────────────────────────────────────────────────────────
   await test('3. GET /faculties no token → 401', async () => {
     const r = await api('GET', `${BASE}/faculties`, { token: null });
     expectStatus(r, 401, 'no-token');
@@ -70,7 +40,6 @@ async function run() {
     expectStatus(r, 200, 'admin-list');
   });
 
-  // ── Create ────────────────────────────────────────────────────────────────
   await test('6. POST /faculties happy', async () => {
     const r = await api('POST', `${BASE}/faculties`, {
       body: { name: `Khoa Test ${sfx}`, code: `FAC_${sfx}` },
@@ -101,7 +70,6 @@ async function run() {
     expectErrorCode(r, 'DUPLICATE_CODE', 'dup-code');
   });
 
-  // ── List / Get ────────────────────────────────────────────────────────────
   await test('10. GET /faculties list contains new item', async () => {
     const r = await api('GET', `${BASE}/faculties?pageSize=100`);
     expectStatus(r, 200, 'list');
@@ -122,7 +90,6 @@ async function run() {
     expectErrorCode(r, 'FACULTY_NOT_FOUND', 'notfound');
   });
 
-  // ── Update ────────────────────────────────────────────────────────────────
   await test('13. PUT /faculties/:id update name', async () => {
     const r = await api('PUT', `${BASE}/faculties/${facultyId}`, {
       body: { name: `Khoa Updated ${sfx}` },
@@ -140,7 +107,6 @@ async function run() {
     expectErrorCode(r, 'FACULTY_NOT_FOUND', 'notfound');
   });
 
-  // ── Delete-restrict: create child Department first ────────────────────────
   await test('15a. Setup: create child Department', async () => {
     if (!facultyId) return;
     const r = await api('POST', `${BASE}/departments`, {
@@ -159,12 +125,10 @@ async function run() {
       code === 'HAS_CHILD_DEPARTMENTS' || code === 'HAS_CHILD_MAJORS',
       `expected HAS_CHILD_DEPARTMENTS|MAJORS, got ${code}`,
     );
-    // Faculty must still exist
     const check = await api('GET', `${BASE}/faculties/${facultyId}`);
     expectStatus(check, 200, 'still-exists');
   });
 
-  // ── Delete happy ──────────────────────────────────────────────────────────
   await test('16. DELETE child Dept then Faculty → 200', async () => {
     if (childDeptId) {
       const r = await api('DELETE', `${BASE}/departments/${childDeptId}`);
@@ -185,7 +149,6 @@ async function run() {
     }
   });
 
-  // ── Tier 2: import template ───────────────────────────────────────────────
   await test('18. GET /faculties/import/template → 200', async () => {
     const r = await api('GET', `${BASE}/faculties/import/template?format=xlsx`);
     expectStatus(r, 200, 'template');

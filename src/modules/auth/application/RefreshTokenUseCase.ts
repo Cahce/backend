@@ -1,11 +1,3 @@
-/**
- * Refresh Token Use Case
- *
- * Exchanges a valid (non-revoked, non-expired) rotating refresh token for a new
- * access + refresh pair. Rotation is one-time-use: the presented token is
- * revoked and replaced (same family). Reuse of an already-rotated token is
- * treated as theft → the whole family is burned.
- */
 
 import { AuthError, AuthErrors } from "../domain/AuthErrors.js";
 import type {
@@ -46,31 +38,25 @@ export class RefreshTokenUseCase {
             const tokenHash = this.tokenService.hashRefreshToken(command.refreshToken);
             const row = await this.refreshTokenRepo.findByHash(tokenHash);
 
-            // Unknown token.
             if (!row) {
                 return this.fail(AuthErrors.REFRESH_TOKEN_INVALID);
             }
 
-            // Reuse of an already-rotated/revoked token → theft: burn the family
-            // so the legitimate holder's next refresh also fails (forced re-login).
             if (row.revokedAt !== null) {
                 await this.refreshTokenRepo.revokeFamily(row.familyId);
                 return this.fail(AuthErrors.TOKEN_REUSE_DETECTED);
             }
 
-            // Past TTL.
             if (row.expiresAt.getTime() < Date.now()) {
                 return this.fail(AuthErrors.REFRESH_TOKEN_EXPIRED);
             }
 
-            // Valid → user must still exist + be active.
             const user = await this.userRepo.findById(row.userId);
             if (!user || !user.isActive) {
                 await this.refreshTokenRepo.revokeFamily(row.familyId);
                 return this.fail(AuthErrors.REFRESH_TOKEN_INVALID);
             }
 
-            // Issue a new access + refresh pair (same family); rotate atomically.
             const access = await this.tokenService.generateAccessToken({
                 userId: user.id,
                 email: user.email,

@@ -1,10 +1,3 @@
-/**
- * Capture HTTP Routes
- *
- * Fastify routes for the "capture a paper from the web → cite into project"
- * flow. All routes require auth; the save route enforces project access via
- * the use case's ProjectAccessPolicy.
- */
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { CaptureContainer } from "../../Container.js";
@@ -37,10 +30,6 @@ export async function captureRoutes(
   app: FastifyInstance,
   container: CaptureContainer
 ) {
-  /**
-   * POST /capture/resolve
-   * Preview metadata for a URL or identifier (no persistence).
-   */
   app.post(
     "/capture/resolve",
     {
@@ -78,10 +67,6 @@ export async function captureRoutes(
     }
   );
 
-  /**
-   * POST /capture/projects/:projectId/save
-   * Resolve + save to project .bib and/or the user's Zotero library.
-   */
   app.post(
     "/capture/projects/:projectId/save",
     {
@@ -138,7 +123,6 @@ export async function captureRoutes(
   );
 }
 
-/** Map a domain item to the preview DTO (DOI → doi, drop noisy fields). */
 function mapItemToDto(item: CaptureItem) {
   return {
     itemType: item.itemType,

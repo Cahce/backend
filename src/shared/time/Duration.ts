@@ -1,11 +1,3 @@
-/**
- * Parse a human-readable duration string into milliseconds.
- *
- * Supported units: `ms`, `s`, `m`, `h`, `d`. A bare number is treated as `ms`.
- * Examples: `"15m"` → 900000, `"1d"` → 86400000, `"900s"` → 900000, `"500"` → 500.
- *
- * Pure helper (no framework imports) so it can be used from `config` and `infra`.
- */
 const UNIT_MS: Record<string, number> = {
     ms: 1,
     s: 1000,

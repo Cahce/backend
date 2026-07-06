@@ -21,14 +21,12 @@ async function migratePhase2a() {
   try {
     console.log('=== Phase 2a Migration: Teacher and Student Profiles ===\n');
 
-    // Step 0: Rename legacy tables using raw SQL
     console.log('Step 0: Renaming legacy tables...');
     await prisma.$executeRaw`ALTER TABLE "Teacher" RENAME TO "Teacher_Legacy"`;
     await prisma.$executeRaw`ALTER TABLE "Student" RENAME TO "Student_Legacy"`;
     console.log('✅ Legacy tables renamed\n');
 
     await prisma.$transaction(async (tx) => {
-      // Step 1: Preload all Department mappings (avoid N+1)
       console.log('Step 1: Preloading Department mappings...');
       const departments = await tx.department.findMany({
         select: { id: true, name: true }
@@ -36,7 +34,6 @@ async function migratePhase2a() {
       const departmentMap = new Map(departments.map(d => [d.name, d.id]));
       console.log(`✅ Loaded ${departments.length} departments\n`);
 
-      // Step 2: Preload all AcademicClass mappings (avoid N+1)
       console.log('Step 2: Preloading AcademicClass mappings...');
       const classes = await tx.$queryRaw<Array<{ id: string; name: string }>>`
         SELECT id, name FROM "AcademicClass"
@@ -44,7 +41,6 @@ async function migratePhase2a() {
       const classMap = new Map(classes.map(c => [c.name, c.id]));
       console.log(`✅ Loaded ${classes.length} classes\n`);
 
-      // Step 3: Migrate Teacher_Legacy → Teacher
       console.log('Step 3: Migrating Teacher records...');
       const legacyTeachers = await tx.$queryRaw<Array<{
         userId: string;
@@ -61,7 +57,6 @@ async function migratePhase2a() {
       for (const legacy of legacyTeachers) {
         stats.teachersProcessed++;
 
-        // Validate userId
         if (!legacy.userId) {
           stats.errors.push({
             type: 'TEACHER_NULL_USERID',
@@ -71,7 +66,6 @@ async function migratePhase2a() {
           throw new Error(`MIGRATION FAILED: Teacher record has NULL userId`);
         }
 
-        // Lookup departmentId
         const departmentId = legacy.department ? departmentMap.get(legacy.department) : null;
         if (!departmentId) {
           stats.errors.push({
@@ -82,7 +76,6 @@ async function migratePhase2a() {
           throw new Error(`MIGRATION FAILED: Department "${legacy.department}" not found for teacher ${legacy.userId}`);
         }
 
-        // Create new Teacher record
         await tx.$executeRaw`
           INSERT INTO "Teacher" (
             id, "accountId", "teacherCode", "fullName", "departmentId", 
@@ -105,7 +98,6 @@ async function migratePhase2a() {
       }
       console.log(`✅ Created ${stats.teachersCreated} Teacher records\n`);
 
-      // Step 4: Migrate Student_Legacy → Student
       console.log('Step 4: Migrating Student records...');
       const legacyStudents = await tx.$queryRaw<Array<{
         userId: string;
@@ -122,7 +114,6 @@ async function migratePhase2a() {
       for (const legacy of legacyStudents) {
         stats.studentsProcessed++;
 
-        // Validate userId
         if (!legacy.userId) {
           stats.errors.push({
             type: 'STUDENT_NULL_USERID',
@@ -132,7 +123,6 @@ async function migratePhase2a() {
           throw new Error(`MIGRATION FAILED: Student record has NULL userId`);
         }
 
-        // Lookup classId
         const classId = legacy.className ? classMap.get(legacy.className) : null;
         if (!classId) {
           stats.errors.push({
@@ -143,7 +133,6 @@ async function migratePhase2a() {
           throw new Error(`MIGRATION FAILED: Class "${legacy.className}" not found for student ${legacy.userId}`);
         }
 
-        // Create new Student record
         await tx.$executeRaw`
           INSERT INTO "Student" (
             id, "accountId", "studentCode", "fullName", "classId", 
@@ -165,7 +154,6 @@ async function migratePhase2a() {
       console.log(`✅ Created ${stats.studentsCreated} Student records\n`);
     });
 
-    // Step 5: Post-migration verification
     console.log('Step 5: Verifying migration...');
     
     const newTeacherCount = await prisma.$queryRaw<[{ count: bigint }]>`
@@ -184,7 +172,6 @@ async function migratePhase2a() {
     console.log(`  Teacher: ${newTeacherCount[0].count}`);
     console.log(`  Student: ${newStudentCount[0].count}`);
 
-    // Verify counts match
     if (Number(newTeacherCount[0].count) !== stats.teachersCreated) {
       throw new Error(`Teacher count mismatch: expected ${stats.teachersCreated}, got ${newTeacherCount[0].count}`);
     }
@@ -203,5 +190,4 @@ async function migratePhase2a() {
   }
 }
 
-// Run migration
 migratePhase2a();

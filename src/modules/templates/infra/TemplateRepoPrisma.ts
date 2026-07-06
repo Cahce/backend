@@ -1,9 +1,3 @@
-/**
- * Prisma implementation of Template repository
- * 
- * Infrastructure layer implementation of TemplateRepo port.
- * Handles all Template and TemplateVersion data access operations using Prisma.
- */
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import { Prisma } from '../../../generated/prisma/index.js';
@@ -19,15 +13,9 @@ import type {
 } from '../domain/Types.js';
 import { TemplateCategory } from '../domain/Types.js';
 
-/**
- * Prisma-based Template repository implementation
- */
 export class TemplateRepoPrisma implements TemplateRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Create a new Template
-   */
   async create(data: CreateTemplateData): Promise<Template> {
     const template = await this.prisma.template.create({
       data: {
@@ -41,9 +29,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     return this.mapToTemplate(template);
   }
 
-  /**
-   * Find Template by ID
-   */
   async findById(id: string): Promise<Template | null> {
     const template = await this.prisma.template.findUnique({
       where: { id },
@@ -56,13 +41,9 @@ export class TemplateRepoPrisma implements TemplateRepo {
     return this.mapToTemplate(template);
   }
 
-  /**
-   * List templates with filtering and pagination (admin)
-   */
   async list(filter: TemplateFilter): Promise<{ items: Template[]; total: number }> {
     const where: Prisma.TemplateWhereInput = {};
 
-    // Search filter
     if (filter.search) {
       where.OR = [
         { name: { contains: filter.search, mode: 'insensitive' } },
@@ -70,17 +51,14 @@ export class TemplateRepoPrisma implements TemplateRepo {
       ];
     }
 
-    // Category filter
     if (filter.category) {
       where.category = filter.category;
     }
 
-    // isOfficial filter
     if (filter.isOfficial !== undefined) {
       where.isOfficial = filter.isOfficial;
     }
 
-    // isActive filter
     if (filter.isActive !== undefined) {
       where.isActive = filter.isActive;
     }
@@ -101,15 +79,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     };
   }
 
-  /**
-   * List public templates (active only) with latest active version.
-   *
-   * Performance: filters templates that have at least one active version
-   * directly at the database level via `versions.some` instead of fetching
-   * every template and filtering in JS. Combined with `take: 1` on the
-   * included version, this keeps the payload bounded regardless of how many
-   * historical versions exist per template.
-   */
   async listPublic(): Promise<TemplateWithLatestVersion[]> {
     const templates = await this.prisma.template.findMany({
       where: {
@@ -138,9 +107,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     }));
   }
 
-  /**
-   * Update an existing Template
-   */
   async update(id: string, patch: UpdateTemplateData): Promise<Template> {
     try {
       const template = await this.prisma.template.update({
@@ -165,9 +131,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     }
   }
 
-  /**
-   * Delete a Template
-   */
   async delete(id: string): Promise<void> {
     try {
       await this.prisma.template.delete({
@@ -183,9 +146,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     }
   }
 
-  /**
-   * Link a template to its editable "source project" (admin authoring copy).
-   */
   async setSourceProject(templateId: string, projectId: string): Promise<void> {
     try {
       await this.prisma.template.update({
@@ -200,9 +160,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     }
   }
 
-  /**
-   * Count projects using this template or any of its versions
-   */
   async countProjectsUsing(id: string): Promise<number> {
     const count = await this.prisma.project.count({
       where: {
@@ -220,13 +177,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     return count;
   }
 
-  /**
-   * Batched usage count by template IDs.
-   *
-   * Runs two grouped queries (one for direct `templateId`, one via
-   * `templateVersion.templateId`) and merges the results. Skips the query if
-   * the input list is empty so we don't hammer Prisma with empty `IN ()`.
-   */
   async countUsageByTemplateIds(
     templateIds: string[],
   ): Promise<Map<string, number>> {
@@ -234,7 +184,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
 
     const result = new Map<string, number>();
 
-    // Direct templateId references on Project
     const direct = await this.prisma.project.groupBy({
       by: ['templateId'],
       where: { templateId: { in: templateIds } },
@@ -245,7 +194,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
       result.set(row.templateId, (result.get(row.templateId) ?? 0) + row._count._all);
     }
 
-    // Indirect via templateVersionId → templateVersion.templateId
     const indirect = await this.prisma.project.findMany({
       where: {
         templateVersionId: { not: null },
@@ -262,9 +210,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     return result;
   }
 
-  /**
-   * Create a new TemplateVersion
-   */
   async createVersion(data: CreateVersionData): Promise<TemplateVersion> {
     try {
       const version = await this.prisma.templateVersion.create({
@@ -281,7 +226,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation
           throw new Error('VERSION_EXISTS');
         }
       }
@@ -289,9 +233,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     }
   }
 
-  /**
-   * Find TemplateVersion by ID
-   */
   async findVersionById(versionId: string): Promise<TemplateVersion | null> {
     const version = await this.prisma.templateVersion.findUnique({
       where: { id: versionId },
@@ -304,9 +245,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     return this.mapToVersion(version);
   }
 
-  /**
-   * List all versions of a template
-   */
   async listVersionsByTemplate(templateId: string): Promise<TemplateVersion[]> {
     const versions = await this.prisma.templateVersion.findMany({
       where: { templateId },
@@ -316,19 +254,10 @@ export class TemplateRepoPrisma implements TemplateRepo {
     return versions.map((v) => this.mapToVersion(v));
   }
 
-  /**
-   * Set version active/inactive
-   */
   async setVersionActive(versionId: string, isActive: boolean): Promise<TemplateVersion> {
     return this.updateVersion(versionId, { isActive });
   }
 
-  /**
-   * Update version metadata (changelog and/or isActive).
-   *
-   * Both fields are optional — only present keys are written. `changelog` may
-   * be `null` to clear the existing note.
-   */
   async updateVersion(
     versionId: string,
     patch: { changelog?: string | null; isActive?: boolean },
@@ -353,9 +282,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     }
   }
 
-  /**
-   * Map Prisma Template model to domain Template type
-   */
   private mapToTemplate(prismaTemplate: {
     id: string;
     name: string;
@@ -380,9 +306,6 @@ export class TemplateRepoPrisma implements TemplateRepo {
     };
   }
 
-  /**
-   * Map Prisma TemplateVersion model to domain TemplateVersion type
-   */
   private mapToVersion(prismaVersion: {
     id: string;
     templateId: string;

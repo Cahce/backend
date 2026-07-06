@@ -1,6 +1,3 @@
-/**
- * Unit Tests for DeleteProjectUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -42,7 +39,6 @@ describe('DeleteProjectUseCase', () => {
 
     assert.strictEqual(result.success, true);
 
-    // Verify project was deleted
     const deletedProject = await mockRepo.findById('project-1');
     assert.strictEqual(deletedProject, null);
   });
@@ -74,7 +70,6 @@ describe('DeleteProjectUseCase', () => {
       assert.strictEqual(result.error.code, ProjectErrors.UNAUTHORIZED.code);
     }
 
-    // Verify project was NOT deleted
     const stillThere = await mockRepo.findById('project-1');
     assert.notStrictEqual(stillThere, null);
   });
@@ -121,7 +116,6 @@ describe('DeleteProjectUseCase', () => {
       assert.strictEqual(result.error.code, ProjectErrors.UNAUTHORIZED.code);
     }
 
-    // Verify project was NOT deleted
     const project2 = await mockRepo.findById('project-1');
     assert.notStrictEqual(project2, null);
   });
@@ -178,7 +172,6 @@ describe('DeleteProjectUseCase', () => {
 
     assert.strictEqual(result.success, true);
 
-    // Verify project was deleted
     const deletedProject = await mockRepo.findById('project-1');
     assert.strictEqual(deletedProject, null);
   });

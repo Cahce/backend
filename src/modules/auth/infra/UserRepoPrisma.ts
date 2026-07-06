@@ -1,9 +1,6 @@
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { IUserRepository, AuthUser } from "../domain/Ports.js";
 
-/**
- * Prisma implementation of user repository
- */
 export class UserRepoPrisma implements IUserRepository {
     constructor(private readonly prisma: PrismaClient) {}
 
@@ -66,7 +63,6 @@ export class UserRepoPrisma implements IUserRepository {
             where: { id: userId },
             data: {
                 passwordHash: newPasswordHash,
-                // After a successful change the forced-change requirement is satisfied.
                 mustChangePassword: false,
                 passwordChangedAt: new Date(),
             },

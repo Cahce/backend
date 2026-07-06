@@ -4,20 +4,12 @@ import { ImportDepartments } from "../ImportDepartments.js";
 import type { FacultyRepo } from "../../../domain/Faculty/Ports.js";
 import type { DepartmentRepo } from "../../../domain/Department/Ports.js";
 
-/**
- * Fake FacultyRepo exposing only findByCode (the sole method the importer uses).
- * `findByCode(code)` returns the resolved faculty (needs `.id`) or null.
- */
 function makeFacultyRepo(findByCode: (code: string) => unknown): FacultyRepo {
   return {
     findByCode: mock.fn(async (code: string) => findByCode(code)),
   } as unknown as FacultyRepo;
 }
 
-/**
- * Fake DepartmentRepo exposing findByCode (existence check) + create.
- * `create(data)` receives `{ code, name, facultyId }` directly (no `.data` wrap).
- */
 function makeDepartmentRepo(opts: {
   findByCode?: (code: string) => unknown;
   create?: (data: { code: string; name: string; facultyId: string }) => unknown;
@@ -104,9 +96,9 @@ describe("ImportDepartments", () => {
     );
 
     const rows = [
-      { code: "", name: "Khoa học Máy tính", facultyCode: "CNTT" }, // Invalid: empty code
-      { code: "HTTT", name: "", facultyCode: "CNTT" }, // Invalid: empty name
-      { code: "KHMT", name: "Valid Department", facultyCode: "CNTT" }, // Valid
+      { code: "", name: "Khoa học Máy tính", facultyCode: "CNTT" },
+      { code: "HTTT", name: "", facultyCode: "CNTT" },
+      { code: "KHMT", name: "Valid Department", facultyCode: "CNTT" },
     ];
 
     const result = await useCase.execute(rows);
@@ -127,7 +119,7 @@ describe("ImportDepartments", () => {
     );
 
     const rows = [
-      { code: "KHMT", name: "Khoa học Máy tính" }, // Missing facultyCode
+      { code: "KHMT", name: "Khoa học Máy tính" },
     ] as unknown[];
 
     const result = await useCase.execute(rows);
@@ -171,7 +163,6 @@ describe("ImportDepartments", () => {
       makeDepartmentRepo({}),
     );
 
-    // Create 600 rows to test batch processing (batch size is 500)
     const rows = Array.from({ length: 600 }, (_, i) => ({
       code: `CODE${i}`,
       name: `Department ${i}`,

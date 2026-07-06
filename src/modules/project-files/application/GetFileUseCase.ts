@@ -1,8 +1,3 @@
-/**
- * Get File Use Case
- * 
- * Application layer orchestration for retrieving a file by path.
- */
 
 import type { FileRepo } from '../domain/ProjectFile/Ports.js';
 import type { ProjectRepo } from '../../projects/domain/Project/Ports.js';
@@ -13,9 +8,6 @@ import { buildProjectAuthContext } from '../../projects/application/ProjectAuthC
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
-/**
- * Command for getting a file
- */
 export interface GetFileCommand {
   projectId: string;
   path: string;
@@ -23,11 +15,6 @@ export interface GetFileCommand {
   userRole: 'admin' | 'teacher' | 'student';
 }
 
-/**
- * Get File Use Case
- * 
- * Retrieves a file by project ID and path, including content.
- */
 export class GetFileUseCase {
   constructor(
     private readonly fileRepo: FileRepo,
@@ -36,14 +23,12 @@ export class GetFileUseCase {
 
   async execute(command: GetFileCommand): Promise<Result<File>> {
     try {
-      // Verify project exists
       const project = await this.projectRepo.findById(command.projectId);
 
       if (!project) {
         return failure(FileErrors.PROJECT_NOT_FOUND.code, FileErrors.PROJECT_NOT_FOUND.message);
       }
 
-      // Enforce authorization (resolves ProjectMember / advisor relations).
       const authContext: AuthContext = await buildProjectAuthContext(
         this.projectRepo,
         project,
@@ -55,7 +40,6 @@ export class GetFileUseCase {
         return failure(FileErrors.UNAUTHORIZED.code, FileErrors.UNAUTHORIZED.message);
       }
 
-      // Find file by project ID and path
       const file = await this.fileRepo.findByProjectIdAndPath(command.projectId, command.path);
 
       if (!file) {

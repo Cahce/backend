@@ -1,16 +1,3 @@
-/**
- * Multi-format archive extraction for project import.
- *
- * Detects the archive format from magic bytes (with an extension fallback) and
- * yields every regular file as a `{ path, data }` entry. ZIP stays on
- * `adm-zip` — the existing, well-tested path. Everything else (7z, rar, tar,
- * tar.gz/tgz) goes through `archive-wasm` (LibArchive compiled to WASM, pure
- * JS, no native binary). Path-traversal, symlink, and size-bomb defenses are
- * applied uniformly to every format so the security posture matches the
- * original ZIP-only importer regardless of input format.
- *
- * Note: `archive-wasm` is GPL-3.0 licensed.
- */
 import AdmZip from 'adm-zip';
 import path from 'node:path';
 import { extract as wasmExtract } from 'archive-wasm';
@@ -23,7 +10,6 @@ export interface PendingEntry {
 
 export type ArchiveFormat = 'zip' | 'rar' | '7z' | 'tar' | 'gzip' | 'unknown';
 
-/** Thrown by extraction; carries a stable error code for HTTP mapping. */
 export class ArchiveExtractionError extends Error {
   constructor(
     public readonly code: string,
@@ -34,23 +20,14 @@ export class ArchiveExtractionError extends Error {
   }
 }
 
-/** A format-agnostic archive entry. `getData` is lazy so callers can bail
- *  (path/size checks) before paying for a copy of the decompressed bytes. */
 interface RawEntry {
   name: string;
   isDirectory: boolean;
   isSymlink: boolean;
-  /** Declared uncompressed size when the format exposes it (pre-check). */
   declaredSize: number | null;
   getData: () => Buffer;
 }
 
-/**
- * Detect the archive format from leading magic bytes; fall back to the file
- * extension only when the bytes are inconclusive. Content is authoritative so
- * a `.zip` renamed to `.bak` (or vice-versa) still works and a spoofed
- * extension cannot pick the wrong extractor.
- */
 export function detectArchiveFormat(buf: Buffer, filename?: string): ArchiveFormat {
   if (
     buf.length >= 4 &&
@@ -58,7 +35,7 @@ export function detectArchiveFormat(buf: Buffer, filename?: string): ArchiveForm
     buf[1] === 0x4b &&
     (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07)
   ) {
-    return 'zip'; // PK\x03\x04 (also empty/spanned variants)
+    return 'zip';
   }
   if (
     buf.length >= 6 &&
@@ -69,7 +46,7 @@ export function detectArchiveFormat(buf: Buffer, filename?: string): ArchiveForm
     buf[4] === 0x1a &&
     buf[5] === 0x07
   ) {
-    return 'rar'; // "Rar!\x1a\x07" (RAR4 + RAR5)
+    return 'rar';
   }
   if (
     buf.length >= 6 &&
@@ -80,10 +57,10 @@ export function detectArchiveFormat(buf: Buffer, filename?: string): ArchiveForm
     buf[4] === 0x27 &&
     buf[5] === 0x1c
   ) {
-    return '7z'; // 7z\xbc\xaf\x27\x1c
+    return '7z';
   }
   if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
-    return 'gzip'; // .gz / .tar.gz / .tgz
+    return 'gzip';
   }
   if (buf.length >= 262 && buf.toString('latin1', 257, 262) === 'ustar') {
     return 'tar';
@@ -101,10 +78,9 @@ export function detectArchiveFormat(buf: Buffer, filename?: string): ArchiveForm
 }
 
 function isUnsafePath(entryPath: string): boolean {
-  // Normalise to POSIX separators (archives commonly use `/`).
   const normalised = entryPath.replace(/\\/g, '/');
   if (normalised.startsWith('/')) return true;
-  if (/^[a-zA-Z]:[\\/]/.test(normalised)) return true; // Windows drive
+  if (/^[a-zA-Z]:[\\/]/.test(normalised)) return true;
   if (normalised.split('/').includes('..')) return true;
   return false;
 }
@@ -120,8 +96,6 @@ function zipRawEntries(buffer: Buffer): RawEntry[] {
     );
   }
   return zip.getEntries().map((entry) => {
-    // Upper 16 bits of the external attributes are the UNIX mode; 0xA000 =
-    // symlink. Skipped downstream — symlinks have no place in our editor.
     const unixMode = (entry.header.attr >>> 16) & 0xffff;
     return {
       name: entry.entryName,
@@ -137,8 +111,6 @@ function zipRawEntries(buffer: Buffer): RawEntry[] {
 function* wasmRawEntries(buffer: Buffer, format: ArchiveFormat): Generator<RawEntry> {
   let iterator: Generator<{ path: string | null; type: string | null; size: bigint; data: ArrayBuffer }>;
   try {
-    // normalize:false → keep raw paths so our own isUnsafePath check is the
-    // single, consistent traversal gate across all formats.
     iterator = wasmExtract(buffer, {
       normalize: false,
       ignoreDotDir: true,
@@ -152,8 +124,6 @@ function* wasmRawEntries(buffer: Buffer, format: ArchiveFormat): Generator<RawEn
 
   try {
     for (const entry of iterator) {
-      // Copy out of WASM memory immediately — LibArchive may reuse the
-      // backing buffer once the generator advances.
       const data = Buffer.from(entry.data);
       yield {
         name: entry.path ?? '',
@@ -193,7 +163,6 @@ function collectEntries(
     const normalised = path.posix.normalize(entry.name).replace(/^\/+/, '');
     if (!normalised || normalised === '.' || normalised === '..') continue;
 
-    // Fail fast on a declared oversized entry before decompressing/copying.
     if (entry.declaredSize != null && entry.declaredSize > maxPerFileBytes) {
       throw new ArchiveExtractionError(
         ProjectErrors.ZIP_PAYLOAD_TOO_LARGE.code,
@@ -222,11 +191,6 @@ function collectEntries(
   return pending;
 }
 
-/**
- * Extract every regular file from a supported archive into `{ path, data }`
- * entries, enforcing path-traversal, symlink and size-bomb defenses. Throws
- * {@link ArchiveExtractionError} (with a `ProjectErrors` code) on any failure.
- */
 export function extractArchiveEntries(
   buffer: Buffer,
   filename: string | undefined,

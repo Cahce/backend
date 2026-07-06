@@ -29,7 +29,6 @@ describe('LocalBlobStorage', () => {
     assert.equal(meta.sha256, expectedSha);
     assert.equal(meta.contentType, 'application/octet-stream');
 
-    // Second put with same data → same sha256
     const meta2 = await storage.put('key-5kb-dup', buf, 'application/octet-stream');
     assert.equal(meta2.sha256, expectedSha);
   });
@@ -78,7 +77,6 @@ describe('LocalBlobStorage', () => {
     const meta2 = await storage.put('key-idempotent', buf2, 'text/plain');
     const headMeta = await storage.head('key-idempotent');
 
-    // Latest write wins
     assert.equal(meta2.sha256, headMeta!.sha256);
   });
 });

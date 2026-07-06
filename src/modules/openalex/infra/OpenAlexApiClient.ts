@@ -1,8 +1,3 @@
-/**
- * OpenAlex API Client
- * 
- * Infrastructure adapter for OpenAlex API communication.
- */
 
 import type { OpenAlexApiPort } from "../domain/Ports.js";
 import type { OpenAlexWork, OpenAlexSearchFilters, OpenAlexPaginationMeta } from "../domain/Types.js";
@@ -13,18 +8,12 @@ import {
   OpenAlexTimeoutError,
 } from "../domain/Errors.js";
 
-/**
- * Configuration for OpenAlexApiClient
- */
 export interface OpenAlexApiClientConfig {
   baseUrl?: string;
   mailto?: string;
   timeout?: number;
 }
 
-/**
- * OpenAlex API Client implementation
- */
 export class OpenAlexApiClient implements OpenAlexApiPort {
   private readonly baseUrl: string;
   private readonly mailto: string;
@@ -33,12 +22,9 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
   constructor(config: OpenAlexApiClientConfig = {}) {
     this.baseUrl = config.baseUrl || "https://api.openalex.org";
     this.mailto = config.mailto || "";
-    this.timeout = config.timeout || 10000; // 10 seconds
+    this.timeout = config.timeout || 10000;
   }
 
-  /**
-   * Search for works
-   */
   async searchWorks(filters: OpenAlexSearchFilters & {
     page?: number;
     perPage?: number;
@@ -48,7 +34,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
   }> {
     const { search, yearFrom, yearTo, isOA, type, page = 1, perPage = 25 } = filters;
 
-    // Build filter string
     const filterParts: string[] = [];
 
     if (yearFrom || yearTo) {
@@ -65,7 +50,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
       filterParts.push(`type:${type}`);
     }
 
-    // Build URL
     const params = new URLSearchParams();
     
     if (search) {
@@ -79,7 +63,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
     params.append("page", page.toString());
     params.append("per_page", perPage.toString());
 
-    // Add polite mode if mailto is provided
     if (this.mailto) {
       params.append("mailto", this.mailto);
     }
@@ -116,11 +99,7 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
     }
   }
 
-  /**
-   * Get a single work by ID
-   */
   async getWorkById(id: string): Promise<OpenAlexWork> {
-    // OpenAlex IDs can be in format "W12345" or full URL
     const workId = id.startsWith("W") ? id : `W${id}`;
     const url = `${this.baseUrl}/works/${workId}`;
 
@@ -145,9 +124,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
     }
   }
 
-  /**
-   * Get a single work by DOI. Accepts bare DOI, `doi:` prefix, or a doi.org URL.
-   */
   async getWorkByDoi(doi: string): Promise<OpenAlexWork> {
     const clean = doi
       .trim()
@@ -183,9 +159,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
     }
   }
 
-  /**
-   * Fetch with timeout
-   */
   private async fetchWithTimeout(url: string): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -211,9 +184,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
     }
   }
 
-  /**
-   * Handle error responses from OpenAlex API
-   */
   private async handleErrorResponse(response: Response): Promise<Error> {
     const status = response.status;
 
@@ -225,7 +195,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
       return new OpenAlexRateLimitError();
     }
 
-    // Try to get error message from response
     let message = `OpenAlex API error: ${status}`;
     try {
       const data = await response.json() as any;
@@ -233,7 +202,6 @@ export class OpenAlexApiClient implements OpenAlexApiPort {
         message = data.message;
       }
     } catch {
-      // Ignore JSON parse errors
     }
 
     return new OpenAlexUpstreamError(message);

@@ -1,9 +1,3 @@
-/**
- * Unit test for SyncToBibFile — guards the itemKeys N+1 fix: selecting specific
- * Zotero items must issue ONE batched getItemsByKeys call, never one getItem per
- * key. Uses `as any` mocks (matching the SaveItemsToLibrary test style); items
- * are returned empty so the test exercises only the fetch path.
- */
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -32,7 +26,7 @@ test("itemKeys sync uses ONE batched getItemsByKeys call, never per-item getItem
     getItemsByKeys: async (_libraryType: string, _libraryId: string, keys: string[]) => {
       getItemsByKeysCalls++;
       receivedKeys = keys;
-      return []; // empty → skip mapping/write, exercise only the fetch path
+      return [];
     },
   };
 

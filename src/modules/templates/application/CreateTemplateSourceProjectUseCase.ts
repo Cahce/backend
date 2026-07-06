@@ -1,10 +1,3 @@
-/**
- * Create Template Source Project Use Case
- *
- * Creates (or returns the existing) admin-owned "source project" used to author
- * a template's content in the workspace. Seeds it blank or from the template's
- * latest active version, then links it via `Template.sourceProjectId`.
- */
 
 import type { SourceProjectGateway, TemplateRepo } from '../domain/Ports.js';
 import { TemplateErrors } from '../domain/Errors.js';
@@ -34,7 +27,6 @@ export class CreateTemplateSourceProjectUseCase {
         return { success: false, error: TemplateErrors.TEMPLATE_NOT_FOUND };
       }
 
-      // Idempotent: reuse the existing source project if already linked.
       if (template.sourceProjectId) {
         return {
           success: true,
@@ -42,8 +34,6 @@ export class CreateTemplateSourceProjectUseCase {
         };
       }
 
-      // For 'latest', seed the new project from the most recent active version
-      // (falls back to the newest version, then to a blank scaffold).
       let templateVersionId: string | null = null;
       if (input.seed === 'latest') {
         const versions = await this.templateRepo.listVersionsByTemplate(

@@ -1,10 +1,3 @@
-/**
- * Get Template By ID Use Case
- *
- * Application layer orchestration for retrieving a template by ID. Also
- * resolves `usageCount` so the admin detail response is consistent with the
- * list response (both expose the same DTO shape).
- */
 
 import type { TemplateRepo } from '../domain/Ports.js';
 import type { Template } from '../domain/Types.js';
@@ -16,9 +9,6 @@ export type GetTemplateByIdResult =
   | { success: true; data: TemplateWithUsage }
   | { success: false; error: { code: string; message: string } };
 
-/**
- * Use case for getting a template by ID
- */
 export class GetTemplateByIdUseCase {
   constructor(private readonly templateRepo: TemplateRepo) {}
 
@@ -36,9 +26,6 @@ export class GetTemplateByIdUseCase {
         };
       }
 
-      // usageCount is an admin-detail concern. The public detail path passes
-      // includeUsage:false to skip the groupBy + findMany aggregation entirely
-      // (the public response never returns usageCount).
       const usageCount =
         options?.includeUsage === false
           ? 0

@@ -1,36 +1,19 @@
-/**
- * Mock Template Storage Gateway for Unit Testing
- * 
- * Test double that implements TemplateStorageGateway interface for isolated testing.
- */
 
 import type { TemplateStorageGateway } from '../../domain/Ports.js';
 import type { MaterializedFile } from '../../domain/Types.js';
 
-/**
- * Mock implementation of TemplateStorageGateway for unit tests
- */
 export class MockTemplateStorage implements TemplateStorageGateway {
   private storage: Map<string, MaterializedFile[]> = new Map();
   private shouldThrowError: string | null = null;
 
-  /**
-   * Configure mock to throw specific error
-   */
   setShouldThrowError(error: string | null): void {
     this.shouldThrowError = error;
   }
 
-  /**
-   * Configure mock to return specific files for a storage key
-   */
   setFiles(storageKey: string, files: MaterializedFile[]): void {
     this.storage.set(storageKey, files);
   }
 
-  /**
-   * Clear all mock data
-   */
   clear(): void {
     this.storage.clear();
     this.shouldThrowError = null;
@@ -48,7 +31,6 @@ export class MockTemplateStorage implements TemplateStorageGateway {
 
     const storageKey = `${input.templateId}/${input.versionId}`;
 
-    // Collect archive data
     const chunks: Buffer[] = [];
     let totalSize = 0;
 
@@ -57,7 +39,6 @@ export class MockTemplateStorage implements TemplateStorageGateway {
       chunks.push(chunk);
     }
 
-    // Simulate file storage
     if (input.archiveType === 'typ') {
       const content = Buffer.concat(chunks).toString('utf-8');
       this.storage.set(storageKey, [
@@ -73,7 +54,6 @@ export class MockTemplateStorage implements TemplateStorageGateway {
         entryPath: 'main.typ',
       };
     } else {
-      // For ZIP, simulate multiple files
       this.storage.set(storageKey, [
         {
           path: 'main.typ',
@@ -96,7 +76,7 @@ export class MockTemplateStorage implements TemplateStorageGateway {
   async writeFiles(input: {
     templateId: string;
     versionId: string;
-    files: { path: string; content: string }[];
+    files: { path: string; content: string; data?: Buffer }[];
     entryPath: string;
   }): Promise<{ storageKey: string; fileCount: number; entryPath: string }> {
     if (this.shouldThrowError) {
@@ -110,7 +90,7 @@ export class MockTemplateStorage implements TemplateStorageGateway {
     const storageKey = `${input.templateId}/${input.versionId}`;
     this.storage.set(
       storageKey,
-      input.files.map((f) => ({ path: f.path, content: f.content })),
+      input.files.map((f) => ({ path: f.path, content: f.content, data: f.data })),
     );
 
     return {
@@ -141,9 +121,6 @@ export class MockTemplateStorage implements TemplateStorageGateway {
     if (!files) {
       throw new Error('VERSION_NOT_FOUND');
     }
-    // Simulate a zip by concatenating file contents with a separator. Tests
-    // that need real zip semantics should use the real TemplateStorageFs
-    // against a temp dir.
     const sentinel = '\n--MOCK-ZIP-ENTRY--\n';
     const blob = files
       .map((f) => `${f.path}${sentinel}${f.content}`)
@@ -155,21 +132,15 @@ export class MockTemplateStorage implements TemplateStorageGateway {
     this.storage.delete(storageKey);
   }
 
-  /**
-   * Helper to create async iterable from buffer
-   */
   static createArchive(content: string): AsyncIterable<Buffer> {
     return (async function* () {
       yield Buffer.from(content, 'utf-8');
     })();
   }
 
-  /**
-   * Helper to create large archive for testing size limits
-   */
   static createLargeArchive(sizeInMB: number): AsyncIterable<Buffer> {
     return (async function* () {
-      const chunkSize = 1024 * 1024; // 1 MB chunks
+      const chunkSize = 1024 * 1024;
       const totalChunks = sizeInMB;
       for (let i = 0; i < totalChunks; i++) {
         yield Buffer.alloc(chunkSize, 'x');

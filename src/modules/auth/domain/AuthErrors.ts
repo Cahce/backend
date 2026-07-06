@@ -1,7 +1,3 @@
-/**
- * Domain errors for authentication module
- * All messages are in Vietnamese as per requirements
- */
 
 export class AuthError extends Error {
     constructor(
@@ -86,9 +82,6 @@ export class UserNotFoundError extends AuthError {
     }
 }
 
-/**
- * Auth error constants for use in use cases
- */
 export const AuthErrors = {
     INVALID_EMAIL_FORMAT: {
         code: 'INVALID_EMAIL_FORMAT',
@@ -126,7 +119,6 @@ export const AuthErrors = {
         code: 'NEW_PASSWORD_SAME_AS_OLD',
         message: 'Mật khẩu mới phải khác mật khẩu cũ',
     },
-    // Token lifecycle (access expiry + rotating refresh). All map to HTTP 401.
     TOKEN_EXPIRED: {
         code: 'TOKEN_EXPIRED',
         message: 'Phiên đăng nhập đã hết hạn',

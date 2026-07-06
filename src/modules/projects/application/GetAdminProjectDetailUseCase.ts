@@ -1,9 +1,3 @@
-/**
- * Get Admin Project Detail Use Case
- *
- * Returns an admin-facing project detail (owner context + file summary). No
- * owner check — admin access is enforced at the route (`requireAdmin`).
- */
 
 import type { AdminProjectRepo } from '../domain/Project/AdminProjectPorts.js';
 import { ProjectErrors } from '../domain/Project/Errors.js';

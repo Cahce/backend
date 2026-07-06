@@ -1,17 +1,5 @@
 #!/usr/bin/env tsx
 
-/**
- * Health Check Script
- * 
- * Verifies the /health endpoint responds with 200 OK.
- * 
- * Usage:
- *   npm run test:api:health
- * 
- * Environment:
- *   HOST - Server host (default: localhost)
- *   PORT - Server port (default: 3000)
- */
 
 import http from "http";
 

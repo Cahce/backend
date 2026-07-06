@@ -1,5 +1,3 @@
-// Use case for getting teacher profile details by ID
-// No framework dependencies
 
 import type { Result } from '../Types.js';
 import { success, failure } from '../Types.js';

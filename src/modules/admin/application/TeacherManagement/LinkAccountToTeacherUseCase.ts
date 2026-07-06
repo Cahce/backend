@@ -1,5 +1,3 @@
-// Use case for linking an account to a teacher profile
-// No framework dependencies
 
 import type { Result } from '../Types.js';
 import { success, failure } from '../Types.js';

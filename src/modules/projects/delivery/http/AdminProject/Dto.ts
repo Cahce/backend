@@ -4,14 +4,10 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 extendZodWithOpenApi(z);
 
-/**
- * =========================
- * Request DTOs
- * =========================
- */
 
 export const TemplateCategorySchema = z.enum([
   'thesis',
+  'project',
   'report',
   'proposal',
   'paper',
@@ -106,11 +102,6 @@ export const AdminProjectStatsQuerySchema = z
 
 export type AdminProjectStatsQueryDto = z.infer<typeof AdminProjectStatsQuerySchema>;
 
-/**
- * =========================
- * Response DTOs (mirror application/AdminProjectViews.ts)
- * =========================
- */
 
 const FacultyMiniSchema = z
   .object({
@@ -198,6 +189,7 @@ export const AdminProjectStatsSchema = z
     }),
     byCategory: z.object({
       thesis: z.number(),
+      project: z.number(),
       report: z.number(),
       proposal: z.number(),
       paper: z.number(),
@@ -216,11 +208,6 @@ export const ErrorResponseSchema = z
   })
   .openapi('ErrorResponse');
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
   const s = schema as Record<string, unknown>;

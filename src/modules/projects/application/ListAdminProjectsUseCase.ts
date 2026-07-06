@@ -1,10 +1,3 @@
-/**
- * List Admin Projects Use Case
- *
- * Lists projects across all owners (admin oversight) with filters, sorting and
- * pagination. Authorization is enforced at the route (`requireAdmin`); this
- * use case is role-agnostic.
- */
 
 import type { AdminProjectRepo, AdminProjectFilters } from '../domain/Project/AdminProjectPorts.js';
 import type { AdminProjectListDto } from './AdminProjectViews.js';

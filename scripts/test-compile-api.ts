@@ -1,7 +1,3 @@
-/**
- * Compile API Smoke Test
- * Tests the complete compile flow: create project → create file → compile → download PDF
- */
 
 const BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const TEST_EMAIL = "2251172560@e.tlu.edu.vn";
@@ -88,7 +84,6 @@ async function runTests() {
   console.log("=".repeat(60));
   console.log("");
 
-  // ===== STEP 1: AUTHENTICATION =====
   await test("Step 1: Login to get auth token", async () => {
     const result = await apiRequest("POST", "/api/v1/auth/login", {
       email: TEST_EMAIL,
@@ -103,7 +98,6 @@ async function runTests() {
     console.log(`  User: ${result.data.user.email} (${result.data.user.role})`);
   });
 
-  // ===== STEP 2: CREATE PROJECT =====
   await test("Step 2: Create test project", async () => {
     const timestamp = new Date().toISOString();
     const result = await apiRequest("POST", "/api/v1/projects", {
@@ -124,7 +118,6 @@ async function runTests() {
     console.log(`  Title: ${result.data.title}`);
   });
 
-  // ===== STEP 3: CREATE TYPST FILE =====
   await test("Step 3: Create main.typ file", async () => {
     const typstContent = `= Xin Chào Thế Giới
 
@@ -169,7 +162,6 @@ Nội dung mục 2.2.
     console.log(`  File size: ${typstContent.length} bytes`);
   });
 
-  // ===== STEP 4: GET PROJECT SETTINGS =====
   await test("Step 4: Get project settings (auto-created)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}/settings`);
 
@@ -185,7 +177,6 @@ Nội dung mục 2.2.
     console.log(`  Settings auto-created: ${result.data.settings.mainPath === "main.typ" ? "✓" : "✗"}`);
   });
 
-  // ===== STEP 5: ENQUEUE COMPILE JOB =====
   await test("Step 5: Enqueue compile job", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/compile`, {
       entryPath: "main.typ",
@@ -204,14 +195,13 @@ Nội dung mục 2.2.
     console.log(`  Initial status: ${result.data.job.status}`);
   });
 
-  // ===== STEP 6: POLL JOB STATUS =====
   await test("Step 6: Wait for compilation to complete", async () => {
     const maxAttempts = 30;
     let attempt = 0;
     let jobStatus = "queued";
 
     while (attempt < maxAttempts && jobStatus !== "success" && jobStatus !== "failed") {
-      await sleep(2000); // Wait 2 seconds
+      await sleep(2000);
       attempt++;
 
       const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}/compile/${testJobId}`);
@@ -247,7 +237,6 @@ Nội dung mục 2.2.
     }
   });
 
-  // ===== STEP 7: DOWNLOAD PDF ARTIFACT =====
   await test("Step 7: Download PDF artifact", async () => {
     const result = await apiRequest(
       "GET",
@@ -268,7 +257,6 @@ Nội dung mục 2.2.
     console.log(`  Content-Type: ${result.contentType}`);
     console.log(`  PDF size: ${result.data.byteLength} bytes`);
 
-    // Verify it's a PDF (starts with %PDF)
     const pdfHeader = new Uint8Array(result.data.slice(0, 4));
     const headerString = String.fromCharCode(...pdfHeader);
     if (!headerString.startsWith("%PDF")) {
@@ -278,7 +266,6 @@ Nội dung mục 2.2.
     console.log(`  ✓ Valid PDF file (header: ${headerString})`);
   });
 
-  // ===== STEP 8: TEST ERROR CASES =====
   await test("Step 8a: Compile with non-existent entry path (should fail)", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/compile`, {
       entryPath: "nonexistent.typ",
@@ -290,7 +277,6 @@ Nội dung mục 2.2.
 
     const failJobId = result.data.job.id;
 
-    // Wait for it to fail
     await sleep(3000);
 
     const statusResult = await apiRequest("GET", `/api/v1/projects/${testProjectId}/compile/${failJobId}`);
@@ -332,7 +318,6 @@ Nội dung mục 2.2.
     console.log(`  ✓ Correctly rejected unauthorized request`);
   });
 
-  // ===== STEP 9: CLEANUP =====
   await test("Step 9: Cleanup - Delete test project", async () => {
     const result = await apiRequest("DELETE", `/api/v1/projects/${testProjectId}`);
 
@@ -343,7 +328,6 @@ Nội dung mục 2.2.
     console.log(`  ✓ Test project deleted: ${testProjectId}`);
   });
 
-  // ===== SUMMARY =====
   console.log("");
   console.log("=".repeat(60));
   const passed = results.filter((r) => r.passed).length;

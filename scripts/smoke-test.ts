@@ -1,21 +1,5 @@
 #!/usr/bin/env tsx
 
-/**
- * API Smoke Test
- * 
- * Runs basic smoke tests against the backend API:
- * - Health endpoint responds
- * - Swagger docs are accessible
- * - Server returns proper error codes for invalid requests
- * 
- * Usage:
- *   npm run test:api:smoke
- * 
- * Environment:
- *   HOST - Server host (default: localhost)
- *   PORT - Server port (default: 3000)
- *   SWAGGER_ROUTE_PREFIX - Swagger route (default: /docs)
- */
 
 import http from "http";
 

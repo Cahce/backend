@@ -1,6 +1,3 @@
-/**
- * Bibliography HTTP routes.
- */
 
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { BibliographyContainer } from "../../Container.js";

@@ -1,10 +1,3 @@
-/**
- * Unit tests for ImportToBibFile.
- *
- * Guards the N+1 fixes: dedupe is a single batched query, OpenAlex works are
- * fetched per NEW id only, and import-log rows are flushed once via createMany
- * (never per-row create).
- */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -37,7 +30,6 @@ test('dedupes via one batched query, fetches only new ids, flushes logs via crea
   const apiClient: OpenAlexApiPort = {
     async getWorkById(id) {
       getWorkByIdCalls.push(id);
-      // Distinct author + title per id so citation keys do not collide.
       const works: Record<string, { title: string; author: string }> = {
         W1: { title: 'Quantum entanglement in superconductors', author: 'Anderson Alice' },
         W2: { title: 'Galactic rotation curves revisited', author: 'Brown Bob' },
@@ -71,7 +63,6 @@ test('dedupes via one batched query, fetches only new ids, flushes logs via crea
     },
     async findImportedByProjectAndOpenAlexIds() {
       findImportedCalls++;
-      // 'W-existing' was imported in a previous run.
       return [
         {
           id: 'log1',
@@ -125,17 +116,12 @@ test('dedupes via one batched query, fetches only new ids, flushes logs via crea
   });
 
   assert.equal(writeAccessChecked, true);
-  // Dedupe = exactly ONE batched lookup (no per-id findFirst N+1).
   assert.equal(findImportedCalls, 1);
-  // HTTP fetch only for the two NEW ids.
   assert.deepEqual([...getWorkByIdCalls].sort(), ['W1', 'W2']);
-  // Logs flushed once via createMany; per-row create never used.
   assert.equal(createCalls, 0);
   assert.equal(createManyCalls, 1);
-  assert.equal(createManyRows.length, 3); // 1 skipped_duplicate + 2 imported
-  // Bib written once with the two new entries.
+  assert.equal(createManyRows.length, 3);
   assert.deepEqual(writeCalls, [2]);
-  // Result shape.
   assert.equal(result.imported.length, 2);
   assert.equal(result.skippedDuplicate.length, 1);
   assert.equal(result.skippedDuplicate[0]?.openAlexId, 'W-existing');
@@ -208,8 +194,8 @@ test('returns early (no fetch, no bib write) when every id is an existing duplic
     conflictMode: 'skip',
   });
 
-  assert.equal(readBibCalls, 0); // never read the bib (early return)
-  assert.equal(createManyRows.length, 1); // the single skip log
+  assert.equal(readBibCalls, 0);
+  assert.equal(createManyRows.length, 1);
   assert.equal(result.skippedDuplicate.length, 1);
   assert.equal(result.imported.length, 0);
 });

@@ -1,13 +1,3 @@
-/**
- * List Templates Use Case (Admin)
- *
- * Application layer orchestration for listing templates with filtering and
- * pagination. Each returned item now carries a `usageCount` — the number of
- * projects referencing the template (directly via `Project.templateId` or
- * indirectly via `Project.templateVersion.templateId`).
- *
- * Counts are batched in a single repo call to avoid N+1.
- */
 
 import type { TemplateRepo } from '../domain/Ports.js';
 import type { Template, TemplateFilter } from '../domain/Types.js';
@@ -27,9 +17,6 @@ export type ListTemplatesResult =
     }
   | { success: false; error: { code: string; message: string } };
 
-/**
- * Use case for listing templates (admin)
- */
 export class ListTemplatesUseCase {
   constructor(private readonly templateRepo: TemplateRepo) {}
 

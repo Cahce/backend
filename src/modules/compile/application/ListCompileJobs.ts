@@ -1,8 +1,3 @@
-/**
- * ListCompileJobs use case
- * 
- * Lists all compile jobs for a project.
- */
 
 import type { CompileJob } from '../domain/CompileJob.js';
 import type { CompileJobRepository } from '../domain/CompileJobRepository.js';
@@ -20,10 +15,8 @@ export class ListCompileJobs {
   ) {}
 
   async execute(cmd: ListCompileJobsCommand): Promise<CompileJob[]> {
-    // Check project access
     await this.access.requireProjectAccess(cmd.projectId, cmd.userId);
 
-    // List jobs
     return this.repo.listByProjectId(cmd.projectId);
   }
 }

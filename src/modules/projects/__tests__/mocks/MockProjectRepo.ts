@@ -1,22 +1,11 @@
-/**
- * Mock Project Repository for Unit Testing
- * 
- * Test double that implements ProjectRepo interface for isolated testing.
- */
 
 import type { ProjectRepo } from '../../domain/Project/Ports.js';
 import type { Project, CreateProjectData, UpdateProjectData } from '../../domain/Project/Types.js';
 
-/**
- * Mock implementation of ProjectRepo for unit tests
- */
 export class MockProjectRepo implements ProjectRepo {
   private projects: Map<string, Project> = new Map();
   private nextId = 1;
 
-  /**
-   * Configure mock to return specific projects
-   */
   setProjects(projects: Project[]): void {
     this.projects.clear();
     for (const project of projects) {
@@ -24,9 +13,6 @@ export class MockProjectRepo implements ProjectRepo {
     }
   }
 
-  /**
-   * Clear all mock data
-   */
   clear(): void {
     this.projects.clear();
     this.nextId = 1;

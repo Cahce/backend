@@ -6,9 +6,6 @@ import {
 import { GetTeacherProfileUseCase } from "../../../application/GetTeacherProfileUseCase.js";
 import { TeacherRepository } from "../../../infra/TeacherRepository.js";
 
-/**
- * Teacher profile routes
- */
 export async function teacherProfileRoutes(app: FastifyInstance) {
   app.get(
     "/me",
@@ -43,7 +40,6 @@ export async function teacherProfileRoutes(app: FastifyInstance) {
       const accountId = request.user.sub;
       const userRole = request.user.role;
 
-      // Authorization: only teachers can access this endpoint
       if (userRole !== "teacher") {
         return reply.status(403).send({
           error: {
@@ -53,11 +49,9 @@ export async function teacherProfileRoutes(app: FastifyInstance) {
         });
       }
 
-      // Create use case with repository
       const repository = new TeacherRepository(app.prisma);
       const useCase = new GetTeacherProfileUseCase(repository);
 
-      // Execute use case
       const profile = await useCase.execute(accountId);
 
       if (!profile) {

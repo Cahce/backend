@@ -1,13 +1,3 @@
-/**
- * Sinh ảnh snapshot (SVG) cho BỘ TRA CỨU Typst (spec typst-reference-complete)
- * bằng cách biên dịch thật các đoạn Typst qua @myriaddreamin/typst-ts-node-compiler.
- *
- * Chạy:  cd backend && node scripts/gen-reference-snapshots.mjs
- * Đầu ra: Frontendtluscholareditor/public/help-previews/ref/<id>.svg
- * Id khớp `snapshotId` trong src/app/features/help/reference/*.ts (vd visualize-circle).
- *
- * Font: backend/var/fonts (Times New Roman = tiếng Việt, NewCMMath = toán).
- */
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -22,9 +12,7 @@ const pre = (width) => `#set page(width: ${width}, height: auto, margin: 8pt, fi
 #set text(font: "Times New Roman", size: 12pt, lang: "vi", region: "VN")
 `;
 
-// id = <category>-<fn>, khớp snapshotId trong dữ liệu reference.
 const SNIPPETS = [
-  // ----- visualize -----
   { id: 'visualize-circle', w: 'auto', body: `#circle(radius: 24pt, fill: blue.lighten(70%), stroke: blue)` },
   { id: 'visualize-rect', w: 'auto', body: `#rect(width: 4cm, height: 1.6cm, radius: 4pt, fill: blue.lighten(85%), stroke: blue)[Hộp]` },
   { id: 'visualize-square', w: 'auto', body: `#square(size: 2cm, fill: green.lighten(80%), stroke: green)` },
@@ -71,7 +59,6 @@ const SNIPPETS = [
 )`,
   },
 
-  // ----- text -----
   { id: 'text-text', w: '360pt', body: `#text(weight: "bold")[Đậm], #text(fill: blue)[xanh], #text(tracking: 1.5pt)[giãn], #text(style: "italic")[nghiêng].` },
   { id: 'text-sub', w: 'auto', body: `H#sub[2]O và a#sub[i]` },
   { id: 'text-super', w: 'auto', body: `x#super[2] + y#super[n]` },
@@ -82,7 +69,6 @@ const SNIPPETS = [
   { id: 'text-smallcaps', w: 'auto', body: `#smallcaps[Tiêu đề chữ hoa nhỏ]` },
   { id: 'text-raw', w: 'auto', body: `#raw("def f(x): return x * 2", lang: "python", block: true)` },
 
-  // ----- model -----
   { id: 'model-heading', w: '360pt', body: `#set heading(numbering: "1.1")
 = Chương một
 == Mục con` },
@@ -130,7 +116,6 @@ const SNIPPETS = [
 ]`,
   },
 
-  // ----- layout -----
   { id: 'layout-align', w: '320pt', body: `#align(center)[Văn bản căn giữa]` },
   {
     id: 'layout-grid',
@@ -165,7 +150,6 @@ const SNIPPETS = [
   { id: 'layout-scale', w: 'auto', body: `#scale(150%, reflow: true)[To gấp rưỡi]` },
   { id: 'layout-repeat', w: '320pt', body: `Mục 1 #box(width: 1fr, repeat[.]) 5` },
 
-  // ----- math -----
   { id: 'math-equation', w: 'auto', body: `$ a^2 + b^2 = c^2 $` },
   { id: 'math-frac', w: 'auto', body: `$ frac(a + b, c) $` },
   { id: 'math-mat', w: 'auto', body: `$ A = mat(1, 2; 3, 4) $` },
@@ -181,7 +165,6 @@ const SNIPPETS = [
   { id: 'math-underover', w: 'auto', body: `$ underbrace(1 + 2 + 3, "ba số") $` },
   { id: 'math-variants', w: 'auto', body: `$ cal(F) quad frak(g) quad bb(R) quad sans(x) $` },
 
-  // ----- foundations (hiển thị KẾT QUẢ của ví dụ, như typst.app) -----
   { id: 'foundations-calc', w: 'auto', body: `pow(2, 10) = #calc.pow(2, 10) #h(1em) round(3.14159, 2) = #calc.round(3.14159, digits: 2) #h(1em) sqrt(144) = #calc.sqrt(144)` },
   { id: 'foundations-str', w: 'auto', body: `"abc".rev() = #"abc".rev() #h(1em) "a,b,c".split(",").len() = #"a,b,c".split(",").len()` },
   { id: 'foundations-array', w: 'auto', body: `(3, 1, 2).sorted() = #(3, 1, 2).sorted() #h(1em) bình phương (1, 2, 3) = #(1, 2, 3).map(x => x * x)` },
@@ -215,7 +198,6 @@ Tham chiếu tới mục @intro.` },
   { id: 'foundations-repr', w: 'auto', body: `repr((1, 2)) = #repr((1, 2)) #h(1em) repr("x") = #repr("x")` },
   { id: 'foundations-eval', w: 'auto', body: `eval("1 + 2") = #eval("1 + 2") #h(1em) eval("2 · 3") = #eval("2 * 3")` },
 
-  // ----- model (cú pháp còn thiếu ảnh) -----
   { id: 'model-strong', w: 'auto', body: `Đây là *văn bản in đậm* trong câu.` },
   { id: 'model-emph', w: 'auto', body: `Đây là _văn bản in nghiêng_ trong câu.` },
   { id: 'model-link', w: 'auto', body: `Xem #link("https://typst.app")[Trang chủ Typst].` },
@@ -225,13 +207,11 @@ Xem @intro để biết thêm.` },
   { id: 'model-footnote', w: '320pt', body: `Một khẳng định#footnote[Nguồn tham khảo.] trong văn bản.` },
   { id: 'model-numbering', w: 'auto', body: `#numbering("1.1", 1, 2) #h(1em) #numbering("I.a", 1, 2) #h(1em) #numbering("a)", 3)` },
 
-  // ----- text (cú pháp còn thiếu ảnh) -----
   { id: 'text-upper', w: 'auto', body: `#upper("đại học thuỷ lợi")` },
   { id: 'text-lower', w: 'auto', body: `#lower("ĐẠI HỌC THUỶ LỢI")` },
   { id: 'text-lorem', w: '320pt', body: `#lorem(20)` },
   { id: 'text-linebreak', w: 'auto', body: `Dòng thứ nhất #linebreak() Dòng thứ hai` },
 
-  // ----- layout (cú pháp còn thiếu ảnh) -----
   { id: 'layout-h', w: '300pt', body: `Trái #h(1fr) Giữa #h(1fr) Phải` },
   { id: 'layout-v', w: 'auto', body: `Khối trên #v(1cm) Khối dưới` },
   { id: 'layout-move', w: 'auto', body: `Gốc #move(dx: 14pt, dy: -6pt)[đã dịch] tham chiếu.` },
@@ -243,17 +223,14 @@ Xem @intro để biết thêm.` },
   { id: 'layout-ratio', w: '280pt', body: `#block(width: 60%, fill: luma(230), inset: 4pt)[Chiều rộng 60%]` },
   { id: 'layout-fraction', w: '280pt', body: `#grid(columns: (1fr, 2fr), stroke: 0.5pt, inset: 5pt)[1fr][2fr (gấp đôi)]` },
 
-  // ----- math (cú pháp còn thiếu ảnh) -----
   { id: 'math-primes', w: 'auto', body: `$ f'(x) quad f''(x) quad f'''(x) $` },
   { id: 'math-stretch', w: 'auto', body: `$ A stretch(->, size: #3em) B $` },
   { id: 'math-sizes', w: 'auto', body: `$ display(sum_(i=1)^n) quad inline(sum_(i=1)^n) $` },
   { id: 'math-sym', w: 'auto', body: `$ alpha + beta = gamma quad pi r^2 quad x in RR $` },
 
-  // ----- visualize -----
   { id: 'visualize-tiling', w: 'auto', body: `#let pat = tiling(size: (10pt, 10pt))[#place(circle(radius: 2.5pt, fill: blue))]
 #rect(width: 4cm, height: 1.5cm, fill: pat, stroke: 0.5pt)` },
 
-  // ----- introspection -----
   { id: 'introspection-counter', w: '300pt', body: `#let c = counter("buoc")
 #c.step()#c.step()#c.step()
 Số bước hiện tại: #context c.display()` },
@@ -265,7 +242,6 @@ Số bước hiện tại: #context c.display()` },
 = Mục B
 #context [Số tiêu đề: #query(heading).len()]` },
 
-  // ----- data-loading (decode inline, không cần file) -----
   { id: 'data-loading-json', w: '320pt', body: String.raw`#let d = json.decode(bytes("{\"ten\": \"An\", \"diem\": 9}"))
 Tên: #d.ten, điểm: #d.diem` },
   { id: 'data-loading-csv', w: '320pt', body: String.raw`#let rows = csv.decode(bytes("ten,diem\nAn,9\nBình,8"))
@@ -283,8 +259,6 @@ const compiler = NodeCompiler.create({
   fontArgs: [{ fontPaths: [fontDir] }],
 });
 
-// Gộp snippet cơ bản (SNIPPETS, viết tay) + manifest sinh tự động từ registry
-// (paramExamples). Manifest ghi đè khi trùng id.
 const manifestPath = resolve(here, 'reference-snapshots.manifest.json');
 const manifest = existsSync(manifestPath)
   ? JSON.parse(readFileSync(manifestPath, 'utf-8'))
@@ -321,8 +295,6 @@ for (const { id, w, body } of list) {
 
 console.log(`\nHoàn tất: ${ok} thành công, ${fail} lỗi → ${outDir}`);
 
-// Báo cáo ảnh orphan (chỉ khi chạy đầy đủ, không lọc): .svg có trong ref/ nhưng
-// không còn id nào trong nguồn → nên xoá để "không thiếu/không thừa".
 if (!only) {
   const wanted = new Set(all.map((s) => s.id));
   const orphans = readdirSync(outDir)

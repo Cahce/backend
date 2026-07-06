@@ -1,7 +1,3 @@
-/**
- * Project Files API Integration Test
- * Tests all project file endpoints with comprehensive scenarios
- */
 
 const BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const TEST_EMAIL = "admin@tlu.edu.vn";
@@ -71,7 +67,6 @@ async function runTests() {
   console.log("PROJECT FILES API INTEGRATION TEST");
   console.log("=".repeat(60));
 
-  // ===== AUTHENTICATION =====
   await test("Login to get auth token", async () => {
     const result = await apiRequest("POST", "/api/v1/auth/login", {
       email: TEST_EMAIL,
@@ -86,7 +81,6 @@ async function runTests() {
     console.log(`  Token: ${authToken.substring(0, 30)}...`);
   });
 
-  // ===== SETUP: CREATE TEST PROJECT =====
   await test("Setup: Create test project", async () => {
     const result = await apiRequest("POST", "/api/v1/projects", {
       title: "File Test Project",
@@ -101,7 +95,6 @@ async function runTests() {
     console.log(`  Created project: ${testProjectId}`);
   });
 
-  // ===== CREATE FILE - HAPPY PATH =====
   await test("POST /api/v1/projects/:projectId/files - Create file (happy path)", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/files`, {
       path: "main.typ",
@@ -148,7 +141,6 @@ async function runTests() {
     console.log(`  Created bib file: ${result.data.path}`);
   });
 
-  // ===== CREATE FILE - VALIDATION ERRORS =====
   await test("POST /api/v1/projects/:projectId/files - Missing path (400)", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/files`, {
       kind: "typst",
@@ -162,11 +154,6 @@ async function runTests() {
     console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
   });
 
-  // `kind` is intentionally optional — the backend auto-detects from the
-  // file extension via `detectKindFromPath` (see ProjectFile/Routes.ts
-  // L215 docstring + `detectKindFromPath` in FileKindPolicy.ts). So a
-  // missing `kind` should succeed (201) and the resulting file should be
-  // kind=typst for a .typ extension.
   await test("POST /api/v1/projects/:projectId/files - Missing kind auto-detects from path", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/files`, {
       path: "autodetect.typ",
@@ -195,7 +182,6 @@ async function runTests() {
     console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
   });
 
-  // ===== CREATE FILE - CONFLICT =====
   await test("POST /api/v1/projects/:projectId/files - Duplicate path (409)", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/files`, {
       path: "main.typ",
@@ -210,7 +196,6 @@ async function runTests() {
     console.log(`  Correctly rejected: file already exists`);
   });
 
-  // ===== CREATE FILE - NOT FOUND =====
   await test("POST /api/v1/projects/:projectId/files - Non-existent project (404)", async () => {
     const fakeProjectId = "00000000-0000-0000-0000-000000000000";
     const result = await apiRequest("POST", `/api/v1/projects/${fakeProjectId}/files`, {
@@ -226,7 +211,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent project`);
   });
 
-  // ===== CREATE FILE - AUTH ERRORS =====
   await test("POST /api/v1/projects/:projectId/files - No auth token (401)", async () => {
     const result = await apiRequest("POST", `/api/v1/projects/${testProjectId}/files`, {
       path: "unauthorized.typ",
@@ -241,7 +225,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== LIST FILES - HAPPY PATH =====
   await test("GET /api/v1/projects/:projectId/files - List files (happy path)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}/files`);
 
@@ -260,7 +243,6 @@ async function runTests() {
     console.log(`  Found ${result.data.files.length} files`);
   });
 
-  // ===== LIST FILES - NOT FOUND =====
   await test("GET /api/v1/projects/:projectId/files - Non-existent project (404)", async () => {
     const fakeProjectId = "00000000-0000-0000-0000-000000000000";
     const result = await apiRequest("GET", `/api/v1/projects/${fakeProjectId}/files`);
@@ -272,7 +254,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent project`);
   });
 
-  // ===== LIST FILES - AUTH ERRORS =====
   await test("GET /api/v1/projects/:projectId/files - No auth token (401)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}/files`, undefined, "");
 
@@ -283,7 +264,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== GET FILE BY PATH - HAPPY PATH =====
   await test("GET /api/v1/projects/:projectId/files/*path - Get file (happy path)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}/files/main.typ`);
 
@@ -312,7 +292,6 @@ async function runTests() {
     console.log(`  Retrieved nested file: ${result.data.path}`);
   });
 
-  // ===== GET FILE BY PATH - NOT FOUND =====
   await test("GET /api/v1/projects/:projectId/files/*path - Non-existent file (404)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}/files/nonexistent.typ`);
 
@@ -334,7 +313,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent project`);
   });
 
-  // ===== GET FILE BY PATH - AUTH ERRORS =====
   await test("GET /api/v1/projects/:projectId/files/*path - No auth token (401)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}/files/main.typ`, undefined, "");
 
@@ -345,7 +323,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== UPDATE FILE - HAPPY PATH =====
   await test("PUT /api/v1/projects/:projectId/files/*path - Update file (happy path)", async () => {
     const result = await apiRequest("PUT", `/api/v1/projects/${testProjectId}/files/main.typ`, {
       content: "#set page(paper: \"a4\")\n\n= Hello World (Updated)\n\nThis is an updated document.",
@@ -362,7 +339,6 @@ async function runTests() {
     console.log(`  Updated file: ${result.data.path}`);
   });
 
-  // ===== UPDATE FILE - VALIDATION ERRORS =====
   await test("PUT /api/v1/projects/:projectId/files/*path - Missing content (400)", async () => {
     const result = await apiRequest("PUT", `/api/v1/projects/${testProjectId}/files/main.typ`, {});
 
@@ -373,7 +349,6 @@ async function runTests() {
     console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
   });
 
-  // ===== UPDATE FILE - NOT FOUND =====
   await test("PUT /api/v1/projects/:projectId/files/*path - Non-existent file (404)", async () => {
     const result = await apiRequest("PUT", `/api/v1/projects/${testProjectId}/files/nonexistent.typ`, {
       content: "Test",
@@ -386,7 +361,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent file`);
   });
 
-  // ===== UPDATE FILE - AUTH ERRORS =====
   await test("PUT /api/v1/projects/:projectId/files/*path - No auth token (401)", async () => {
     const result = await apiRequest("PUT", `/api/v1/projects/${testProjectId}/files/main.typ`, {
       content: "Unauthorized update",
@@ -399,7 +373,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== RENAME FILE - HAPPY PATH =====
   await test("PATCH /api/v1/projects/:projectId/files:rename - Rename file (happy path)", async () => {
     const result = await apiRequest("PATCH", `/api/v1/projects/${testProjectId}/files:rename?path=chapters/chapter1.typ`, {
       newPath: "chapters/introduction.typ",
@@ -416,7 +389,6 @@ async function runTests() {
     console.log(`  Renamed file: chapters/chapter1.typ → ${result.data.path}`);
   });
 
-  // ===== RENAME FILE - VALIDATION ERRORS =====
   await test("PATCH /api/v1/projects/:projectId/files:rename - Missing newPath (400)", async () => {
     const result = await apiRequest("PATCH", `/api/v1/projects/${testProjectId}/files:rename?path=main.typ`, {});
 
@@ -427,7 +399,6 @@ async function runTests() {
     console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
   });
 
-  // ===== RENAME FILE - CONFLICT =====
   await test("PATCH /api/v1/projects/:projectId/files:rename - Duplicate newPath (409)", async () => {
     const result = await apiRequest("PATCH", `/api/v1/projects/${testProjectId}/files:rename?path=references.bib`, {
       newPath: "main.typ",
@@ -440,7 +411,6 @@ async function runTests() {
     console.log(`  Correctly rejected: file already exists at newPath`);
   });
 
-  // ===== RENAME FILE - NOT FOUND =====
   await test("PATCH /api/v1/projects/:projectId/files:rename - Non-existent file (404)", async () => {
     const result = await apiRequest("PATCH", `/api/v1/projects/${testProjectId}/files:rename?path=nonexistent.typ`, {
       newPath: "renamed.typ",
@@ -453,7 +423,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent file`);
   });
 
-  // ===== RENAME FILE - AUTH ERRORS =====
   await test("PATCH /api/v1/projects/:projectId/files:rename - No auth token (401)", async () => {
     const result = await apiRequest("PATCH", `/api/v1/projects/${testProjectId}/files:rename?path=main.typ`, {
       newPath: "unauthorized.typ",
@@ -466,7 +435,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== DELETE FILE - HAPPY PATH =====
   await test("DELETE /api/v1/projects/:projectId/files/*path - Delete file (happy path)", async () => {
     const result = await apiRequest("DELETE", `/api/v1/projects/${testProjectId}/files/references.bib`);
 
@@ -477,7 +445,6 @@ async function runTests() {
     console.log(`  Deleted file: references.bib`);
   });
 
-  // ===== DELETE FILE - NOT FOUND =====
   await test("DELETE /api/v1/projects/:projectId/files/*path - Already deleted (404)", async () => {
     const result = await apiRequest("DELETE", `/api/v1/projects/${testProjectId}/files/references.bib`);
 
@@ -498,7 +465,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent file`);
   });
 
-  // ===== DELETE FILE - AUTH ERRORS =====
   await test("DELETE /api/v1/projects/:projectId/files/*path - No auth token (401)", async () => {
     const result = await apiRequest("DELETE", `/api/v1/projects/${testProjectId}/files/main.typ`, undefined, "");
 
@@ -509,7 +475,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== CLEANUP =====
   await test("Cleanup: Delete test project", async () => {
     const result = await apiRequest("DELETE", `/api/v1/projects/${testProjectId}`);
 
@@ -520,7 +485,6 @@ async function runTests() {
     console.log(`  Deleted project: ${testProjectId}`);
   });
 
-  // ===== SUMMARY =====
   console.log("\n" + "=".repeat(60));
   const passed = results.filter((r) => r.passed).length;
   const failed = results.filter((r) => !r.passed).length;

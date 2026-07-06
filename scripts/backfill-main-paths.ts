@@ -1,19 +1,3 @@
-/**
- * Backfill `ProjectSettings.mainPath` for already-imported projects whose entry
- * was chosen before the include-graph heuristic existed — e.g. it points at a
- * single-page fragment (`00-Title/00-Title.typ`) instead of the real document
- * root (`90-Document/90-Document.typ`).
- *
- * Conservative: a project is only "suspect" (and updated) when the detected
- * root differs from the stored mainPath AND the stored mainPath is either unset,
- * missing from the project, or a FRAGMENT that the detected root transitively
- * includes/imports. A deliberately-chosen independent root is left untouched.
- *
- * Dry-run by default — prints what WOULD change. Pass `--apply` to write.
- *   npx tsx scripts/backfill-main-paths.ts                 # dry run (no writes)
- *   npx tsx scripts/backfill-main-paths.ts --apply         # write changes
- *   npx tsx scripts/backfill-main-paths.ts --project <id>  # limit to one project
- */
 import { PrismaClient } from '../src/generated/prisma/index.js';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -88,8 +72,6 @@ async function main(): Promise<void> {
     const current = project.settings?.mainPath ?? null;
     if (current === detected) continue;
 
-    // Decide whether the stored mainPath looks like the old mistake rather than
-    // a deliberate choice.
     const pathSet = new Set(detectFiles.map((file) => file.path));
     let reason: string | null = null;
     if (current === null) {
@@ -99,7 +81,7 @@ async function main(): Promise<void> {
     } else if (reachableFrom(buildTypstGraph(detectFiles), detected).has(current)) {
       reason = 'current is a fragment included by the detected root';
     }
-    if (!reason) continue; // detected differs but current looks intentional.
+    if (!reason) continue;
 
     changes.push({
       id: project.id,

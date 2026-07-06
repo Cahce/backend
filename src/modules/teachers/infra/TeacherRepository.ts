@@ -2,9 +2,6 @@ import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { TeacherProfile } from "../domain/TeacherProfile.js";
 import type { TeacherProfilePort } from "../domain/TeacherProfilePort.js";
 
-/**
- * Prisma implementation of TeacherProfilePort
- */
 export class TeacherRepository implements TeacherProfilePort {
   constructor(private readonly prisma: PrismaClient) {}
 

@@ -1,9 +1,3 @@
-/**
- * Zotero API Client
- * 
- * Infrastructure adapter for Zotero API communication.
- * Implements ZoteroApiPort using global fetch.
- */
 
 import type { ZoteroApiPort, ZoteroKeyInfo, ZoteroGroupSummary } from "../domain/Ports.js";
 import type { ZoteroItem, ZoteroCollection } from "../domain/Types.js";
@@ -17,9 +11,6 @@ import {
 } from "../domain/Errors.js";
 import { randomBytes } from "node:crypto";
 
-/**
- * Configuration for ZoteroApiClient
- */
 export interface ZoteroApiClientConfig {
   baseUrl?: string;
   timeout?: number;
@@ -27,9 +18,6 @@ export interface ZoteroApiClientConfig {
   retryDelay?: number;
 }
 
-/**
- * Zotero API Client implementation
- */
 export class ZoteroApiClient implements ZoteroApiPort {
   private readonly baseUrl: string;
   private readonly timeout: number;
@@ -38,14 +26,11 @@ export class ZoteroApiClient implements ZoteroApiPort {
 
   constructor(config: ZoteroApiClientConfig = {}) {
     this.baseUrl = config.baseUrl || "https://api.zotero.org";
-    this.timeout = config.timeout || 10000; // 10 seconds
+    this.timeout = config.timeout || 10000;
     this.maxRetries = config.maxRetries || 1;
-    this.retryDelay = config.retryDelay || 500; // 500ms
+    this.retryDelay = config.retryDelay || 500;
   }
 
-  /**
-   * Verify API key by making a test request
-   */
   async verifyKey(
     libraryType: "user" | "group",
     libraryId: string,
@@ -74,10 +59,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * Get information about the API key (numeric userID, username, access scopes).
-   * Calls GET /keys/current which returns the key info for the calling key.
-   */
   async getKeyInfo(apiKey: string): Promise<ZoteroKeyInfo> {
     const url = `${this.baseUrl}/keys/current`;
 
@@ -126,10 +107,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * List Zotero groups that the API key can access for a given user.
-   * Returns [] if the user has no groups (404 is treated as empty).
-   */
   async listGroups(userId: string, apiKey: string): Promise<ZoteroGroupSummary[]> {
     const url = `${this.baseUrl}/users/${userId}/groups?limit=100`;
 
@@ -176,9 +153,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * List collections in a library
-   */
   async listCollections(
     libraryType: "user" | "group",
     libraryId: string,
@@ -206,9 +180,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * List items in a library or collection
-   */
   async listItems(args: {
     libraryType: "user" | "group";
     libraryId: string;
@@ -221,13 +192,11 @@ export class ZoteroApiClient implements ZoteroApiPort {
   }): Promise<{ items: ZoteroItem[]; total: number }> {
     const { libraryType, libraryId, apiKey, collectionKey, start = 0, limit = 100, sort, direction } = args;
 
-    // Build URL
     let url = `${this.baseUrl}/${libraryType}s/${libraryId}/items`;
     if (collectionKey) {
       url = `${this.baseUrl}/${libraryType}s/${libraryId}/collections/${collectionKey}/items`;
     }
 
-    // Add query parameters
     const params = new URLSearchParams({
       start: start.toString(),
       limit: limit.toString(),
@@ -251,7 +220,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
         throw await this.handleErrorResponse(response);
       }
 
-      // Extract total from headers
       const totalHeader = response.headers.get("Total-Results");
       const total = totalHeader ? parseInt(totalHeader, 10) : 0;
 
@@ -271,9 +239,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * Get a single item by key
-   */
   async getItem(
     libraryType: "user" | "group",
     libraryId: string,
@@ -305,11 +270,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * Batch-fetch items by key, chunked into groups of ≤50 (Zotero's itemKey
-   * filter limit). Missing keys are simply absent from the response — far fewer
-   * round-trips than one getItem per key.
-   */
   async getItemsByKeys(
     libraryType: "user" | "group",
     libraryId: string,
@@ -358,10 +318,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     return collected;
   }
 
-  /**
-   * Create items in a Zotero library (write). Requires a write-enabled API key.
-   * Sends an idempotency `Zotero-Write-Token` header.
-   */
   async createItems(
     libraryType: "user" | "group",
     libraryId: string,
@@ -423,12 +379,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * Build a Zotero write payload from a domain item: `itemType` + defined
-   * fields only. Excludes server-managed (`key`/`version`) and
-   * source-library-specific (`collections`/`relations`) fields so the new item
-   * validates in the target library.
-   */
   private toWritePayload(item: ZoteroItem): Record<string, unknown> {
     const payload: Record<string, unknown> = { itemType: item.itemType };
     const set = (key: string, value: unknown) => {
@@ -468,9 +418,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     return payload;
   }
 
-  /**
-   * Build request headers
-   */
   private buildHeaders(apiKey: string): Record<string, string> {
     return {
       "Zotero-API-Key": apiKey,
@@ -479,9 +426,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     };
   }
 
-  /**
-   * Fetch with retry logic for 429 and 5xx errors
-   */
   private async fetchWithRetry(
     url: string,
     options: RequestInit,
@@ -498,9 +442,8 @@ export class ZoteroApiClient implements ZoteroApiPort {
 
       clearTimeout(timeoutId);
 
-      // Retry on 429 (rate limit) or 5xx (server error)
       if ((response.status === 429 || response.status >= 500) && attempt < this.maxRetries) {
-        await this.delay(this.retryDelay * Math.pow(2, attempt)); // Exponential backoff
+        await this.delay(this.retryDelay * Math.pow(2, attempt));
         return this.fetchWithRetry(url, options, attempt + 1);
       }
 
@@ -512,7 +455,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
         throw new ZoteroTimeoutError();
       }
 
-      // Retry on network errors
       if (attempt < this.maxRetries) {
         await this.delay(this.retryDelay * Math.pow(2, attempt));
         return this.fetchWithRetry(url, options, attempt + 1);
@@ -522,13 +464,9 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
   }
 
-  /**
-   * Handle error responses from Zotero API
-   */
   private async handleErrorResponse(response: Response): Promise<Error> {
     const status = response.status;
 
-    // Try to extract Zotero error body (may be JSON `{message}` or plain text).
     let detail: string | undefined;
     try {
       const text = await response.text();
@@ -541,7 +479,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
         }
       }
     } catch {
-      // ignore
     }
 
     if (status === 401 || status === 403) {
@@ -551,8 +488,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }
 
     if (status === 400) {
-      // Zotero returns 400 for malformed requests (e.g. non-numeric libraryId).
-      // From the user's perspective this means their credentials/library don't make sense.
       return new ZoteroInvalidCredentialsError(
         detail ? `Yêu cầu không hợp lệ: ${detail}` : undefined
       );
@@ -571,9 +506,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     return new ZoteroSyncError(detail ?? `Zotero API error: ${status}`);
   }
 
-  /**
-   * Parse collections from API response
-   */
   private parseCollections(data: any[]): ZoteroCollection[] {
     return data.map(item => ({
       key: item.key,
@@ -585,16 +517,10 @@ export class ZoteroApiClient implements ZoteroApiPort {
     }));
   }
 
-  /**
-   * Parse items from API response
-   */
   private parseItems(data: any[]): ZoteroItem[] {
     return data.map(item => this.parseItem(item));
   }
 
-  /**
-   * Parse a single item from API response
-   */
   private parseItem(item: any): ZoteroItem {
     const data = item.data || item;
 
@@ -636,9 +562,6 @@ export class ZoteroApiClient implements ZoteroApiPort {
     };
   }
 
-  /**
-   * Delay helper for retry logic
-   */
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

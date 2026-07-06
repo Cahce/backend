@@ -1,5 +1,3 @@
-// Use case for updating a student profile
-// No framework dependencies
 
 import type { Result } from '../Types.js';
 import { success, failure } from '../Types.js';

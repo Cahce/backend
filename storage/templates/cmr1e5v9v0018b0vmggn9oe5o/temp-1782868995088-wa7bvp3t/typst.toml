@@ -1,0 +1,4 @@
+[package]
+name = "mau2_maunhiemvu"
+version = "0.1.0"
+entrypoint = "main.typ"

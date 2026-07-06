@@ -1,5 +1,3 @@
-// Domain errors for Teacher management
-// Vietnamese error messages for user-facing errors
 
 export const TeacherErrors = {
   TEACHER_NOT_FOUND: {

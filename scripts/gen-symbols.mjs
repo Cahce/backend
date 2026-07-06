@@ -1,11 +1,3 @@
-/**
- * SINH symbols.ts ĐẦY ĐỦ cho bộ tra cứu — nguồn = chính trình biên dịch Typst
- * (@myriaddreamin/typst-ts-node-compiler, v0.14.2). Lấy mọi ký hiệu của mô-đun
- * `sym` cùng TẤT CẢ biến thể (modifier) qua repr(). Không bịa, khớp version.
- *
- * Chạy: cd backend && node scripts/gen-symbols.mjs
- * Đầu ra: Frontendtluscholareditor/src/app/features/help/reference/symbols.ts
- */
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,14 +8,12 @@ const fontDir = resolve(here, '../var/fonts');
 const outFile = resolve(here, '../../Frontendtluscholareditor/src/app/features/help/reference/symbols.ts');
 const compiler = NodeCompiler.create({ workspace: here, fontArgs: [{ fontPaths: [fontDir] }] });
 
-// ---- 1. Lấy base + repr từ compiler ----
 const res = compiler.query(
   { mainFileContent: `#let d = dictionary(sym)\n#metadata(d.keys().map(k => (name: k, rep: repr(d.at(k))))) <dump>` },
   { selector: '<dump>', field: 'value' },
 );
 const rows = res[0];
 
-// ---- 2. Parser repr(symbol) ----
 function readString(s, i) {
   let out = '';
   i++;
@@ -73,7 +63,6 @@ function parseVariants(rep) {
   return variants;
 }
 
-// ---- 3. Bản đồ nhóm (tên gốc → category). Tên thiếu → "misc". ----
 const L = (s) => s.trim().split(/\s+/);
 const CAT_LISTS = {
   'greek-lower': L('alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega digamma kai sha'),
@@ -122,7 +111,6 @@ const CAT_ORDER = [
   ['misc', 'Khác'],
 ];
 
-// ---- 4. Gom mục theo category ----
 const byCat = new Map(CAT_ORDER.map(([c]) => [c, []]));
 let total = 0;
 const miscBases = [];
@@ -141,7 +129,6 @@ for (const { name, rep } of rows) {
   total += items.length;
 }
 
-// ---- 5. Emit symbols.ts ----
 const esc = (s) => JSON.stringify(s);
 let body = '';
 for (const [cat, title] of CAT_ORDER) {
@@ -179,8 +166,6 @@ export const SYMBOL_BASE_COUNT = ${rows.length};
 
 writeFileSync(outFile, out, 'utf-8');
 
-// File meta nhỏ (chỉ số đếm) để các trang khác hiển thị "đầy đủ N ký hiệu" mà
-// KHÔNG phải import cả mảng lớn (giữ code-split).
 const metaFile = resolve(here, '../../Frontendtluscholareditor/src/app/features/help/reference/symbolMeta.ts');
 writeFileSync(
   metaFile,

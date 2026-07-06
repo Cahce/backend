@@ -1,11 +1,3 @@
-/**
- * Shared reference resolution for capture use cases.
- *
- * URL → translation-server `/web` (no fallback — OpenAlex can't resolve an
- * arbitrary page). Identifier → translation-server `/search`, falling back to
- * the OpenAlex resolver (DOI/arXiv) when the server is unavailable or finds
- * nothing, so DOI/arXiv capture works without a self-hosted translation-server.
- */
 
 import type {
   TranslationServerPort,
@@ -43,7 +35,6 @@ export async function resolveReferenceItems(
   try {
     return await translation.search(id);
   } catch (err) {
-    // Translation-server down (e.g. no Docker) or no match → try OpenAlex.
     if (
       err instanceof TranslationUnavailableError ||
       err instanceof TranslationNoResultError

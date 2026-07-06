@@ -14,16 +14,10 @@ import {
   type AdminProjectStatsQueryDto,
 } from './Dto.js';
 
-/**
- * Admin project oversight routes (admin only).
- * Registered under prefix `/api/v1/admin` in app.ts.
- */
 export async function adminProjectRoutes(
   app: FastifyInstance,
   container: ProjectsContainer,
 ) {
-  // GET /api/v1/admin/projects/stats — declared BEFORE the dynamic
-  // `/projects/:projectId` route so the literal segment is unambiguous.
   app.get<{ Querystring: AdminProjectStatsQueryDto }>(
     '/projects/stats',
     {
@@ -59,7 +53,6 @@ export async function adminProjectRoutes(
     },
   );
 
-  // GET /api/v1/admin/projects — list all projects with filters
   app.get<{ Querystring: ListAdminProjectsQueryDto }>(
     '/projects',
     {
@@ -111,7 +104,6 @@ export async function adminProjectRoutes(
     },
   );
 
-  // GET /api/v1/admin/projects/:projectId — detail
   app.get<{ Params: { projectId: string } }>(
     '/projects/:projectId',
     {
@@ -145,7 +137,6 @@ export async function adminProjectRoutes(
     },
   );
 
-  // GET /api/v1/admin/projects/:projectId/export — download .zip (admin bypass)
   app.get<{ Params: { projectId: string } }>(
     '/projects/:projectId/export',
     {
@@ -191,10 +182,6 @@ export async function adminProjectRoutes(
   );
 }
 
-/**
- * RFC 5987 / 6266 Content-Disposition (handles Vietnamese filenames).
- * Mirrors the helper in Project/Routes.ts.
- */
 function buildContentDisposition(filename: string): string {
   const asciiFallback = filename
     .replace(/[^\x20-\x7E]/g, '_')

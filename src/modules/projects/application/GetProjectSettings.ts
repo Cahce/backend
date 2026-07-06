@@ -18,14 +18,11 @@ export class GetProjectSettings {
     ) {}
 
     async execute(cmd: GetProjectSettingsCommand): Promise<ProjectSettings> {
-        // Check if project exists and user has access
         const project = await this.projectRepo.findById(cmd.projectId);
         if (!project) {
             throw new Error(ProjectErrors.PROJECT_NOT_FOUND.code);
         }
 
-        // Resolve ProjectMember / advisor relations so collaborators and
-        // advisors are not wrongly denied (inline AuthContext left these undefined).
         const authContext = await buildProjectAuthContext(
             this.projectRepo,
             project,
@@ -37,7 +34,6 @@ export class GetProjectSettings {
             throw new Error(ProjectErrors.UNAUTHORIZED.code);
         }
 
-        // Find or create settings
         return await this.settingsRepo.findOrCreate(cmd.projectId);
     }
 }

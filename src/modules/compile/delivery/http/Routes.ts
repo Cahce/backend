@@ -1,6 +1,3 @@
-/**
- * Compile module HTTP routes
- */
 
 import type { FastifyInstance } from 'fastify';
 import type { CompileContainer } from '../../Container.js';
@@ -14,7 +11,6 @@ import {
 import { CompileJobError } from '../../domain/Errors.js';
 
 export async function compileRoutes(app: FastifyInstance, container: CompileContainer) {
-  // POST /api/v1/projects/:projectId/compile - enqueue compile job
   app.post<{ Params: { projectId: string }; Body: EnqueueCompileBody }>(
     '/projects/:projectId/compile',
     {
@@ -58,7 +54,6 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
         const userId = request.user.sub;
         const userRole = request.user.role;
 
-        // Get main path from settings if not provided
         const entryPath = body.entryPath ?? (await container.getMainPath(projectId));
 
         const job = await container.enqueueCompileJob.execute({
@@ -85,7 +80,6 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
     },
   );
 
-  // GET /api/v1/projects/:projectId/compile - list compile jobs
   app.get<{ Params: { projectId: string } }>(
     '/projects/:projectId/compile',
     {
@@ -145,7 +139,6 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
     },
   );
 
-  // GET /api/v1/projects/:projectId/compile/:jobId - get compile job
   app.get<{ Params: { projectId: string; jobId: string } }>(
     '/projects/:projectId/compile/:jobId',
     {
@@ -206,7 +199,6 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
     },
   );
 
-  // GET /api/v1/projects/:projectId/compile/:jobId/artifact - get artifact
   app.get<{ Params: { projectId: string; jobId: string } }>(
     '/projects/:projectId/compile/:jobId/artifact',
     {

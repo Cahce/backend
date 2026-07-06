@@ -1,8 +1,3 @@
-/**
- * Create Class Use Case
- * 
- * Application layer orchestration for creating a new academic class.
- */
 
 import type { ClassRepo } from '../../domain/Class/Ports.js';
 import type { MajorRepo } from '../../domain/Major/Ports.js';
@@ -19,21 +14,18 @@ export class CreateClassUseCase {
 
   async execute(data: CreateClassData): Promise<Result<Class>> {
     try {
-      // Validate parent major exists
       const major = await this.majorRepo.findById(data.majorId);
       if (!major) {
         const error = ClassErrors.MAJOR_NOT_FOUND;
         return failure(error.code, error.message);
       }
 
-      // Check for duplicate code
       const existing = await this.classRepo.findByCode(data.code);
       if (existing) {
         const error = ClassErrors.DUPLICATE_CODE;
         return failure(error.code, error.message);
       }
 
-      // Create class
       const classEntity = await this.classRepo.create(data);
       return success(classEntity);
     } catch (error) {

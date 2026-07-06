@@ -20,9 +20,6 @@ import {
     MessageResponseJsonSchema,
 } from "./Dto.js";
 
-/**
- * Teacher Management module HTTP routes
- */
 export async function teacherManagementRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
     const createTeacherUseCase = container.createTeacherProfileUseCase;
@@ -34,7 +31,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
     const unlinkAccountUseCase = container.unlinkAccountFromTeacherUseCase;
     const importTeachers = container.importTeachers;
 
-    // POST /api/v1/admin/teachers - create teacher
     app.post<{ Body: CreateTeacherRequestDto }>(
         "/teachers",
         {
@@ -97,7 +93,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/teachers - list teachers with pagination and filters
     app.get<{ Querystring: ListTeachersQueryDto }>(
         "/teachers",
         {
@@ -156,7 +151,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/teachers/:id - get teacher by id
     app.get<{ Params: { id: string } }>(
         "/teachers/:id",
         {
@@ -212,7 +206,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // PUT /api/v1/admin/teachers/:id - update teacher
     app.put<{ Params: { id: string }; Body: UpdateTeacherRequestDto }>(
         "/teachers/:id",
         {
@@ -289,7 +282,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // DELETE /api/v1/admin/teachers/:id - delete teacher
     app.delete<{ Params: { id: string } }>(
         "/teachers/:id",
         {
@@ -351,7 +343,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/admin/teachers/:id/link-account - link account to teacher
     app.post<{ Params: { id: string }; Body: LinkAccountRequestDto }>(
         "/teachers/:id/link-account",
         {
@@ -433,7 +424,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // DELETE /api/v1/admin/teachers/:id/unlink-account - unlink account from teacher
     app.delete<{ Params: { id: string } }>(
         "/teachers/:id/unlink-account",
         {
@@ -495,7 +485,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/admin/teachers/import - import teachers from XLSX/CSV file
     app.post(
         "/teachers/import",
         {
@@ -534,7 +523,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Validate MIME type (accept both XLSX and CSV)
                 const mimeValidation = FileParser.validateMimeType(data.mimetype);
                 if (!mimeValidation.valid) {
                     return reply.code(400).send({
@@ -547,7 +535,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
 
                 const buffer = await data.toBuffer();
                 
-                // Parse file (auto-detect XLSX or CSV)
                 const parsed = FileParser.parseSpreadsheet(buffer, data.mimetype);
                 const result = await importTeachers.execute(parsed.rows);
 
@@ -563,7 +550,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/teachers/import/template - download XLSX/CSV template
     app.get(
         "/teachers/import/template",
         {
@@ -593,8 +579,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
             const query = request.query as { format?: "xlsx" | "csv" };
             const format = query.format || "xlsx";
 
-            // No "Mã GV" column on purpose — matches "Mẫu Import Giảng viên.xlsx".
-            // ImportTeachers auto-generates teacherCode from the dominant DB pattern.
             const headers = [
                 "STT",
                 "Họ và Tên",
@@ -634,9 +618,6 @@ export async function teacherManagementRoutes(app: FastifyInstance) {
     );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
     switch (errorCode) {
         case "VALIDATION_ERROR":

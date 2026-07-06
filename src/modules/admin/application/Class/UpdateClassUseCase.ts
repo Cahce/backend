@@ -1,8 +1,3 @@
-/**
- * Update Class Use Case
- * 
- * Application layer orchestration for updating an existing academic class.
- */
 
 import type { ClassRepo } from '../../domain/Class/Ports.js';
 import type { MajorRepo } from '../../domain/Major/Ports.js';
@@ -22,14 +17,12 @@ export class UpdateClassUseCase {
     data: UpdateClassData
   ): Promise<Result<Class>> {
     try {
-      // Check if class exists
       const existing = await this.classRepo.findById(id);
       if (!existing) {
         const error = ClassErrors.CLASS_NOT_FOUND;
         return failure(error.code, error.message);
       }
 
-      // Validate parent major if majorId is being changed
       if (data.majorId && data.majorId !== existing.majorId) {
         const major = await this.majorRepo.findById(data.majorId);
         if (!major) {
@@ -38,7 +31,6 @@ export class UpdateClassUseCase {
         }
       }
 
-      // Check for duplicate code if code is being changed
       if (data.code && data.code !== existing.code) {
         const duplicate = await this.classRepo.findByCode(data.code);
         if (duplicate) {
@@ -47,7 +39,6 @@ export class UpdateClassUseCase {
         }
       }
 
-      // Update class
       const classEntity = await this.classRepo.update(id, data);
       return success(classEntity);
     } catch (error) {

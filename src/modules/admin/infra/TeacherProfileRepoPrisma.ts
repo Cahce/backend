@@ -1,9 +1,3 @@
-/**
- * Prisma implementation of Teacher Profile repository
- * 
- * Infrastructure layer implementation of TeacherProfileRepo port.
- * Handles all Teacher Profile data access operations using Prisma.
- */
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import type { TeacherProfileRepo } from '../domain/TeacherManagement/Ports.js';
@@ -21,15 +15,9 @@ import type {
 import type { PaginatedResult } from '../application/Types.js';
 import { Prisma } from '../../../generated/prisma/index.js';
 
-/**
- * Prisma-based Teacher Profile repository implementation
- */
 export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * List every existing teacherCode (used by the import auto-code generator).
-   */
   async listAllTeacherCodes(): Promise<string[]> {
     const rows = await this.prisma.teacher.findMany({
       select: { teacherCode: true },
@@ -37,9 +25,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     return rows.map((r) => r.teacherCode);
   }
 
-  /**
-   * Create a new Teacher Profile
-   */
   async create(data: CreateTeacherData): Promise<TeacherProfile> {
     try {
       const teacher = await this.prisma.teacher.create({
@@ -59,14 +44,11 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
 
       return this.mapToTeacherProfile(teacher);
     } catch (error) {
-      // Handle Prisma unique constraint violation
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - teacherCode or accountId already exists
           throw new Error('DUPLICATE_TEACHER_CODE');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation - departmentId or accountId does not exist
           throw new Error('DEPARTMENT_NOT_FOUND');
         }
       }
@@ -74,9 +56,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     }
   }
 
-  /**
-   * Find Teacher Profile by ID with enriched context
-   */
   async findById(id: string): Promise<TeacherProfileWithContext | null> {
     const teacher = await this.prisma.teacher.findUnique({
       where: { id },
@@ -104,10 +83,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     return this.mapToTeacherProfileWithContext(teacher);
   }
 
-  /**
-   * Find Teacher Profile by teacher code
-   * Used for duplicate code checking during create/update
-   */
   async findByTeacherCode(code: string): Promise<TeacherProfile | null> {
     const teacher = await this.prisma.teacher.findUnique({
       where: { teacherCode: code },
@@ -120,9 +95,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     return this.mapToTeacherProfile(teacher);
   }
 
-  /**
-   * Find Teacher Profile by account ID
-   */
   async findByAccountId(accountId: string): Promise<TeacherProfile | null> {
     const teacher = await this.prisma.teacher.findUnique({
       where: { accountId },
@@ -135,16 +107,11 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     return this.mapToTeacherProfile(teacher);
   }
 
-  /**
-   * Find all Teacher Profiles with optional filters and enriched context
-   * Results are ordered by updatedAt descending (newest first)
-   */
   async findAll(filters: TeacherFilters): Promise<PaginatedResult<TeacherProfileWithContext>> {
     const page = filters.page ?? 1;
     const pageSize = Math.min(filters.pageSize ?? 20, 100);
     const skip = (page - 1) * pageSize;
 
-    // Build where clause for search and filters
     const whereClause: Prisma.TeacherWhereInput = {};
 
     if (filters.search) {
@@ -168,7 +135,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
       whereClause.accountId = filters.hasAccount ? { not: null } : null;
     }
 
-    // Execute query with pagination, includes, and default ordering
     const [items, total] = await Promise.all([
       this.prisma.teacher.findMany({
         where: whereClause,
@@ -187,7 +153,7 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
             },
           },
         },
-        orderBy: { updatedAt: 'desc' }, // Default ordering: newest first
+        orderBy: { updatedAt: 'desc' },
         skip,
         take: pageSize,
       }),
@@ -203,9 +169,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     };
   }
 
-  /**
-   * Update an existing Teacher Profile
-   */
   async update(id: string, data: UpdateTeacherData): Promise<TeacherProfile> {
     try {
       const teacher = await this.prisma.teacher.update({
@@ -225,18 +188,14 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
 
       return this.mapToTeacherProfile(teacher);
     } catch (error) {
-      // Handle Prisma unique constraint violation
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - teacherCode already exists
           throw new Error('DUPLICATE_TEACHER_CODE');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation - departmentId does not exist
           throw new Error('DEPARTMENT_NOT_FOUND');
         }
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('TEACHER_NOT_FOUND');
         }
       }
@@ -244,10 +203,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     }
   }
 
-  /**
-   * Delete a Teacher Profile
-   * Should only be called after checking deletion policies
-   */
   async delete(id: string): Promise<void> {
     try {
       await this.prisma.teacher.delete({
@@ -256,11 +211,9 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('TEACHER_NOT_FOUND');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation
           throw new Error('HAS_LINKED_ENTITIES');
         }
       }
@@ -268,10 +221,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     }
   }
 
-  /**
-   * Check if Teacher has any active advisor assignments
-   * Used by deletion policy to prevent orphaned data
-   */
   async hasAdvisorAssignments(id: string): Promise<boolean> {
     const count = await this.prisma.projectAdvisor.count({
       where: { teacherId: id },
@@ -279,9 +228,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     return count > 0;
   }
 
-  /**
-   * Link Teacher Profile to Account
-   */
   async linkToAccount(teacherId: string, accountId: string): Promise<void> {
     try {
       await this.prisma.teacher.update({
@@ -291,15 +237,12 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - accountId already linked
           throw new Error('ACCOUNT_ALREADY_LINKED');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation - accountId does not exist
           throw new Error('ACCOUNT_NOT_FOUND');
         }
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('TEACHER_NOT_FOUND');
         }
       }
@@ -307,9 +250,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     }
   }
 
-  /**
-   * Unlink Teacher Profile from Account
-   */
   async unlinkFromAccount(teacherId: string): Promise<void> {
     try {
       await this.prisma.teacher.update({
@@ -319,7 +259,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('TEACHER_NOT_FOUND');
         }
       }
@@ -327,15 +266,7 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     }
   }
 
-  /**
-   * Bulk import teachers from Excel
-   * Creates or updates teachers based on mode
-   * 
-   * NOTE: This is a placeholder implementation
-   * Full Excel import functionality will be implemented after CRUD is stable
-   */
   async bulkUpsert(_teachers: TeacherImportRow[], _mode: ImportMode): Promise<ImportResult> {
-    // Placeholder implementation
     return {
       totalRows: 0,
       created: 0,
@@ -346,9 +277,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     };
   }
 
-  /**
-   * Map Prisma Teacher model to domain TeacherProfile type
-   */
   private mapToTeacherProfile(prismaTeacher: {
     id: string;
     accountId: string | null;
@@ -381,9 +309,6 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     };
   }
 
-  /**
-   * Map Prisma Teacher with includes to domain TeacherProfileWithContext type
-   */
   private mapToTeacherProfileWithContext(prismaTeacher: {
     id: string;
     accountId: string | null;

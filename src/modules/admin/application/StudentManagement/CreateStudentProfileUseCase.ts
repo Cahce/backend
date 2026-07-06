@@ -1,5 +1,3 @@
-// Use case for creating a student profile
-// No framework dependencies
 
 import type { Result } from '../Types.js';
 import type { PasswordHasher } from '../../domain/shared/PasswordHasher.js';

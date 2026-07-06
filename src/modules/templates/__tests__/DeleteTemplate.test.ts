@@ -1,6 +1,3 @@
-/**
- * Unit Tests for DeleteTemplateUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -36,7 +33,6 @@ describe('DeleteTemplateUseCase', () => {
 
     assert.strictEqual(result.success, true);
 
-    // Verify template was deleted
     const deletedTemplate = await mockRepo.findById('template-1');
     assert.strictEqual(deletedTemplate, null);
   });
@@ -73,7 +69,6 @@ describe('DeleteTemplateUseCase', () => {
       assert.ok(result.error.message.includes('đang được sử dụng'));
     }
 
-    // Verify template was NOT deleted
     const template2 = await mockRepo.findById('template-1');
     assert.notStrictEqual(template2, null);
   });
@@ -118,7 +113,6 @@ describe('DeleteTemplateUseCase', () => {
 
     assert.strictEqual(result.success, true);
 
-    // Verify template was deleted
     const deletedTemplate = await mockRepo.findById('template-1');
     assert.strictEqual(deletedTemplate, null);
   });

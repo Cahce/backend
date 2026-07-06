@@ -1,6 +1,3 @@
-/**
- * Unit Tests for CreateFilesFromTemplateUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -77,7 +74,7 @@ describe('CreateFilesFromTemplateUseCase', () => {
       const file = result.data[0];
       assert.strictEqual(file.sizeBytes, Buffer.byteLength('test content', 'utf8'));
       assert.ok(file.sha256);
-      assert.strictEqual(file.sha256.length, 64); // SHA256 hex length
+      assert.strictEqual(file.sha256.length, 64);
     }
   });
 
@@ -100,7 +97,6 @@ describe('CreateFilesFromTemplateUseCase', () => {
 
     assert.strictEqual(result.success, true);
     if (result.success) {
-      // Stage 1: all files should use inline storage
       assert.ok(result.data[0].storageMode);
     }
   });
@@ -209,7 +205,6 @@ describe('CreateFilesFromTemplateUseCase', () => {
   });
 
   it('should return error when file creation fails', async () => {
-    // Create a file that already exists
     mockFileRepo.setFiles([
       {
         id: 'existing-file',

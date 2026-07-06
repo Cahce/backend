@@ -1,23 +1,12 @@
-/**
- * Mock File Repository for Unit Testing
- * 
- * Test double that implements FileRepo interface for isolated testing.
- */
 
 import type { FileRepo } from '../../domain/ProjectFile/Ports.js';
 import type { File, FileMetadata, FileKind, StorageMode } from '../../domain/ProjectFile/Types.js';
 import { StorageMode as StorageModeEnum } from '../../domain/ProjectFile/Types.js';
 
-/**
- * Mock implementation of FileRepo for unit tests
- */
 export class MockFileRepo implements FileRepo {
   private files: Map<string, File> = new Map();
   private nextId = 1;
 
-  /**
-   * Configure mock to return specific files
-   */
   setFiles(files: File[]): void {
     this.files.clear();
     for (const file of files) {
@@ -26,9 +15,6 @@ export class MockFileRepo implements FileRepo {
     }
   }
 
-  /**
-   * Clear all mock data
-   */
   clear(): void {
     this.files.clear();
     this.nextId = 1;
@@ -46,7 +32,6 @@ export class MockFileRepo implements FileRepo {
   }): Promise<File> {
     const key = `${data.projectId}:${data.path}`;
     
-    // Check if file already exists
     if (this.files.has(key)) {
       throw new Error('FILE_ALREADY_EXISTS');
     }

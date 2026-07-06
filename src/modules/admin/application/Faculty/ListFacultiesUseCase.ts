@@ -1,9 +1,3 @@
-/**
- * List Faculties Use Case
- * 
- * Application layer orchestration for listing faculties with pagination and search.
- * Pagination sanitization is handled at delivery layer; this use case applies safe defaults.
- */
 
 import type { FacultyRepo } from '../../domain/Faculty/Ports.js';
 import type { Faculty, FacultyFilters } from '../../domain/Faculty/Types.js';
@@ -19,7 +13,6 @@ export class ListFacultiesUseCase {
 
   async execute(filters: FacultyFilters): Promise<Result<PaginatedResult<Faculty>>> {
     try {
-      // Apply safe pagination defaults
       const page = Math.max(filters.page ?? DEFAULT_PAGE, 1);
       const pageSize = Math.min(
         Math.max(filters.pageSize ?? DEFAULT_PAGE_SIZE, 1),

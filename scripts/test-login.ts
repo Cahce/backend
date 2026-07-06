@@ -1,7 +1,3 @@
-/**
- * Login API Test Script
- * Tests all login scenarios including success and error cases
- */
 
 interface TestCase {
     name: string;
@@ -12,7 +8,6 @@ interface TestCase {
 }
 
 const testCases: TestCase[] = [
-    // Success cases
     {
         name: "Student login with valid credentials",
         email: "2251172560@e.tlu.edu.vn",
@@ -31,7 +26,6 @@ const testCases: TestCase[] = [
         password: "123456",
         expectedStatus: 200,
     },
-    // Error cases
     {
         name: "Login with unsupported email domain",
         email: "test@gmail.com",

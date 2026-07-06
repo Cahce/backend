@@ -1,6 +1,3 @@
-/**
- * Test Runner for Projects Module Unit Tests
- */
 
 import { run } from 'node:test';
 import { spec as specReporter } from 'node:test/reporters';

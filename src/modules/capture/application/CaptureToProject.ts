@@ -1,12 +1,3 @@
-/**
- * Capture To Project Use Case
- *
- * Resolves a reference (URL/identifier/item), then saves it to the project's
- * `.bib` file and/or the user's Zotero library, and returns the citation key
- * so the editor can insert `#cite(<key>)`.
- *
- * Mirrors the dedupe/merge/write flow of `openalex/ImportToBibFile`.
- */
 
 import type {
   TranslationServerPort,
@@ -122,7 +113,6 @@ export class CaptureToProject {
     return { citationKey, bibSaved, zoteroItemKey, skippedDuplicate };
   }
 
-  /** Resolve the single capture source into one item. */
   private async resolveItem(
     command: CaptureToProjectCommand
   ): Promise<CaptureItem> {

@@ -1,11 +1,3 @@
-/**
- * Update Own Profile Use Case
- *
- * Lets the authenticated user edit the personal fields of their own
- * student/teacher profile. Depends only on the IUserProfileMutation domain
- * port — no Prisma in application. Identity/academic fields are not editable
- * here (admin-managed).
- */
 
 import type {
     IUserProfileMutation,

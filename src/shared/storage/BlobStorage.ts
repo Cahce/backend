@@ -7,10 +7,6 @@ export interface BlobMetadata {
 }
 
 export interface BlobStorage {
-    /**
-     * Persist a stream and return content-addressable metadata.
-     * The implementation MUST compute sha256 while streaming.
-     */
     put(
         key: string,
         body: Readable | Buffer,

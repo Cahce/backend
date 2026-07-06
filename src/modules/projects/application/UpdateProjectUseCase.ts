@@ -1,8 +1,3 @@
-/**
- * Update Project Use Case
- * 
- * Application layer orchestration for updating a project.
- */
 
 import type { ProjectRepo } from '../domain/Project/Ports.js';
 import type { Project, UpdateProjectData } from '../domain/Project/Types.js';
@@ -12,9 +7,6 @@ import { buildProjectAuthContext } from './ProjectAuthContext.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
-/**
- * Command for updating a project
- */
 export interface UpdateProjectCommand {
   projectId: string;
   title?: string;
@@ -23,24 +15,17 @@ export interface UpdateProjectCommand {
   userRole: 'admin' | 'teacher' | 'student';
 }
 
-/**
- * Update Project Use Case
- * 
- * Updates a project and enforces authorization.
- */
 export class UpdateProjectUseCase {
   constructor(private readonly projectRepo: ProjectRepo) {}
 
   async execute(command: UpdateProjectCommand): Promise<Result<Project>> {
     try {
-      // Find project by ID
       const project = await this.projectRepo.findById(command.projectId);
 
       if (!project) {
         return failure(ProjectErrors.PROJECT_NOT_FOUND.code, ProjectErrors.PROJECT_NOT_FOUND.message);
       }
 
-      // Enforce authorization (resolves ProjectMember / advisor relations).
       const authContext: AuthContext = await buildProjectAuthContext(
         this.projectRepo,
         project,
@@ -52,21 +37,18 @@ export class UpdateProjectUseCase {
         return failure(ProjectErrors.UNAUTHORIZED.code, ProjectErrors.UNAUTHORIZED.message);
       }
 
-      // Validate title if provided
       if (command.title !== undefined) {
         if (!command.title || command.title.trim().length === 0) {
           return failure(ProjectErrors.VALIDATION_ERROR.code, 'Tiêu đề dự án không được để trống');
         }
       }
 
-      // Update project data
       const data: UpdateProjectData = {
         projectId: command.projectId,
         title: command.title?.trim(),
-        category: command.category as any, // Type assertion for enum
+        category: command.category as any,
       };
 
-      // Update project via repository
       const updatedProject = await this.projectRepo.update(data);
       return success(updatedProject);
     } catch (error) {

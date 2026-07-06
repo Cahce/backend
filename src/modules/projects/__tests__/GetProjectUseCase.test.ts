@@ -1,6 +1,3 @@
-/**
- * Unit Tests for GetProjectUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -108,7 +105,7 @@ describe('GetProjectUseCase', () => {
 
     const command = {
       projectId: 'project-1',
-      userId: 'user-456', // Different user
+      userId: 'user-456',
       userRole: 'student' as const,
     };
 

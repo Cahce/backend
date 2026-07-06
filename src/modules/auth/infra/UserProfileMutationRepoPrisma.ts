@@ -1,11 +1,3 @@
-/**
- * Prisma implementation of the user-profile mutation port.
- *
- * Updates the authenticated user's OWN role-specific profile (student/teacher)
- * by their unique `accountId`. Only personal fields are writable; identity and
- * academic fields stay admin-managed. Throws `PROFILE_NOT_LINKED` when the
- * account has no linked profile record (Prisma P2025).
- */
 
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import { Prisma } from "../../../generated/prisma/index.js";
@@ -24,8 +16,6 @@ export class UserProfileMutationRepoPrisma implements IUserProfileMutation {
         role: UserRole,
         data: UpdateOwnProfileData,
     ): Promise<OwnProfilePersonal> {
-        // Only fields explicitly present in the patch are written, so omitting a
-        // field leaves it unchanged (passing null clears it).
         const patch = {
             ...(data.gender !== undefined && { gender: data.gender }),
             ...(data.dateOfBirth !== undefined && { dateOfBirth: data.dateOfBirth }),
@@ -55,7 +45,6 @@ export class UserProfileMutationRepoPrisma implements IUserProfileMutation {
                     select,
                 });
             }
-            // Admin (or any other role) has no personal profile to edit.
             throw new Error("PROFILE_NOT_EDITABLE");
         } catch (error) {
             if (

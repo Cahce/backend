@@ -1,7 +1,3 @@
-/**
- * Seed Test Accounts Script
- * Creates teacher and student test accounts for authorization testing
- */
 
 import dotenv from "dotenv";
 import { PrismaClient } from "../src/generated/prisma/index.js";
@@ -11,7 +7,6 @@ import bcrypt from "bcryptjs";
 
 dotenv.config();
 
-// Create PostgreSQL connection pool
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is not set");
@@ -25,7 +20,6 @@ async function seedTestAccounts() {
   console.log("🌱 Seeding test accounts...\n");
 
   try {
-    // Check if accounts already exist
     const existingTeacher = await prisma.user.findUnique({
       where: { email: "kieutuandung@tlu.edu.vn" },
     });
@@ -34,7 +28,6 @@ async function seedTestAccounts() {
       where: { email: "2251172560@e.tlu.edu.vn" },
     });
 
-    // Create teacher account if doesn't exist
     if (!existingTeacher) {
       const hashedPassword = await bcrypt.hash("123456", 10);
       await prisma.user.create({
@@ -50,7 +43,6 @@ async function seedTestAccounts() {
       console.log("ℹ️  Teacher account already exists: kieutuandung@tlu.edu.vn");
     }
 
-    // Create student account if doesn't exist
     if (!existingStudent) {
       const hashedPassword = await bcrypt.hash("123456", 10);
       await prisma.user.create({
@@ -66,7 +58,6 @@ async function seedTestAccounts() {
       console.log("ℹ️  Student account already exists: 2251172560@e.tlu.edu.vn");
     }
 
-    // List all users
     console.log("\n📋 All users in database:");
     const allUsers = await prisma.user.findMany({
       select: {

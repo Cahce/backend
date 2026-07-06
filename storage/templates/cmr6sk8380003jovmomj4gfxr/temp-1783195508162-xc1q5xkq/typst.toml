@@ -1,0 +1,8 @@
+# typst.toml — Cấu hình dự án Typst.
+[package]
+name = "mau-datn-phanmem"
+version = "1.0.0"
+entrypoint = "main.typ"
+authors = ["TLU Scholar Editor"]
+license = "MIT"
+description = "Mẫu Đồ án tốt nghiệp dạng xây dựng phần mềm/website — Trường Đại học Thủy lợi (bìa, tờ nhiệm vụ, mở đầu, 4 chương, kết luận, TLTK IEEE, phụ lục)."

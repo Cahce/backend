@@ -1,6 +1,3 @@
-/**
- * Compile module DTOs
- */
 
 import { z } from 'zod';
 import { ZMSG } from '../../../../shared/validation/ZodMessages.js';
@@ -13,7 +10,6 @@ export const enqueueCompileBodySchema = z.object({
 
 export type EnqueueCompileBody = z.infer<typeof enqueueCompileBodySchema>;
 
-// Wire shape of a single diagnostic
 export interface CompileDiagnosticDto {
   severity: 'error' | 'warning' | 'hint' | 'info';
   message: string;
@@ -36,7 +32,6 @@ export interface CompileJobResponse {
   updatedAt: string;
 }
 
-// JSON schemas for Swagger
 export const EnqueueCompileBodyJsonSchema = {
   type: 'object',
   properties: {

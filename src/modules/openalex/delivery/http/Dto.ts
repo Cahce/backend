@@ -1,18 +1,9 @@
-/**
- * OpenAlex HTTP DTOs
- * 
- * Request/response validation schemas using Zod.
- */
 
 import { z } from "zod";
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 
-// Extend Zod with OpenAPI support
 extendZodWithOpenApi(z);
 
-/**
- * Search Works Query Parameters
- */
 export const SearchWorksQuerySchema = z.object({
   search: z.string().min(1).max(200).openapi({
     description: "Search query",
@@ -40,9 +31,6 @@ export const SearchWorksQuerySchema = z.object({
 
 export type SearchWorksQuery = z.infer<typeof SearchWorksQuerySchema>;
 
-/**
- * OpenAlex Author DTO
- */
 export const OpenAlexAuthorDtoSchema = z.object({
   name: z.string().openapi({ description: "Author name" }),
   position: z.string().openapi({ description: "Author position (first, middle, last)" }),
@@ -50,9 +38,6 @@ export const OpenAlexAuthorDtoSchema = z.object({
 
 export type OpenAlexAuthorDto = z.infer<typeof OpenAlexAuthorDtoSchema>;
 
-/**
- * OpenAlex Work DTO
- */
 export const OpenAlexWorkDtoSchema = z.object({
   id: z.string().openapi({ description: "OpenAlex work ID (e.g., W12345)" }),
   doi: z.string().nullable().openapi({ description: "DOI" }),
@@ -73,18 +58,12 @@ export const OpenAlexWorkDtoSchema = z.object({
 
 export type OpenAlexWorkDto = z.infer<typeof OpenAlexWorkDtoSchema>;
 
-/**
- * Work ID Path Parameter
- */
 export const WorkIdParamSchema = z.object({
   openAlexId: z.string().openapi({ description: "OpenAlex work ID" }),
 });
 
 export type WorkIdParam = z.infer<typeof WorkIdParamSchema>;
 
-/**
- * Import To Bib File Request
- */
 export const ImportToBibFileBodySchema = z.object({
   openAlexIds: z.array(z.string()).min(1).max(50).openapi({
     description: "OpenAlex work IDs to import",
@@ -109,18 +88,12 @@ export const ImportToBibFileBodySchema = z.object({
 
 export type ImportToBibFileBody = z.infer<typeof ImportToBibFileBodySchema>;
 
-/**
- * Project ID Path Parameter
- */
 export const ProjectIdParamSchema = z.object({
   projectId: z.string().openapi({ description: "Project ID" }),
 });
 
 export type ProjectIdParam = z.infer<typeof ProjectIdParamSchema>;
 
-/**
- * Import Response - detailed status for each work
- */
 export const ImportResponseSchema = z.object({
   imported: z.array(z.object({
     openAlexId: z.string().openapi({ description: "OpenAlex work ID" }),
@@ -138,9 +111,6 @@ export const ImportResponseSchema = z.object({
 
 export type ImportResponse = z.infer<typeof ImportResponseSchema>;
 
-/**
- * API Error Response
- */
 export const ApiErrorSchema = z.object({
   error: z.object({
     code: z.string().openapi({ description: "Error code" }),
@@ -150,12 +120,6 @@ export const ApiErrorSchema = z.object({
 
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- * Convert Zod schemas to JSON Schema for Fastify validation
- */
 
 import { zodToJsonSchema } from "zod-to-json-schema";
 

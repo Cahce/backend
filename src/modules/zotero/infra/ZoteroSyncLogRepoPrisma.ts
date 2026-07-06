@@ -1,22 +1,11 @@
-/**
- * Zotero Sync Log Repository (Prisma)
- * 
- * Infrastructure adapter for ZoteroSyncLog persistence.
- */
 
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { ZoteroSyncLogRepo } from "../domain/Ports.js";
 import type { ZoteroSyncLogRecord } from "../domain/Types.js";
 
-/**
- * Prisma implementation of ZoteroSyncLogRepo
- */
 export class ZoteroSyncLogRepoPrisma implements ZoteroSyncLogRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Create a new sync log entry
-   */
   async create(args: {
     connectionId: string;
     projectId?: string;
@@ -35,9 +24,6 @@ export class ZoteroSyncLogRepoPrisma implements ZoteroSyncLogRepo {
     return { id: log.id };
   }
 
-  /**
-   * Mark sync as running
-   */
   async markRunning(id: string): Promise<void> {
     await this.prisma.zoteroSyncLog.update({
       where: { id },
@@ -48,9 +34,6 @@ export class ZoteroSyncLogRepoPrisma implements ZoteroSyncLogRepo {
     });
   }
 
-  /**
-   * Mark sync as successful
-   */
   async markSuccess(id: string, itemsSynced: number): Promise<void> {
     await this.prisma.zoteroSyncLog.update({
       where: { id },
@@ -62,9 +45,6 @@ export class ZoteroSyncLogRepoPrisma implements ZoteroSyncLogRepo {
     });
   }
 
-  /**
-   * Mark sync as failed
-   */
   async markFailed(id: string, errorMessage: string): Promise<void> {
     await this.prisma.zoteroSyncLog.update({
       where: { id },
@@ -76,9 +56,6 @@ export class ZoteroSyncLogRepoPrisma implements ZoteroSyncLogRepo {
     });
   }
 
-  /**
-   * List sync logs for a project
-   */
   async listByProject(projectId: string, limit: number): Promise<ZoteroSyncLogRecord[]> {
     const logs = await this.prisma.zoteroSyncLog.findMany({
       where: { projectId },

@@ -1,14 +1,3 @@
-/**
- * Prisma-backed compile access policy.
- *
- * Implements the read policy (view compile jobs/artifacts: owner or any member)
- * and the official-compile gate (enqueue/export: owner or editor member; admin
- * oversight + viewers denied), reusing the projects-domain access resolver as the
- * single source of truth.
- *
- * Moved out of the compile composition root (Container.ts) so DB queries live in
- * infra, not in wiring code.
- */
 
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { ProjectAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
@@ -24,7 +13,6 @@ export class PrismaCompileAccessRepository
 {
     constructor(private readonly prisma: PrismaClient) {}
 
-    /** READ access (view compile jobs/artifacts): owner or any member. */
     async requireProjectAccess(projectId: string, userId: string): Promise<void> {
         const project = await this.prisma.project.findUnique({
             where: { id: projectId },
@@ -44,11 +32,6 @@ export class PrismaCompileAccessRepository
         }
     }
 
-    /**
-     * OFFICIAL compile/export: requires write-level access (owner or editor
-     * member). Admin oversight (non-owner) and viewers are denied. Throws a
-     * CompileJobError so the route maps it to a clean 403/404.
-     */
     async requireOfficialCompileAccess(
         projectId: string,
         userId: string,

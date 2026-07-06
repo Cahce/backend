@@ -1,29 +1,13 @@
-/**
- * OpenAlex Domain Types
- *
- * Raw API shapes from OpenAlex API.
- * No framework dependencies.
- */
 
-/**
- * Import status for an OpenAlex → bibliography import attempt.
- *
- * Domain-owned union (NOT the Prisma-generated enum) so the domain layer stays
- * free of framework imports. The infra repository maps this to/from the Prisma
- * `OpenAlexImportStatus` enum at the persistence boundary.
- */
 export type OpenAlexImportStatus = "imported" | "skipped_duplicate" | "failed";
 
-/**
- * OpenAlex Author
- */
 export interface OpenAlexAuthor {
   author: {
     id: string;
     display_name: string;
     orcid?: string;
   };
-  author_position: string; // "first", "middle", "last"
+  author_position: string;
   institutions: Array<{
     id: string;
     display_name: string;
@@ -31,22 +15,17 @@ export interface OpenAlexAuthor {
   }>;
 }
 
-/**
- * OpenAlex Work (raw API shape)
- */
 export interface OpenAlexWork {
-  id: string; // "W12345"
+  id: string;
   doi?: string;
   title?: string;
   display_name?: string;
   publication_year?: number;
   publication_date?: string;
-  type?: string; // "journal-article", "book", etc.
+  type?: string;
   
-  // Authors
   authorships?: OpenAlexAuthor[];
   
-  // Publication venue
   primary_location?: {
     source?: {
       id?: string;
@@ -64,7 +43,6 @@ export interface OpenAlexWork {
     license?: string;
   };
   
-  // Bibliographic info
   biblio?: {
     volume?: string;
     issue?: string;
@@ -72,7 +50,6 @@ export interface OpenAlexWork {
     last_page?: string;
   };
   
-  // Open access
   open_access?: {
     is_oa?: boolean;
     oa_status?: string;
@@ -80,13 +57,10 @@ export interface OpenAlexWork {
     any_repository_has_fulltext?: boolean;
   };
   
-  // Abstract
   abstract_inverted_index?: Record<string, number[]>;
   
-  // Metrics
   cited_by_count?: number;
   
-  // Other metadata
   language?: string;
   keywords?: Array<{
     keyword: string;
@@ -101,9 +75,6 @@ export interface OpenAlexWork {
   }>;
 }
 
-/**
- * OpenAlex API pagination metadata
- */
 export interface OpenAlexPaginationMeta {
   count: number;
   db_response_time_ms: number;
@@ -111,9 +82,6 @@ export interface OpenAlexPaginationMeta {
   per_page: number;
 }
 
-/**
- * OpenAlex search filters
- */
 export interface OpenAlexSearchFilters {
   search?: string;
   yearFrom?: number;

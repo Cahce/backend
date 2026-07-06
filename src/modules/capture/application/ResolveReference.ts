@@ -1,10 +1,3 @@
-/**
- * Resolve Reference Use Case
- *
- * Previews the metadata for a URL or identifier. Read-only: does NOT write to
- * any project file or library. Identifier resolution falls back to OpenAlex
- * (DOI/arXiv) when the translation-server is unavailable.
- */
 
 import type {
   TranslationServerPort,

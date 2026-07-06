@@ -1,12 +1,3 @@
-/**
- * Unit Tests for FileKindPolicy
- * 
- * Tests all pure functions in FileKindPolicy module:
- * - detectKindFromPath (13 cases: one per extension + no extension)
- * - isBinaryKind (covering all 11 kinds)
- * - isCompilationInput (covering all 11 kinds)
- * - getMimeTypeForKind (covering all 11 kinds)
- */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
@@ -25,7 +16,7 @@ describe('FileKindPolicy', () => {
     it('should detect typst files', () => {
       assert.strictEqual(detectKindFromPath('main.typ'), FileKind.Typst);
       assert.strictEqual(detectKindFromPath('chapters/intro.typ'), FileKind.Typst);
-      assert.strictEqual(detectKindFromPath('MAIN.TYP'), FileKind.Typst); // case insensitive
+      assert.strictEqual(detectKindFromPath('MAIN.TYP'), FileKind.Typst);
     });
 
     it('should detect bib files', () => {
@@ -173,7 +164,7 @@ describe('FileKindPolicy', () => {
       assert.strictEqual(getMimeTypeForKind(FileKind.Image, 'gif'), 'image/gif');
       assert.strictEqual(getMimeTypeForKind(FileKind.Image, 'webp'), 'image/webp');
       assert.strictEqual(getMimeTypeForKind(FileKind.Image, 'jpg'), 'image/jpeg');
-      assert.strictEqual(getMimeTypeForKind(FileKind.Image), 'image/jpeg'); // default
+      assert.strictEqual(getMimeTypeForKind(FileKind.Image), 'image/jpeg');
     });
 
     it('should return correct MIME type for vector kind', () => {
@@ -185,7 +176,7 @@ describe('FileKindPolicy', () => {
       assert.strictEqual(getMimeTypeForKind(FileKind.Font, 'otf'), 'font/otf');
       assert.strictEqual(getMimeTypeForKind(FileKind.Font, 'woff'), 'font/woff');
       assert.strictEqual(getMimeTypeForKind(FileKind.Font, 'woff2'), 'font/woff2');
-      assert.strictEqual(getMimeTypeForKind(FileKind.Font), 'font/ttf'); // default
+      assert.strictEqual(getMimeTypeForKind(FileKind.Font), 'font/ttf');
     });
 
     it('should return correct MIME type for pdf kind', () => {
@@ -200,7 +191,7 @@ describe('FileKindPolicy', () => {
       assert.strictEqual(getMimeTypeForKind(FileKind.Config, 'json'), 'application/json');
       assert.strictEqual(getMimeTypeForKind(FileKind.Config, 'toml'), 'application/toml');
       assert.strictEqual(getMimeTypeForKind(FileKind.Config, 'yaml'), 'application/yaml');
-      assert.strictEqual(getMimeTypeForKind(FileKind.Config), 'application/yaml'); // default
+      assert.strictEqual(getMimeTypeForKind(FileKind.Config), 'application/yaml');
     });
 
     it('should return correct MIME type for data kinds', () => {
@@ -211,7 +202,7 @@ describe('FileKindPolicy', () => {
         getMimeTypeForKind(FileKind.Data, 'csl'),
         'application/vnd.citationstyles.style+xml',
       );
-      assert.strictEqual(getMimeTypeForKind(FileKind.Data), 'application/xml'); // default
+      assert.strictEqual(getMimeTypeForKind(FileKind.Data), 'application/xml');
     });
 
     it('should return correct MIME type for typst kind', () => {

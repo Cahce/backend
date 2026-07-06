@@ -6,10 +6,6 @@ import type { TeacherProfileRepo } from "../../../domain/TeacherManagement/Ports
 import type { StudentProfileRepo } from "../../../domain/StudentManagement/Ports.js";
 import type { PasswordHasher } from "../../../domain/shared/PasswordHasher.js";
 
-/**
- * Fake account repo exposing the methods ImportAccounts uses. `linkToTeacher`
- * / `linkToStudent` are mock.fn so tests can inspect linking calls.
- */
 function makeAccountRepo(opts: {
   findByEmail?: (email: string) => unknown;
   create?: (data: { email: string; passwordHash: string; role: string; isActive: boolean }) => unknown;
@@ -102,9 +98,9 @@ describe("ImportAccounts", () => {
     const { useCase } = build();
 
     const rows = [
-      { email: "student@tlu.edu.vn", password: "Password123", role: "student", isActive: "true" }, // wrong domain
-      { email: "teacher@e.tlu.edu.vn", password: "Password456", role: "teacher", isActive: "true" }, // wrong domain
-      { email: "valid@e.tlu.edu.vn", password: "Password789", role: "student", isActive: "true" }, // correct
+      { email: "student@tlu.edu.vn", password: "Password123", role: "student", isActive: "true" },
+      { email: "teacher@e.tlu.edu.vn", password: "Password456", role: "teacher", isActive: "true" },
+      { email: "valid@e.tlu.edu.vn", password: "Password789", role: "student", isActive: "true" },
     ];
 
     const result = await useCase.execute(rows);
@@ -122,7 +118,7 @@ describe("ImportAccounts", () => {
     const { useCase } = build();
 
     const rows = [
-      { email: "admin@tlu.edu.vn", password: "", role: "admin", isActive: "true" }, // Empty password
+      { email: "admin@tlu.edu.vn", password: "", role: "admin", isActive: "true" },
     ];
 
     const result = await useCase.execute(rows);
@@ -140,8 +136,8 @@ describe("ImportAccounts", () => {
     const { useCase } = build();
 
     const rows = [
-      { email: "", password: "Password123", role: "admin" }, // Empty email
-      { email: "admin@tlu.edu.vn", password: "Password123" }, // Missing role
+      { email: "", password: "Password123", role: "admin" },
+      { email: "admin@tlu.edu.vn", password: "Password123" },
     ] as unknown[];
 
     const result = await useCase.execute(rows);
@@ -179,7 +175,6 @@ describe("ImportAccounts", () => {
     assert.strictEqual(result.created, 1);
     assert.strictEqual(result.failed, 0);
 
-    // Linking now goes through accountRepo.linkToTeacher(accountId, teacherId).
     const linkCalls = (accountRepo.linkToTeacher as unknown as { mock: { calls: { arguments: unknown[] }[] } }).mock.calls;
     assert.strictEqual(linkCalls.length, 1);
     assert.strictEqual(linkCalls[0].arguments[0], "new-account-id");

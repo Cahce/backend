@@ -1,29 +1,10 @@
-/**
- * Main-file (entry-point) detection for imported Typst projects.
- *
- * Pure, framework-free logic (no Fastify/Prisma/Zod). Given the set of files in
- * an import, it picks the file that should become `ProjectSettings.mainPath`.
- *
- * Priority chain (see `.kiro/specs/main-file-detection/design.md`):
- *   1. Manifest entry — `typst.toml` `[template] entrypoint` (resolved against
- *      `[template] path`), else a legacy top-level `entry = "…"`.
- *   2. Include/import-graph root — the `.typ` file not included/imported by any
- *      other `.typ` file that transitively reaches the most files.
- *   3. `main.typ` at the project root.
- *   4. First `.typ` file alphabetically (legacy fallback).
- *
- * Note: `[package] entrypoint` (the library import target, e.g. `lib.typ`) is
- * intentionally NOT treated as the document main.
- */
 
 import path from 'node:path';
 
 const TYP_RE = /\.typ$/i;
 
 export interface DetectFile {
-  /** Project-relative path, e.g. `90-Document/90-Document.typ`. */
   path: string;
-  /** UTF-8 text for `.typ` files; `null` for binary/non-Typst entries. */
   content: string | null;
 }
 
@@ -37,7 +18,6 @@ export function isTypstSource(filePath: string): boolean {
   return TYP_RE.test(filePath);
 }
 
-/** Normalise a candidate path to a safe, project-relative POSIX path. */
 function toProjectPath(raw: string): string | null {
   const cleaned = raw.replace(/\\/g, '/').trim();
   if (!cleaned) return null;
@@ -46,11 +26,6 @@ function toProjectPath(raw: string): string | null {
   return normalised;
 }
 
-/**
- * Minimal section-aware TOML scanner — captures `key = "value"` pairs and the
- * section they belong to. Sufficient for reading manifest paths; not a full
- * TOML parser.
- */
 function scanToml(toml: string): Array<{ section: string; key: string; value: string }> {
   const rows: Array<{ section: string; key: string; value: string }> = [];
   let section = '';
@@ -83,7 +58,6 @@ export function parseManifestEntry(toml: string | null): ManifestEntry {
   return {
     templatePath: find('template', 'path'),
     templateEntrypoint: find('template', 'entrypoint'),
-    // Prefer a top-level `entry`, but accept one in any section as a fallback.
     legacyEntry: find('', 'entry') ?? rows.find((row) => row.key === 'entry')?.value ?? null,
   };
 }
@@ -94,7 +68,6 @@ function resolveManifestEntry(manifest: ManifestEntry, pathSet: Set<string>): st
     const joined = base ? `${base}/${manifest.templateEntrypoint}` : manifest.templateEntrypoint;
     const resolved = toProjectPath(joined);
     if (resolved && pathSet.has(resolved)) return resolved;
-    // Some exports flatten the template dir — try the bare entrypoint too.
     const bare = toProjectPath(manifest.templateEntrypoint);
     if (bare && pathSet.has(bare)) return bare;
   }
@@ -105,28 +78,18 @@ function resolveManifestEntry(manifest: ManifestEntry, pathSet: Set<string>): st
   return null;
 }
 
-/**
- * Extract local `#include`/`#import` string-literal targets from Typst source.
- * Package specs (`@preview/…`, `@local/…`) and non-string imports are excluded.
- * Best-effort: does not strip commented-out lines.
- */
 export function parseTypstDeps(content: string): string[] {
   const targets: string[] = [];
   const re = /#(?:include|import)\s+"([^"]+)"/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(content)) !== null) {
     const raw = match[1];
-    if (raw.startsWith('@')) continue; // package spec, not a local file
+    if (raw.startsWith('@')) continue;
     targets.push(raw);
   }
   return targets;
 }
 
-/**
- * Resolve a raw include/import target (relative to `fromPath`, or absolute from
- * the project root) to a member of `pathSet`, or `null` if it escapes the root
- * or does not exist.
- */
 export function resolveDep(
   fromPath: string,
   rawTarget: string,
@@ -151,17 +114,10 @@ export function resolveDep(
 }
 
 export interface TypstGraph {
-  /** All `.typ` file paths in the project. */
   typPaths: Set<string>;
-  /** file path → set of `.typ` files it includes/imports (resolved). */
   edges: Map<string, Set<string>>;
 }
 
-/**
- * Build the directed include/import graph among the project's `.typ` files.
- * Edges only point to other `.typ` files; package imports and non-existent
- * targets are dropped.
- */
 export function buildTypstGraph(files: DetectFile[]): TypstGraph {
   const typFiles = files.filter((file) => isTypstSource(file.path));
   const allPaths = new Set(files.map((file) => file.path));
@@ -181,7 +137,6 @@ export function buildTypstGraph(files: DetectFile[]): TypstGraph {
   return { typPaths, edges };
 }
 
-/** Set of `.typ` files transitively reachable from `start` (inclusive). */
 export function reachableFrom(graph: TypstGraph, start: string): Set<string> {
   const seen = new Set<string>([start]);
   const stack = [start];
@@ -197,12 +152,6 @@ export function reachableFrom(graph: TypstGraph, start: string): Set<string> {
   return seen;
 }
 
-/**
- * Pick the document root via include/import-graph analysis: the `.typ` file
- * that no other `.typ` file includes/imports and that transitively reaches the
- * most files. Returns `null` when there is no meaningful root (e.g. all files
- * are mutually independent, or there is a cycle) so the caller can fall back.
- */
 export function pickGraphRoot(files: DetectFile[]): string | null {
   const typFiles = files.filter((file) => isTypstSource(file.path));
   if (typFiles.length === 0) return null;
@@ -221,7 +170,7 @@ export function pickGraphRoot(files: DetectFile[]): string | null {
   const candidates = [...graph.typPaths].filter(
     (typPath) => (inDegree.get(typPath) ?? 0) === 0,
   );
-  if (candidates.length === 0) return null; // cycle or every file is included
+  if (candidates.length === 0) return null;
 
   const scored = candidates
     .map((candidate) => ({
@@ -241,7 +190,6 @@ export function pickGraphRoot(files: DetectFile[]): string | null {
     );
 
   const best = scored[0];
-  // Only a candidate that actually pulls in other files is a confident root.
   if (!best || best.reach <= 1) return null;
   return best.path;
 }
@@ -252,20 +200,16 @@ export function detectMainPath(
 ): string | null {
   const pathSet = new Set(files.map((file) => file.path));
 
-  // 1. Manifest-declared entry (typst.toml preferred, then project.toml).
   for (const toml of [tomls.typstToml, tomls.projectToml]) {
     const entry = resolveManifestEntry(parseManifestEntry(toml ?? null), pathSet);
     if (entry) return entry;
   }
 
-  // 2. Include/import-graph root.
   const graphRoot = pickGraphRoot(files);
   if (graphRoot) return graphRoot;
 
-  // 3. Conventional main.typ at the project root.
   if (pathSet.has('main.typ')) return 'main.typ';
 
-  // 4. First .typ alphabetically (legacy fallback).
   const firstTypst = files
     .map((file) => file.path)
     .filter(isTypstSource)

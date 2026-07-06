@@ -1,15 +1,9 @@
-/**
- * Non-Admin Access Test Script
- * Tests that teacher and student accounts CANNOT access admin endpoints
- * Verifies 403 Forbidden is returned for non-admin users
- */
 
 import dotenv from "dotenv";
 dotenv.config();
 
 const BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 
-// Test accounts
 const ADMIN_EMAIL = "admin@tlu.edu.vn";
 const TEACHER_EMAIL = "kieutuandung@tlu.edu.vn";
 const STUDENT_EMAIL = "2251172560@e.tlu.edu.vn";
@@ -19,7 +13,6 @@ let adminToken = "";
 let teacherToken = "";
 let studentToken = "";
 
-// Helper function to make authenticated requests
 async function apiRequest(
   method: string,
   path: string,
@@ -54,7 +47,6 @@ async function apiRequest(
   }
 }
 
-// Login helper
 async function login(email: string, password: string): Promise<string | null> {
   const result = await apiRequest("POST", "/api/v1/auth/login", undefined, {
     email,
@@ -67,11 +59,9 @@ async function login(email: string, password: string): Promise<string | null> {
   return null;
 }
 
-// Test authentication for all roles
 async function testAuthentication() {
   console.log("\n=== Testing Authentication for All Roles ===\n");
 
-  // Login as admin
   console.log("1. Logging in as Admin...");
   adminToken = await login(ADMIN_EMAIL, PASSWORD);
   if (adminToken) {
@@ -81,7 +71,6 @@ async function testAuthentication() {
     return false;
   }
 
-  // Login as teacher
   console.log("\n2. Logging in as Teacher...");
   teacherToken = await login(TEACHER_EMAIL, PASSWORD);
   if (teacherToken) {
@@ -92,7 +81,6 @@ async function testAuthentication() {
     return false;
   }
 
-  // Login as student
   console.log("\n3. Logging in as Student...");
   studentToken = await login(STUDENT_EMAIL, PASSWORD);
   if (studentToken) {
@@ -106,7 +94,6 @@ async function testAuthentication() {
   return true;
 }
 
-// Test admin endpoints with admin token (should succeed)
 async function testAdminAccess() {
   console.log("\n=== Testing Admin Access with Admin Token ===\n");
 
@@ -137,7 +124,6 @@ async function testAdminAccess() {
   return failCount === 0;
 }
 
-// Test admin endpoints with teacher token (should fail with 403)
 async function testTeacherAccessToAdminEndpoints() {
   console.log("\n=== Testing Teacher Access to Admin Endpoints (should be FORBIDDEN) ===\n");
 
@@ -175,7 +161,6 @@ async function testTeacherAccessToAdminEndpoints() {
   return failCount === 0;
 }
 
-// Test admin endpoints with student token (should fail with 403)
 async function testStudentAccessToAdminEndpoints() {
   console.log("\n=== Testing Student Access to Admin Endpoints (should be FORBIDDEN) ===\n");
 
@@ -213,7 +198,6 @@ async function testStudentAccessToAdminEndpoints() {
   return failCount === 0;
 }
 
-// Test CRUD operations with teacher token (should all fail with 403)
 async function testTeacherCRUDAttempts() {
   console.log("\n=== Testing Teacher CRUD Attempts (should all be FORBIDDEN) ===\n");
 
@@ -259,7 +243,6 @@ async function testTeacherCRUDAttempts() {
   return failCount === 0;
 }
 
-// Test that auth endpoints still work for all roles
 async function testAuthEndpointsForAllRoles() {
   console.log("\n=== Testing Auth Endpoints (should work for all authenticated users) ===\n");
 
@@ -289,7 +272,6 @@ async function testAuthEndpointsForAllRoles() {
   return failCount === 0;
 }
 
-// Main test runner
 async function runTests() {
   console.log("🔒 Starting Non-Admin Access Tests");
   console.log("📍 Base URL:", BASE_URL);
@@ -297,7 +279,6 @@ async function runTests() {
 
   let allPassed = true;
 
-  // Test 1: Authenticate all roles
   if (!(await testAuthentication())) {
     console.error("\n❌ Cannot proceed without all accounts");
     console.log("\n💡 Run this command to create test accounts:");
@@ -305,35 +286,29 @@ async function runTests() {
     process.exit(1);
   }
 
-  // Test 2: Admin can access admin endpoints
   if (!(await testAdminAccess())) {
     allPassed = false;
   }
 
-  // Test 3: Teacher CANNOT access admin endpoints (CRITICAL)
   if (!(await testTeacherAccessToAdminEndpoints())) {
     allPassed = false;
     console.error("\n🚨 CRITICAL: Teacher can access admin endpoints!");
   }
 
-  // Test 4: Student CANNOT access admin endpoints (CRITICAL)
   if (!(await testStudentAccessToAdminEndpoints())) {
     allPassed = false;
     console.error("\n🚨 CRITICAL: Student can access admin endpoints!");
   }
 
-  // Test 5: Teacher CANNOT perform CRUD operations (CRITICAL)
   if (!(await testTeacherCRUDAttempts())) {
     allPassed = false;
     console.error("\n🚨 CRITICAL: Teacher can perform CRUD operations!");
   }
 
-  // Test 6: Auth endpoints work for all roles
   if (!(await testAuthEndpointsForAllRoles())) {
     allPassed = false;
   }
 
-  // Summary
   console.log("\n" + "=".repeat(60));
   if (allPassed) {
     console.log("✅ All authorization tests passed!");
@@ -349,7 +324,6 @@ async function runTests() {
   }
 }
 
-// Run tests
 runTests().catch((error) => {
   console.error("Fatal error:", error);
   process.exit(1);

@@ -1,6 +1,3 @@
-/**
- * Domain type for Teacher Profile
- */
 export interface TeacherProfile {
   id: string;
   accountId: string | null;

@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-/**
- * Zod schemas for Teacher Profile API
- */
 
 export const FacultySchema = z.object({
   id: z.string(),

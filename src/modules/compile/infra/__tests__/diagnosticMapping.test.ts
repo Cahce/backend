@@ -2,7 +2,6 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mapSeverity, parseTypstDiagnostics } from '../diagnosticMapping.js';
 
-// Use forward-slashed absolute paths matching the compiler's `path` shape.
 const WORKDIR = 'C:/Users/x/proj';
 
 describe('mapSeverity (numeric Severity enum from the napi binding)', () => {
@@ -12,7 +11,6 @@ describe('mapSeverity (numeric Severity enum from the napi binding)', () => {
   });
 
   it('never throws on a numeric severity (the original crash)', () => {
-    // Pre-fix this path called (1).toLowerCase() → "severity?.toLowerCase is not a function".
     assert.doesNotThrow(() => mapSeverity(1));
     assert.doesNotThrow(() => mapSeverity(2));
   });

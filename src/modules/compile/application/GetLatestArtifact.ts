@@ -1,8 +1,3 @@
-/**
- * GetLatestArtifact use case
- * 
- * Gets the latest artifact for a compile job and streams it.
- */
 
 import type { Readable } from 'node:stream';
 import type { CompileJobRepository } from '../domain/CompileJobRepository.js';
@@ -31,10 +26,8 @@ export class GetLatestArtifact {
   ) {}
 
   async execute(cmd: GetLatestArtifactCommand): Promise<GetLatestArtifactResult> {
-    // Check project access
     await this.access.requireProjectAccess(cmd.projectId, cmd.userId);
 
-    // Find job
     const job = await this.jobs.findById(cmd.jobId);
     if (!job) {
       throw new CompileJobError(
@@ -43,7 +36,6 @@ export class GetLatestArtifact {
       );
     }
 
-    // Verify job belongs to project
     if (job.projectId !== cmd.projectId) {
       throw new CompileJobError(
         CompileErrors.COMPILE_JOB_NOT_FOUND,
@@ -51,7 +43,6 @@ export class GetLatestArtifact {
       );
     }
 
-    // Check if artifact is ready
     if (!job.latestArtifactId) {
       throw new CompileJobError(
         CompileErrors.COMPILE_ARTIFACT_NOT_READY,
@@ -59,7 +50,6 @@ export class GetLatestArtifact {
       );
     }
 
-    // Find artifact
     const artifact = await this.artifacts.findById(job.latestArtifactId);
     if (!artifact) {
       throw new CompileJobError(
@@ -68,7 +58,6 @@ export class GetLatestArtifact {
       );
     }
 
-    // Get metadata
     const metadata = await this.storage.head(artifact.storageKey);
     if (!metadata) {
       throw new CompileJobError(
@@ -77,7 +66,6 @@ export class GetLatestArtifact {
       );
     }
 
-    // Stream artifact
     const stream = await this.storage.get(artifact.storageKey);
 
     return {

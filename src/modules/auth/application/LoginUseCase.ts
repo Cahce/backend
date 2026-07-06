@@ -15,10 +15,6 @@ import { EmailPolicy } from "../domain/EmailPolicy.js";
 import { getPermissionsForRole } from "../../../shared/auth/Permissions.js";
 import type { LoginCommand, LoginResponse } from "./Types.js";
 
-/**
- * Login use case
- * Orchestrates the login flow following clean architecture principles
- */
 export class LoginUseCase {
     constructor(
         private readonly userRepo: IUserRepository,
@@ -29,22 +25,18 @@ export class LoginUseCase {
 
     async execute(command: LoginCommand): Promise<LoginResponse> {
         try {
-            // 1. Validate and normalize email
             const normalizedEmail = EmailPolicy.normalize(command.email);
             EmailPolicy.validate(normalizedEmail);
 
-            // 2. Find user by email
             const user = await this.userRepo.findByEmail(normalizedEmail);
             if (!user) {
                 throw new InvalidCredentialsError();
             }
 
-            // 3. Check if account is active
             if (!user.isActive) {
                 throw new AccountInactiveError();
             }
 
-            // 4. Verify password
             const isPasswordValid = await this.passwordHasher.verify(
                 command.password,
                 user.passwordHash,
@@ -54,7 +46,6 @@ export class LoginUseCase {
                 throw new InvalidCredentialsError();
             }
 
-            // 5. Generate access (short-lived JWT) + rotating refresh token.
             const access = await this.tokenService.generateAccessToken({
                 userId: user.id,
                 email: user.email,
@@ -64,11 +55,10 @@ export class LoginUseCase {
             await this.refreshTokenRepo.persist({
                 tokenHash: this.tokenService.hashRefreshToken(refresh.token),
                 userId: user.id,
-                familyId: randomUUID(), // new rotation family per login
+                familyId: randomUUID(),
                 expiresAt: refresh.expiresAt,
             });
 
-            // 6. Return success result
             return {
                 success: true,
                 accessToken: access.token,
@@ -82,7 +72,6 @@ export class LoginUseCase {
                 },
             };
         } catch (error) {
-            // Handle domain errors
             if (error instanceof AuthError) {
                 return {
                     success: false,
@@ -93,7 +82,6 @@ export class LoginUseCase {
                 };
             }
 
-            // Handle unexpected errors
             console.error("Login use case error:", error);
             const internalError = new InternalAuthError();
             return {

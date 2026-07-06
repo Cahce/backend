@@ -20,9 +20,6 @@ import {
     MessageResponseJsonSchema,
 } from "./Dto.js";
 
-/**
- * Student Management module HTTP routes
- */
 export async function studentManagementRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
     const createStudentUseCase = container.createStudentProfileUseCase;
@@ -34,7 +31,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
     const unlinkAccountUseCase = container.unlinkAccountFromStudentUseCase;
     const importStudents = container.importStudents;
 
-    // POST /api/v1/admin/students - create student
     app.post<{ Body: CreateStudentRequestDto }>(
         "/students",
         {
@@ -97,7 +93,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/students - list students with pagination and filters
     app.get<{ Querystring: ListStudentsQueryDto }>(
         "/students",
         {
@@ -156,7 +151,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/students/:id - get student by id
     app.get<{ Params: { id: string } }>(
         "/students/:id",
         {
@@ -212,7 +206,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // PUT /api/v1/admin/students/:id - update student
     app.put<{ Params: { id: string }; Body: UpdateStudentRequestDto }>(
         "/students/:id",
         {
@@ -289,7 +282,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // DELETE /api/v1/admin/students/:id - delete student
     app.delete<{ Params: { id: string } }>(
         "/students/:id",
         {
@@ -351,7 +343,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/admin/students/:id/link-account - link account to student
     app.post<{ Params: { id: string }; Body: LinkAccountRequestDto }>(
         "/students/:id/link-account",
         {
@@ -433,7 +424,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // DELETE /api/v1/admin/students/:id/unlink-account - unlink account from student
     app.delete<{ Params: { id: string } }>(
         "/students/:id/unlink-account",
         {
@@ -495,7 +485,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/admin/students/import - import students from XLSX/CSV file
     app.post(
         "/students/import",
         {
@@ -534,7 +523,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Validate MIME type (accept both XLSX and CSV)
                 const mimeValidation = FileParser.validateMimeType(data.mimetype);
                 if (!mimeValidation.valid) {
                     return reply.code(400).send({
@@ -547,7 +535,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
 
                 const buffer = await data.toBuffer();
                 
-                // Parse file (auto-detect XLSX or CSV)
                 const parsed = FileParser.parseSpreadsheet(buffer, data.mimetype);
                 const result = await importStudents.execute(parsed.rows);
 
@@ -563,7 +550,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/students/import/template - download XLSX/CSV template
     app.get(
         "/students/import/template",
         {
@@ -630,9 +616,6 @@ export async function studentManagementRoutes(app: FastifyInstance) {
     );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
     switch (errorCode) {
         case "VALIDATION_ERROR":

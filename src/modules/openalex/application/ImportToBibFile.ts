@@ -1,14 +1,3 @@
-/**
- * Import To Bib File Use Case
- *
- * Imports OpenAlex works to a project's .bib file.
- * Tracks import history to prevent duplicates.
- *
- * Performance: the dedupe pre-pass is a single batched query, OpenAlex works are
- * fetched with bounded concurrency (not one serial await per id), and all import
- * log rows are flushed once via createMany — instead of the previous
- * three-N+1 pattern (per-id findFirst + per-id HTTP + per-id INSERT).
- */
 
 import type {
   OpenAlexApiPort,
@@ -22,15 +11,8 @@ import { dedupeKey } from "../../bibliography/domain/CitationKeyGen.js";
 import { normalizeDoi } from "../../bibliography/domain/DuplicateDetection.js";
 import { mapWithConcurrency } from "../../../shared/async/mapWithConcurrency.js";
 
-/**
- * Max simultaneous OpenAlex work fetches. Bounded so a 50-id import neither
- * serializes (slow) nor fires 50 requests at once (rate-limit risk).
- */
 const OPENALEX_FETCH_CONCURRENCY = 5;
 
-/**
- * Command to import works to .bib file
- */
 export interface ImportToBibFileCommand {
   userId: string;
   projectId: string;
@@ -39,18 +21,12 @@ export interface ImportToBibFileCommand {
   conflictMode?: "skip" | "replace" | "rename";
 }
 
-/**
- * Result of import operation with detailed status
- */
 export interface ImportToBibFileResult {
   imported: Array<{ openAlexId: string; citationKey: string }>;
   skippedDuplicate: Array<{ openAlexId: string; existingKey: string }>;
   failed: Array<{ openAlexId: string; errorMessage: string }>;
 }
 
-/**
- * Import To Bib File Use Case
- */
 export class ImportToBibFile {
   constructor(
     private readonly apiClient: OpenAlexApiPort,
@@ -68,7 +44,6 @@ export class ImportToBibFile {
       conflictMode = "skip",
     } = command;
 
-    // Verify write access (owner or editor member; viewers/admin-oversight denied)
     await this.projectAccess.requireWriteAccess(projectId, userId);
 
     const result: ImportToBibFileResult = {
@@ -77,10 +52,8 @@ export class ImportToBibFile {
       failed: [],
     };
 
-    // Import-log rows are accumulated and flushed once via createMany at the end.
     const logRows: OpenAlexImportLogCreateInput[] = [];
 
-    // Dedupe pre-pass: ONE query for all ids (previously one findFirst per id).
     const existingLogs = await this.importLogRepo.findImportedByProjectAndOpenAlexIds(
       projectId,
       openAlexIds,
@@ -123,13 +96,11 @@ export class ImportToBibFile {
       }
     }
 
-    // Nothing to fetch — flush any skip logs and return.
     if (toImport.length === 0) {
       await this.importLogRepo.createMany(logRows);
       return result;
     }
 
-    // Read existing .bib file
     const existing = await this.bibliography.readBibFile(projectId, targetBibPath);
     const existingKeys = new Set(existing.map((e) => e.key));
     const existingByDoi = new Map<string, string>();
@@ -138,7 +109,6 @@ export class ImportToBibFile {
       if (doi) existingByDoi.set(doi, entry.key);
     }
 
-    // Fetch works with bounded concurrency (previously fully serial awaits).
     const fetched = await mapWithConcurrency(
       toImport,
       OPENALEX_FETCH_CONCURRENCY,
@@ -156,8 +126,6 @@ export class ImportToBibFile {
       },
     );
 
-    // Process results SEQUENTIALLY in original order so citation-key dedup
-    // (which mutates existingKeys) stays deterministic.
     const newEntries: Array<{ entry: ReturnType<typeof mapOpenAlexWorkToBibEntry> }> = [];
     for (const item of fetched) {
       if (!item.ok) {
@@ -237,7 +205,6 @@ export class ImportToBibFile {
       }
     }
 
-    // Write bib first (content is the source of truth), then flush all logs once.
     if (newEntries.length > 0) {
       const merged = this.bibliography.mergeEntries(
         existing,

@@ -1,9 +1,3 @@
-/**
- * Unit tests for buildStudentWhereClause — the student list filter builder.
- *
- * Regression guard for the majorId+facultyId overwrite bug: both filters scope
- * the related class, so both must survive when supplied together.
- */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

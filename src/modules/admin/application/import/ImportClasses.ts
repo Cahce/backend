@@ -5,9 +5,6 @@ import type { Class } from "../../domain/Class/Types.js";
 import { ImportService, type ImportResult } from "./ImportTypes.js";
 import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
 
-/**
- * Class import row schema
- */
 const ClassImportRowSchema = z.object({
   code: z.string().min(1, "Mã lớp không được để trống"),
   name: z.string().min(1, "Tên lớp không được để trống"),
@@ -16,19 +13,12 @@ const ClassImportRowSchema = z.object({
 
 type ClassImportRow = z.infer<typeof ClassImportRowSchema>;
 
-/**
- * Matches columns in "Mẫu Import Lớp V2.xlsx" (STT ignored).
- */
 const CLASS_HEADER_MAP: HeaderMap = {
   "Mã Lớp": "code",
   "Lớp": "name",
   "Ngành": "majorCode",
 };
 
-/**
- * Import classes from CSV / XLSX. Application use case — depends only on the
- * MajorRepo + ClassRepo domain ports, never on Prisma.
- */
 export class ImportClasses {
   constructor(
     private readonly majorRepo: MajorRepo,

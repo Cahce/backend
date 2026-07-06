@@ -1,28 +1,15 @@
-/**
- * Authorization Test Script
- * Tests that only admin users can access admin endpoints
- * Tests that teacher and student users get 403 Forbidden
- */
 
 import dotenv from "dotenv";
 dotenv.config();
 
 const BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 
-// Test accounts
-// Email format convention:
-// - Admin: admin@tlu.edu.vn
-// - Teacher: {teacherName}@tlu.edu.vn (e.g., kieutuandung@tlu.edu.vn)
-// - Student: {studentId}@e.tlu.edu.vn (e.g., 2251172560@e.tlu.edu.vn)
 const ADMIN_EMAIL = "admin@tlu.edu.vn";
 const ADMIN_PASSWORD = "123456";
 
-// We'll need to create teacher and student accounts for testing
-// For now, we'll test with admin and without token
 
 let adminToken = "";
 
-// Helper function to make authenticated requests
 async function apiRequest(
   method: string,
   path: string,
@@ -57,7 +44,6 @@ async function apiRequest(
   }
 }
 
-// Test authentication
 async function loginAsAdmin() {
   console.log("\n=== Logging in as Admin ===");
 
@@ -77,7 +63,6 @@ async function loginAsAdmin() {
   }
 }
 
-// Test admin endpoints with admin token
 async function testAdminAccessWithAdminToken() {
   console.log("\n=== Testing Admin Access with Admin Token ===");
 
@@ -110,7 +95,6 @@ async function testAdminAccessWithAdminToken() {
   return failCount === 0;
 }
 
-// Test admin endpoints without token
 async function testAdminAccessWithoutToken() {
   console.log("\n=== Testing Admin Access without Token ===");
 
@@ -143,7 +127,6 @@ async function testAdminAccessWithoutToken() {
   return failCount === 0;
 }
 
-// Test that auth endpoints still work (they should use verify, not requireAdmin)
 async function testAuthEndpoints() {
   console.log("\n=== Testing Auth Endpoints (should work with any authenticated user) ===");
 
@@ -171,35 +154,29 @@ async function testAuthEndpoints() {
   return failCount === 0;
 }
 
-// Main test runner
 async function runTests() {
   console.log("🚀 Starting Authorization Tests");
   console.log(`📍 Base URL: ${BASE_URL}`);
 
   let allPassed = true;
 
-  // Test 1: Login as admin
   if (!(await loginAsAdmin())) {
     console.error("\n❌ Cannot proceed without admin login");
     process.exit(1);
   }
 
-  // Test 2: Admin can access admin endpoints
   if (!(await testAdminAccessWithAdminToken())) {
     allPassed = false;
   }
 
-  // Test 3: No token = 401 Unauthorized
   if (!(await testAdminAccessWithoutToken())) {
     allPassed = false;
   }
 
-  // Test 4: Auth endpoints still work
   if (!(await testAuthEndpoints())) {
     allPassed = false;
   }
 
-  // Summary
   console.log("\n" + "=".repeat(60));
   if (allPassed) {
     console.log("✅ All authorization tests passed!");
@@ -209,7 +186,6 @@ async function runTests() {
   }
 }
 
-// Run tests
 runTests().catch((error) => {
   console.error("Fatal error:", error);
   process.exit(1);

@@ -1,28 +1,14 @@
-/**
- * Mock Project Settings Repository for Unit Testing
- * 
- * Test double that implements ProjectSettingsRepository interface for isolated testing.
- */
 
 import type { ProjectSettingsRepository } from '../../domain/ProjectSettingsRepository.js';
 import { ProjectSettings } from '../../domain/ProjectSettings.js';
 
-/**
- * Mock implementation of ProjectSettingsRepository for unit tests
- */
 export class MockProjectSettingsRepo implements ProjectSettingsRepository {
   private settings: Map<string, ProjectSettings> = new Map();
 
-  /**
-   * Configure mock to return specific settings
-   */
   setSettings(projectId: string, settings: ProjectSettings): void {
     this.settings.set(projectId, settings);
   }
 
-  /**
-   * Clear all mock data
-   */
   clear(): void {
     this.settings.clear();
   }
@@ -33,7 +19,6 @@ export class MockProjectSettingsRepo implements ProjectSettingsRepository {
       return existing;
     }
 
-    // Create default settings
     const defaultSettings = new ProjectSettings(
       projectId,
       'main.typ',
@@ -51,9 +36,6 @@ export class MockProjectSettingsRepo implements ProjectSettingsRepository {
     return settings;
   }
 
-  /**
-   * Get settings for testing assertions
-   */
   getSettings(projectId: string): ProjectSettings | undefined {
     return this.settings.get(projectId);
   }

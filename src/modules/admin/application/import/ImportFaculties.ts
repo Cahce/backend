@@ -4,9 +4,6 @@ import type { Faculty } from '../../domain/Faculty/Types.js';
 import { ImportService, type ImportResult } from './ImportTypes.js';
 import { normalizeRow, type HeaderMap } from './HeaderMap.js';
 
-/**
- * Faculty import row schema
- */
 const FacultyImportRowSchema = z.object({
   code: z.string().min(1, 'Mã khoa không được để trống'),
   name: z.string().min(1, 'Tên khoa không được để trống'),
@@ -14,19 +11,11 @@ const FacultyImportRowSchema = z.object({
 
 type FacultyImportRow = z.infer<typeof FacultyImportRowSchema>;
 
-/**
- * Vietnamese ↔ internal-key mapping. Matches the columns in
- * "Mẫu Import Khoa.xlsx" (STT is ignored).
- */
 const FACULTY_HEADER_MAP: HeaderMap = {
   'Mã khoa': 'code',
   'Tên khoa': 'name',
 };
 
-/**
- * Import faculties from CSV / XLSX. Application use case — depends only on
- * the FacultyRepo domain port, never on Prisma.
- */
 export class ImportFaculties {
   constructor(private readonly facultyRepo: FacultyRepo) {}
 

@@ -1,11 +1,3 @@
-/**
- * Connect Zotero Use Case
- *
- * Connects a user's Zotero account by verifying credentials and storing the
- * connection. The library to connect can be specified explicitly; if it is
- * omitted, the personal library is derived from the API key via
- * GET /keys/current.
- */
 
 import type { ZoteroConnectionRepo, ZoteroApiPort } from "../domain/Ports.js";
 import type { ZoteroConnectionRecord } from "../domain/Types.js";
@@ -44,7 +36,6 @@ export class ConnectZotero {
       libraryId = libraryId ?? info.userId;
       libraryType = libraryType ?? "user";
     } else {
-      // User picked a specific library — confirm the API key has access to it.
       await this.apiClient.verifyKey(libraryType, libraryId, apiKey);
     }
 

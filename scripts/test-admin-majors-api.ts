@@ -1,28 +1,3 @@
-/**
- * Admin — Majors CRUD API Test
- * Script: npm run test:api:admin:majors
- *
- * ┌─────┬───────────────────────────────────────────────┬────────┬──────────────────────────┐
- * │ #   │ Test case                                      │ Expect │ error.code               │
- * ├─────┼───────────────────────────────────────────────┼────────┼──────────────────────────┤
- * │  1  │ Login admin / student                         │ 200    │ —                        │
- * │  2  │ Setup: create parent Faculty fixture           │ 200    │ —                        │
- * │  3  │ GET /majors no token → 401                    │ 401    │ UNAUTHENTICATED          │
- * │  4  │ GET /majors student token → 403               │ 403    │ FORBIDDEN                │
- * │  5  │ POST /majors happy (with facultyId)            │ 200    │ —                        │
- * │  6  │ POST /majors missing name → 400               │ 400    │ VALIDATION_ERROR         │
- * │  7  │ POST /majors missing code → 400               │ 400    │ VALIDATION_ERROR         │
- * │  8  │ POST /majors bad facultyId → 404              │ 404    │ FACULTY_NOT_FOUND        │
- * │  9  │ POST /majors duplicate code → DUPLICATE       │ 4xx    │ DUPLICATE_CODE           │
- * │ 10  │ GET /majors list contains new item            │ 200    │ —                        │
- * │ 11  │ GET /majors/:id found                         │ 200    │ —                        │
- * │ 12  │ GET /majors/:id not-found                     │ 404    │ MAJOR_NOT_FOUND          │
- * │ 13  │ PUT /majors/:id update                        │ 200    │ —                        │
- * │ 14  │ DELETE /majors with child Class → restrict     │ 4xx    │ HAS_CHILD_CLASSES        │
- * │ 15  │ DELETE child Class, then Major → 200          │ 200    │ —                        │
- * │ 16  │ GET /majors/:id after delete → 404            │ 404    │ MAJOR_NOT_FOUND          │
- * └─────┴───────────────────────────────────────────────┴────────┴──────────────────────────┘
- */
 
 import {
   api, loginAdmin, loginStudent,
@@ -128,7 +103,6 @@ async function run() {
       assert((r.data as { name: string }).name === `Ngành Updated ${sfx}`, 'name updated');
     });
 
-    // delete-restrict: create child Class
     await test('14a. Setup child Class', async () => {
       const r = await api('POST', `${BASE}/classes`, {
         body: { name: `Lớp Child ${sfx}`, code: `CLS_CHILD_${sfx}`, majorId },

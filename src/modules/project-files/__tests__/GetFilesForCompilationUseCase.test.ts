@@ -1,6 +1,3 @@
-/**
- * Unit Tests for GetFilesForCompilationUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -126,7 +123,6 @@ describe('GetFilesForCompilationUseCase', () => {
 
     assert.strictEqual(result.success, true);
     if (result.success) {
-      // Should include typst, bib, image, data but exclude other
       assert.strictEqual(result.data.length, 4);
       const kinds = result.data.map(f => f.kind);
       assert.ok(kinds.includes(FileKind.Typst));

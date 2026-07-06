@@ -1,9 +1,3 @@
-/**
- * Prisma implementation of the rotating refresh-token store.
- *
- * Only the SHA-256 hash of the opaque token is persisted. Rotation revokes the
- * old row + inserts the next (same family) atomically in a transaction.
- */
 
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { IRefreshTokenRepository, RefreshTokenRow } from "../domain/Ports.js";

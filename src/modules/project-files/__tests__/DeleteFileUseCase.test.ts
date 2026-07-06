@@ -1,6 +1,3 @@
-/**
- * Unit Tests for DeleteFileUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -66,7 +63,6 @@ describe('DeleteFileUseCase', () => {
 
     assert.strictEqual(result.success, true);
     
-    // Verify file is deleted
     const files = await mockFileRepo.listByProjectId('project-1');
     assert.strictEqual(files.length, 0);
   });
@@ -134,7 +130,6 @@ describe('DeleteFileUseCase', () => {
       assert.strictEqual(result.error.code, FileErrors.UNAUTHORIZED.code);
     }
 
-    // Verify file was NOT deleted
     const files = await mockFileRepo.listByProjectId('project-1');
     assert.ok(files.some((f) => f.path === 'main.typ'));
   });
@@ -168,7 +163,6 @@ describe('DeleteFileUseCase', () => {
 
     assert.strictEqual(result.success, true);
     
-    // Verify only target file is deleted
     const files = await mockFileRepo.listByProjectId('project-1');
     assert.strictEqual(files.length, 1);
     assert.strictEqual(files[0].path, 'other.typ');

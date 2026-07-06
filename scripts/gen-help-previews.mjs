@@ -1,13 +1,3 @@
-/**
- * Sinh ảnh preview (SVG) cho Trung tâm trợ giúp của frontend bằng cách biên dịch
- * thật các đoạn Typst qua @myriaddreamin/typst-ts-node-compiler.
- *
- * Chạy:  cd backend && node scripts/gen-help-previews.mjs
- * Đầu ra: Frontendtluscholareditor/public/help-previews/<id>.svg
- *
- * Font lấy từ backend/var/fonts (Times New Roman hỗ trợ tiếng Việt, New CM Math
- * cho công thức). Glyph được nhúng vào SVG nên hiển thị đúng ở mọi trình duyệt.
- */
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -18,7 +8,6 @@ const fontDir = resolve(here, '../var/fonts');
 const outDir = resolve(here, '../../Frontendtluscholareditor/public/help-previews');
 mkdirSync(outDir, { recursive: true });
 
-/** Preamble: trang tự co theo nội dung, nền trắng, font Việt, ngôn ngữ vi. */
 const pre = (width) => String.raw`#set page(width: ${width}, height: auto, margin: 12pt, fill: white)
 #set text(font: "Times New Roman", size: 13pt, lang: "vi", region: "VN")
 #set par(justify: true, leading: 0.78em)
@@ -185,9 +174,6 @@ for (const { id, w, body } of SNIPPETS) {
     fail++;
     continue;
   }
-  // NOTE: dùng svg() (rich) thay plainSvg() — bản node-compiler hiện tại panic
-  // ("unreachable" tại node.rs:322) khi gọi plainSvg(); svg() cho SVG standalone
-  // hợp lệ, hiển thị được qua <img>.
   const svg = compiler.svg(doc);
   writeFileSync(resolve(outDir, `${id}.svg`), svg, 'utf-8');
   console.log(`[OK]   ${id}.svg (${(svg.length / 1024).toFixed(1)} KB)`);

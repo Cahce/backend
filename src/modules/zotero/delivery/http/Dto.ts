@@ -1,21 +1,9 @@
-/**
- * Zotero HTTP DTOs
- * 
- * Request/response validation schemas using Zod.
- */
 
 import { z } from "zod";
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 
-// Extend Zod with OpenAPI support
 extendZodWithOpenApi(z);
 
-/**
- * Connect Zotero Request
- *
- * libraryId/libraryType are optional. When omitted, the backend derives the
- * user's personal library from the API key via GET /keys/current.
- */
 export const ConnectZoteroBodySchema = z.object({
   apiKey: z.string().min(1).max(500).openapi({
     description: "Zotero API key",
@@ -33,9 +21,6 @@ export const ConnectZoteroBodySchema = z.object({
 
 export type ConnectZoteroBody = z.infer<typeof ConnectZoteroBodySchema>;
 
-/**
- * Verify Zotero API key request (no persistence).
- */
 export const VerifyZoteroBodySchema = z.object({
   apiKey: z.string().min(1).max(500).openapi({
     description: "Zotero API key",
@@ -45,9 +30,6 @@ export const VerifyZoteroBodySchema = z.object({
 
 export type VerifyZoteroBody = z.infer<typeof VerifyZoteroBodySchema>;
 
-/**
- * Zotero library summary (returned by verify).
- */
 export const ZoteroLibraryDtoSchema = z.object({
   id: z.string().openapi({ description: "Library ID (numeric)" }),
   name: z.string().openapi({ description: "Library name" }),
@@ -56,9 +38,6 @@ export const ZoteroLibraryDtoSchema = z.object({
 
 export type ZoteroLibraryDto = z.infer<typeof ZoteroLibraryDtoSchema>;
 
-/**
- * Verify Zotero API key response.
- */
 export const VerifyZoteroResponseSchema = z.object({
   userId: z.string().openapi({ description: "Zotero user ID (numeric)" }),
   username: z.string().openapi({ description: "Zotero username" }),
@@ -70,9 +49,6 @@ export const VerifyZoteroResponseSchema = z.object({
 
 export type VerifyZoteroResponse = z.infer<typeof VerifyZoteroResponseSchema>;
 
-/**
- * Zotero Connection DTO
- */
 export const ZoteroConnectionDtoSchema = z.object({
   id: z.string().openapi({ description: "Connection ID" }),
   libraryId: z.string().openapi({ description: "Zotero library ID" }),
@@ -84,9 +60,6 @@ export const ZoteroConnectionDtoSchema = z.object({
 
 export type ZoteroConnectionDto = z.infer<typeof ZoteroConnectionDtoSchema>;
 
-/**
- * Zotero Collection DTO
- */
 export const ZoteroCollectionDtoSchema = z.object({
   key: z.string().openapi({ description: "Collection key" }),
   name: z.string().openapi({ description: "Collection name" }),
@@ -96,9 +69,6 @@ export const ZoteroCollectionDtoSchema = z.object({
 
 export type ZoteroCollectionDto = z.infer<typeof ZoteroCollectionDtoSchema>;
 
-/**
- * Zotero Creator DTO
- */
 export const ZoteroCreatorDtoSchema = z.object({
   creatorType: z.string().openapi({ description: "Creator type (author, editor, etc.)" }),
   firstName: z.string().optional().openapi({ description: "First name" }),
@@ -108,9 +78,6 @@ export const ZoteroCreatorDtoSchema = z.object({
 
 export type ZoteroCreatorDto = z.infer<typeof ZoteroCreatorDtoSchema>;
 
-/**
- * Zotero Item DTO
- */
 export const ZoteroItemDtoSchema = z.object({
   key: z.string().openapi({ description: "Item key" }),
   itemType: z.string().openapi({ description: "Item type (journalArticle, book, etc.)" }),
@@ -125,9 +92,6 @@ export const ZoteroItemDtoSchema = z.object({
 
 export type ZoteroItemDto = z.infer<typeof ZoteroItemDtoSchema>;
 
-/**
- * List Items Query Parameters
- */
 export const ListItemsQuerySchema = z.object({
   collectionKey: z.string().optional().openapi({ description: "Filter by collection key" }),
   start: z.coerce.number().int().min(0).default(0).openapi({ description: "Pagination start" }),
@@ -144,9 +108,6 @@ export const ListItemsQuerySchema = z.object({
 
 export type ListItemsQuery = z.infer<typeof ListItemsQuerySchema>;
 
-/**
- * Sync To Bib File Request
- */
 export const SyncToBibFileBodySchema = z.object({
   collectionKeys: z.array(z.string()).optional().openapi({
     description: "Collection keys to sync (optional)",
@@ -177,9 +138,6 @@ export const SyncToBibFileBodySchema = z.object({
 
 export type SyncToBibFileBody = z.infer<typeof SyncToBibFileBodySchema>;
 
-/**
- * Zotero Sync Log DTO
- */
 export const ZoteroSyncLogDtoSchema = z.object({
   id: z.string().openapi({ description: "Sync log ID" }),
   syncType: z.enum(["full", "incremental"]).openapi({ description: "Sync type" }),
@@ -192,18 +150,12 @@ export const ZoteroSyncLogDtoSchema = z.object({
 
 export type ZoteroSyncLogDto = z.infer<typeof ZoteroSyncLogDtoSchema>;
 
-/**
- * Project ID Path Parameter
- */
 export const ProjectIdParamSchema = z.object({
   projectId: z.string().openapi({ description: "Project ID" }),
 });
 
 export type ProjectIdParam = z.infer<typeof ProjectIdParamSchema>;
 
-/**
- * Get Sync Logs Query Parameters
- */
 export const GetSyncLogsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50).openapi({
     description: "Maximum number of logs to return",
@@ -212,9 +164,6 @@ export const GetSyncLogsQuerySchema = z.object({
 
 export type GetSyncLogsQuery = z.infer<typeof GetSyncLogsQuerySchema>;
 
-/**
- * API Error Response
- */
 export const ApiErrorSchema = z.object({
   error: z.object({
     code: z.string().openapi({ description: "Error code" }),
@@ -224,12 +173,6 @@ export const ApiErrorSchema = z.object({
 
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- * Convert Zod schemas to JSON Schema for Fastify validation
- */
 
 import { zodToJsonSchema } from "zod-to-json-schema";
 

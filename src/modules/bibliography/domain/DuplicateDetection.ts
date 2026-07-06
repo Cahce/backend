@@ -1,8 +1,3 @@
-/**
- * Duplicate detection for bibliography entries.
- *
- * Pure domain helper: no file IO, no framework dependencies.
- */
 
 import type { BibEntry, BibEntryType } from "./BibEntry.js";
 

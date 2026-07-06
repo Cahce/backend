@@ -5,9 +5,6 @@ import type { Major } from "../../domain/Major/Types.js";
 import { ImportService, type ImportResult } from "./ImportTypes.js";
 import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
 
-/**
- * Major import row schema
- */
 const MajorImportRowSchema = z.object({
   code: z.string().min(1, "Mã ngành không được để trống"),
   name: z.string().min(1, "Tên ngành không được để trống"),
@@ -16,19 +13,12 @@ const MajorImportRowSchema = z.object({
 
 type MajorImportRow = z.infer<typeof MajorImportRowSchema>;
 
-/**
- * Matches columns in "Mẫu Import Ngành V2.xlsx" (STT ignored).
- */
 const MAJOR_HEADER_MAP: HeaderMap = {
   "Mã Ngành": "code",
   "Ngành": "name",
   Khoa: "facultyCode",
 };
 
-/**
- * Import majors from CSV / XLSX. Application use case — depends only on the
- * FacultyRepo + MajorRepo domain ports, never on Prisma.
- */
 export class ImportMajors {
   constructor(
     private readonly facultyRepo: FacultyRepo,

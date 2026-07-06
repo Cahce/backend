@@ -29,11 +29,7 @@ import {
   MessageResponseJsonSchema,
 } from './Dto.js';
 
-/**
- * Admin template routes
- */
 export async function adminTemplateRoutes(app: FastifyInstance, container: TemplatesContainer) {
-  // POST /api/v1/admin/templates - create template
   app.post<{ Body: CreateTemplateRequestDto }>(
     '/templates',
     {
@@ -107,7 +103,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // GET /api/v1/admin/templates - list templates with pagination and search
   app.get<{ Querystring: ListTemplatesQueryDto }>(
     '/templates',
     {
@@ -190,7 +185,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // GET /api/v1/admin/templates/:id - get template by id
   app.get<{ Params: { id: string } }>(
     '/templates/:id',
     {
@@ -257,7 +251,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // PATCH /api/v1/admin/templates/:id - update template
   app.patch<{ Params: { id: string }; Body: UpdateTemplateRequestDto }>(
     '/templates/:id',
     {
@@ -346,7 +339,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // DELETE /api/v1/admin/templates/:id - delete template
   app.delete<{ Params: { id: string } }>(
     '/templates/:id',
     {
@@ -408,7 +400,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // POST /api/v1/admin/templates/:id/versions - create template version (multipart)
   app.post<{ Params: { id: string } }>(
     '/templates/:id/versions',
     {
@@ -477,7 +468,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
           });
         }
 
-        // Get form fields - @fastify/multipart v9 returns fields as objects
         const fields = data.fields as Record<string, { value: string }>;
         const versionNumber = fields.versionNumber?.value;
         const changelog = fields.changelog?.value;
@@ -491,7 +481,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
           });
         }
 
-        // Determine archive type
         const filename = data.filename.toLowerCase();
         let archiveType: 'typ' | 'zip';
         if (filename.endsWith('.typ')) {
@@ -540,7 +529,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // GET /api/v1/admin/templates/:id/versions - list versions by template
   app.get<{ Params: { id: string } }>(
     '/templates/:id/versions',
     {
@@ -605,11 +593,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // PATCH /api/v1/admin/templates/:id/versions/:versionId
-  //   Body accepts: { changelog?: string | null; isActive?: boolean }
-  //   At least one field must be present. Supersedes the previous
-  //   deactivate-only behaviour — clients that used to send `{}` to deactivate
-  //   must now send `{ isActive: false }` explicitly.
   app.patch<{
     Params: { id: string; versionId: string };
     Body: UpdateTemplateVersionRequestDto;
@@ -701,10 +684,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // GET /api/v1/admin/templates/:id/versions/:versionId/file
-  //   Streams the version's archive content as a .zip download. Always a zip,
-  //   even when the original upload was a single .typ file — the storage
-  //   gateway re-bundles the directory.
   app.get<{ Params: { id: string; versionId: string } }>(
     '/templates/:id/versions/:versionId/file',
     {
@@ -722,7 +701,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
           },
         },
         response: {
-          // No JSON schema for 200 — body is a binary blob.
           401: { description: 'Chưa đăng nhập', ...ErrorResponseJsonSchema },
           403: { description: 'Không có quyền', ...ErrorResponseJsonSchema },
           404: {
@@ -756,9 +734,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // POST /api/v1/admin/templates/:id/source-project
-  //   Create (or reuse) the template's editable source project. The frontend
-  //   then opens it in the workspace via `/workspace/:sourceProjectId?templateId=`.
   app.post<{ Params: { id: string }; Body: CreateSourceProjectRequestDto }>(
     '/templates/:id/source-project',
     {
@@ -815,8 +790,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // POST /api/v1/admin/templates/:id/source-project/import (multipart)
-  //   Create the template's source project seeded from an uploaded .zip.
   app.post<{ Params: { id: string } }>(
     '/templates/:id/source-project/import',
     {
@@ -884,8 +857,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
     },
   );
 
-  // POST /api/v1/admin/templates/:id/versions/from-source
-  //   Publish a new immutable version by snapshotting the source project files.
   app.post<{ Params: { id: string }; Body: PublishVersionFromSourceRequestDto }>(
     '/templates/:id/versions/from-source',
     {
@@ -951,9 +922,6 @@ export async function adminTemplateRoutes(app: FastifyInstance, container: Templ
   );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
   switch (errorCode) {
     case 'VALIDATION_ERROR':

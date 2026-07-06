@@ -1,8 +1,3 @@
-/**
- * Get Department By Id Use Case
- * 
- * Application layer orchestration for retrieving a single department by ID.
- */
 
 import type { DepartmentRepo } from '../../domain/Department/Ports.js';
 import type { DepartmentWithContext } from '../../domain/Department/Types.js';

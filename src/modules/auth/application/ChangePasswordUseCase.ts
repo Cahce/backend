@@ -8,10 +8,6 @@ import {
     UnauthorizedError,
 } from "../domain/AuthErrors.js";
 
-/**
- * Change password use case
- * Allows authenticated users to change their password
- */
 
 export interface ChangePasswordCommand {
     userId: string;
@@ -43,24 +39,19 @@ export class ChangePasswordUseCase {
 
     async execute(command: ChangePasswordCommand): Promise<ChangePasswordResponse> {
         try {
-            // 1. Find user
             const user = await this.userRepo.findById(command.userId);
             if (!user) {
                 throw new UnauthorizedError();
             }
 
-            // 2. Check if user has a password (not SSO-only account)
             if (!user.passwordHash) {
                 throw new InternalAuthError("Tài khoản SSO không thể đổi mật khẩu");
             }
 
-            // 3. New password must match its confirmation. Cheap check first so a
-            // mismatched confirmation fails fast without paying for two bcrypt compares.
             if (command.newPassword !== command.confirmNewPassword) {
                 throw new PasswordsDoNotMatchError();
             }
 
-            // 4. Verify old password
             const isOldPasswordValid = await this.passwordHasher.verify(
                 command.oldPassword,
                 user.passwordHash,
@@ -69,7 +60,6 @@ export class ChangePasswordUseCase {
                 throw new OldPasswordIncorrectError();
             }
 
-            // 5. Check if new password is different from old password
             const isNewPasswordSameAsOld = await this.passwordHasher.verify(
                 command.newPassword,
                 user.passwordHash,
@@ -78,10 +68,8 @@ export class ChangePasswordUseCase {
                 throw new NewPasswordSameAsOldError();
             }
 
-            // 6. Hash new password
             const newPasswordHash = await this.passwordHasher.hash(command.newPassword);
 
-            // 7. Update password in database
             await this.userRepo.updatePassword(user.id, newPasswordHash);
 
             return {
@@ -89,7 +77,6 @@ export class ChangePasswordUseCase {
                 message: "Đổi mật khẩu thành công",
             };
         } catch (error) {
-            // Handle domain errors
             if (error instanceof AuthError) {
                 return {
                     success: false,
@@ -100,7 +87,6 @@ export class ChangePasswordUseCase {
                 };
             }
 
-            // Handle unexpected errors
             console.error("Change password error:", error);
             const internalError = new InternalAuthError("Đổi mật khẩu thất bại");
             return {

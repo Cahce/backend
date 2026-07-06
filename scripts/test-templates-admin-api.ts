@@ -1,7 +1,3 @@
-/**
- * Templates Admin API Test
- * Tests the complete admin flow: login → CRUD template → upload version
- */
 
 const BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
 const ADMIN_EMAIL = 'admin@tlu.edu.vn';
@@ -73,7 +69,6 @@ async function runTests() {
   console.log('='.repeat(60));
   console.log('');
 
-  // ===== STEP 1: AUTHENTICATION =====
   await test('Step 1: Login as admin', async () => {
     const result = await apiRequest('POST', '/api/v1/auth/login', {
       email: ADMIN_EMAIL,
@@ -88,7 +83,6 @@ async function runTests() {
     console.log(`  User: ${result.data.user.email} (${result.data.user.role})`);
   });
 
-  // ===== STEP 2: CREATE TEMPLATE =====
   await test('Step 2: Create new template', async () => {
     const timestamp = new Date().toISOString();
     const result = await apiRequest('POST', '/api/v1/admin/templates', {
@@ -111,7 +105,6 @@ async function runTests() {
     console.log(`  Name: ${result.data.name}`);
   });
 
-  // ===== STEP 3: GET TEMPLATE BY ID =====
   await test('Step 3: Get template by ID', async () => {
     const result = await apiRequest('GET', `/api/v1/admin/templates/${testTemplateId}`);
 
@@ -126,7 +119,6 @@ async function runTests() {
     console.log(`  Retrieved: ${result.data.name}`);
   });
 
-  // ===== STEP 4: LIST TEMPLATES =====
   await test('Step 4: List all templates', async () => {
     const result = await apiRequest('GET', '/api/v1/admin/templates?page=1&pageSize=10');
 
@@ -142,7 +134,6 @@ async function runTests() {
     console.log(`  Returned: ${result.data.templates.length}`);
   });
 
-  // ===== STEP 5: UPDATE TEMPLATE =====
   await test('Step 5: Update template', async () => {
     const result = await apiRequest('PATCH', `/api/v1/admin/templates/${testTemplateId}`, {
       name: 'Updated Test Template',
@@ -160,7 +151,6 @@ async function runTests() {
     console.log(`  Updated name: ${result.data.name}`);
   });
 
-  // ===== STEP 6: UPLOAD TEMPLATE VERSION (.typ) =====
   await test('Step 6: Upload template version (.typ file)', async () => {
     const typstContent = `= Mẫu Luận Văn
 
@@ -177,7 +167,6 @@ Nội dung chính của luận văn.
 Kết luận của luận văn.
 `;
 
-    // Create FormData for multipart upload
     const formData = new FormData();
     const blob = new Blob([typstContent], { type: 'text/plain' });
     formData.append('file', blob, 'main.typ');
@@ -210,7 +199,6 @@ Kết luận của luận văn.
     console.log(`  Version: ${data.versionNumber}`);
   });
 
-  // ===== STEP 7: LIST VERSIONS =====
   await test('Step 7: List template versions', async () => {
     const result = await apiRequest(
       'GET',
@@ -232,7 +220,6 @@ Kết luận của luận văn.
     console.log(`  Versions count: ${result.data.length}`);
   });
 
-  // ===== STEP 8: DEACTIVATE VERSION =====
   await test('Step 8: Deactivate template version', async () => {
     const result = await apiRequest(
       'PATCH',
@@ -250,7 +237,6 @@ Kết luận của luận văn.
     console.log(`  Version deactivated: ${testVersionId}`);
   });
 
-  // ===== STEP 9: ERROR CASES =====
   await test('Step 9a: Create template with duplicate name (should succeed)', async () => {
     const result = await apiRequest('POST', '/api/v1/admin/templates', {
       name: 'Updated Test Template',
@@ -259,14 +245,12 @@ Kết luận của luận văn.
       isOfficial: false,
     });
 
-    // Duplicate names are allowed
     if (result.status !== 201) {
       throw new Error(`Expected 201, got ${result.status}`);
     }
 
     console.log(`  Duplicate name allowed: ${result.data.id}`);
 
-    // Clean up
     await apiRequest('DELETE', `/api/v1/admin/templates/${result.data.id}`);
   });
 
@@ -316,7 +300,6 @@ Kết luận của luận văn.
     console.log(`  ✓ Correctly rejected unauthorized request`);
   });
 
-  // ===== STEP 10: DELETE TEMPLATE =====
   await test('Step 10: Delete template', async () => {
     const result = await apiRequest('DELETE', `/api/v1/admin/templates/${testTemplateId}`);
 
@@ -327,7 +310,6 @@ Kết luận của luận văn.
     console.log(`  ✓ Template deleted: ${testTemplateId}`);
   });
 
-  // ===== SUMMARY =====
   console.log('');
   console.log('='.repeat(60));
   const passed = results.filter((r) => r.passed).length;

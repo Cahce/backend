@@ -1,19 +1,9 @@
-/**
- * Capture HTTP DTOs
- *
- * Request/response validation schemas using Zod (+ OpenAPI), mirroring the
- * zotero/openalex Dto pattern (zod-to-json-schema for Fastify validation).
- *
- * Note: `save` re-resolves from url/identifier (the preview item is NOT sent
- * back) so the persisted `.bib` entry / Zotero item keep full metadata.
- */
 
 import { z } from "zod";
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 
 extendZodWithOpenApi(z);
 
-/** A creator on a captured item. */
 export const CaptureCreatorDtoSchema = z.object({
   creatorType: z.string().openapi({ description: "Creator type (author, editor, ...)" }),
   firstName: z.string().optional().openapi({ description: "First name" }),
@@ -22,7 +12,6 @@ export const CaptureCreatorDtoSchema = z.object({
 });
 export type CaptureCreatorDto = z.infer<typeof CaptureCreatorDtoSchema>;
 
-/** A captured reference (preview shape). */
 export const CaptureItemDtoSchema = z.object({
   itemType: z.string().openapi({ description: "Zotero item type" }),
   title: z.string().nullable().openapi({ description: "Title" }),
@@ -35,7 +24,6 @@ export const CaptureItemDtoSchema = z.object({
 });
 export type CaptureItemDto = z.infer<typeof CaptureItemDtoSchema>;
 
-/** Resolve (preview) request. Exactly one of url/identifier is enforced by the use case. */
 export const ResolveBodySchema = z.object({
   url: z.string().url().optional().openapi({ description: "Web page URL", example: "https://arxiv.org/abs/1706.03762" }),
   identifier: z.string().min(1).max(200).optional().openapi({ description: "DOI / PMID / arXiv ID / ISBN", example: "10.1038/nphys1170" }),
@@ -47,7 +35,6 @@ export const ResolveResponseSchema = z.object({
 });
 export type ResolveResponse = z.infer<typeof ResolveResponseSchema>;
 
-/** Capture + save request. */
 export const SaveCaptureBodySchema = z.object({
   url: z.string().url().optional().openapi({ description: "Web page URL" }),
   identifier: z.string().min(1).max(200).optional().openapi({ description: "DOI / PMID / arXiv ID / ISBN" }),
@@ -86,11 +73,6 @@ export const ApiErrorSchema = z.object({
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- */
 
 import { zodToJsonSchema } from "zod-to-json-schema";
 

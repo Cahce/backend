@@ -1,8 +1,3 @@
-/**
- * Update Major Use Case
- * 
- * Application layer orchestration for updating an existing major.
- */
 
 import type { MajorRepo } from '../../domain/Major/Ports.js';
 import type { FacultyRepo } from '../../domain/Faculty/Ports.js';
@@ -22,14 +17,12 @@ export class UpdateMajorUseCase {
     data: UpdateMajorData
   ): Promise<Result<Major>> {
     try {
-      // Check if major exists
       const existing = await this.majorRepo.findById(id);
       if (!existing) {
         const error = MajorErrors.MAJOR_NOT_FOUND;
         return failure(error.code, error.message);
       }
 
-      // Validate parent faculty if facultyId is being changed
       if (data.facultyId && data.facultyId !== existing.facultyId) {
         const faculty = await this.facultyRepo.findById(data.facultyId);
         if (!faculty) {
@@ -38,7 +31,6 @@ export class UpdateMajorUseCase {
         }
       }
 
-      // Check for duplicate code if code is being changed
       if (data.code && data.code !== existing.code) {
         const duplicate = await this.majorRepo.findByCode(data.code);
         if (duplicate) {
@@ -47,7 +39,6 @@ export class UpdateMajorUseCase {
         }
       }
 
-      // Update major
       const major = await this.majorRepo.update(id, data);
       return success(major);
     } catch (error) {

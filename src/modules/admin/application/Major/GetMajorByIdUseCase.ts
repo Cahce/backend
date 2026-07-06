@@ -1,8 +1,3 @@
-/**
- * Get Major By Id Use Case
- * 
- * Application layer orchestration for retrieving a single major by ID.
- */
 
 import type { MajorRepo } from '../../domain/Major/Ports.js';
 import type { MajorWithContext } from '../../domain/Major/Types.js';

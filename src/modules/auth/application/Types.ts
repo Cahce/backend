@@ -1,6 +1,3 @@
-/**
- * Application layer types for auth module
- */
 
 import type { Permission } from "../../../shared/auth/Permissions.js";
 

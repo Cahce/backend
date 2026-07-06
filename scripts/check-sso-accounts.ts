@@ -1,6 +1,3 @@
-/**
- * Check for SSO-only accounts (accounts without passwords)
- */
 
 import dotenv from "dotenv";
 import { PrismaClient } from "../src/generated/prisma/index.js";

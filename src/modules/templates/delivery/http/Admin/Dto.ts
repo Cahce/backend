@@ -2,17 +2,12 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// Extend Zod with OpenAPI support
 extendZodWithOpenApi(z);
 
-/**
- * =========================
- * Shared Enums
- * =========================
- */
 
 export const TemplateCategoryEnum = z.enum([
   'thesis',
+  'project',
   'report',
   'proposal',
   'paper',
@@ -22,13 +17,7 @@ export const TemplateCategoryEnum = z.enum([
   description: 'Danh mục mẫu',
 });
 
-/**
- * =========================
- * Request DTOs
- * =========================
- */
 
-// Create Template Request
 export const CreateTemplateRequestSchema = z
   .object({
     name: z
@@ -58,7 +47,6 @@ export const CreateTemplateRequestSchema = z
 
 export type CreateTemplateRequestDto = z.infer<typeof CreateTemplateRequestSchema>;
 
-// Update Template Request
 export const UpdateTemplateRequestSchema = z
   .object({
     name: z
@@ -94,11 +82,6 @@ export const UpdateTemplateRequestSchema = z
 
 export type UpdateTemplateRequestDto = z.infer<typeof UpdateTemplateRequestSchema>;
 
-// Update Template Version Request
-//
-// Used by PATCH /admin/templates/:id/versions/:versionId — supersedes the
-// deactivate-only behaviour. Either `changelog` (set/clear) or `isActive`
-// (activate/deactivate) must be present, else 400 VALIDATION_ERROR.
 export const UpdateTemplateVersionRequestSchema = z
   .object({
     changelog: z
@@ -125,12 +108,6 @@ export type UpdateTemplateVersionRequestDto = z.infer<
   typeof UpdateTemplateVersionRequestSchema
 >;
 
-// Create Source Project Request
-//
-// Used by POST /admin/templates/:id/source-project to create (or reuse) the
-// admin-owned editable working copy. `seed` decides initial content: 'blank'
-// scaffolds an empty Typst project; 'latest' seeds from the template's most
-// recent active version.
 export const CreateSourceProjectRequestSchema = z
   .object({
     seed: z.enum(['blank', 'latest']).default('blank').openapi({
@@ -144,10 +121,6 @@ export type CreateSourceProjectRequestDto = z.infer<
   typeof CreateSourceProjectRequestSchema
 >;
 
-// Publish Version From Source Request
-//
-// Used by POST /admin/templates/:id/versions/from-source to snapshot the
-// source project's current files into a new immutable version.
 export const PublishVersionFromSourceRequestSchema = z
   .object({
     versionNumber: z
@@ -171,7 +144,6 @@ export type PublishVersionFromSourceRequestDto = z.infer<
   typeof PublishVersionFromSourceRequestSchema
 >;
 
-// List Templates Query Parameters
 export const ListTemplatesQuerySchema = z
   .object({
     search: z
@@ -221,17 +193,7 @@ export const ListTemplatesQuerySchema = z
 
 export type ListTemplatesQueryDto = z.infer<typeof ListTemplatesQuerySchema>;
 
-/**
- * =========================
- * Response DTOs
- * =========================
- */
 
-// Template Response
-//
-// `usageCount` is the number of projects referencing this template (either via
-// `Project.templateId` or via `Project.templateVersion.templateId`). Always
-// present on admin responses; never exposed on the public `/templates` route.
 export const TemplateResponseSchema = z
   .object({
     id: z.string().openapi({
@@ -281,7 +243,6 @@ export const TemplateResponseSchema = z
 
 export type TemplateResponseDto = z.infer<typeof TemplateResponseSchema>;
 
-// Template Version Response
 export const TemplateVersionResponseSchema = z
   .object({
     id: z.string().openapi({
@@ -313,7 +274,6 @@ export const TemplateVersionResponseSchema = z
 
 export type TemplateVersionResponseDto = z.infer<typeof TemplateVersionResponseSchema>;
 
-// List Templates Response
 export const ListTemplatesResponseSchema = z
   .object({
     items: z.array(TemplateResponseSchema).openapi({
@@ -340,7 +300,6 @@ export const ListTemplatesResponseSchema = z
 
 export type ListTemplatesResponseDto = z.infer<typeof ListTemplatesResponseSchema>;
 
-// List Versions Response
 export const ListVersionsResponseSchema = z
   .object({
     versions: z.array(TemplateVersionResponseSchema).openapi({
@@ -351,7 +310,6 @@ export const ListVersionsResponseSchema = z
 
 export type ListVersionsResponseDto = z.infer<typeof ListVersionsResponseSchema>;
 
-// Error Response
 export const ErrorResponseSchema = z
   .object({
     error: z.object({
@@ -369,7 +327,6 @@ export const ErrorResponseSchema = z
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
 
-// Message Response
 export const MessageResponseSchema = z
   .object({
     message: z.string().openapi({
@@ -381,8 +338,6 @@ export const MessageResponseSchema = z
 
 export type MessageResponseDto = z.infer<typeof MessageResponseSchema>;
 
-// Source Project Response — returns the id of the template's editable working
-// copy so the frontend can navigate to `/workspace/:id?templateId=...`.
 export const SourceProjectResponseSchema = z
   .object({
     sourceProjectId: z.string().openapi({
@@ -394,11 +349,6 @@ export const SourceProjectResponseSchema = z
 
 export type SourceProjectResponseDto = z.infer<typeof SourceProjectResponseSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
   const s = schema as Record<string, unknown>;

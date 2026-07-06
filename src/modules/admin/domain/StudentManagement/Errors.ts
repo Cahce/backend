@@ -1,5 +1,3 @@
-// Domain errors for Student management
-// Vietnamese error messages for user-facing errors
 
 export const StudentErrors = {
   STUDENT_NOT_FOUND: {

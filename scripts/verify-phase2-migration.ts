@@ -7,7 +7,6 @@ async function verifyMigration() {
   try {
     console.log('=== Phase 2 Migration Verification ===\n');
 
-    // 1. Row count reconciliation
     console.log('1. Verifying row counts...');
     const legacyTeacherCount = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count FROM "Teacher_Legacy"
@@ -41,7 +40,6 @@ async function verifyMigration() {
       console.log(`  ✅ Student counts match`);
     }
 
-    // 2. accountId mapping verification
     console.log('\n2. Verifying accountId mappings...');
     const unmappedTeachers = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count
@@ -70,7 +68,6 @@ async function verifyMigration() {
       console.log(`  ✅ All Student records mapped`);
     }
 
-    // 3. Required field verification
     console.log('\n3. Verifying required fields...');
     const teacherNulls = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count
@@ -103,7 +100,6 @@ async function verifyMigration() {
       console.log(`  ✅ All Student required fields populated`);
     }
 
-    // 4. Duplicate verification
     console.log('\n4. Verifying uniqueness constraints...');
     const duplicateTeacherCodes = await prisma.$queryRaw<Array<{ teacherCode: string; count: bigint }>>`
       SELECT "teacherCode", COUNT(*) as count
@@ -149,7 +145,6 @@ async function verifyMigration() {
       console.log(`  ✅ No duplicate accountId values`);
     }
 
-    // 5. ProjectAdvisor reference verification (Phase 2b)
     console.log('\n5. Verifying ProjectAdvisor references...');
     const invalidAdvisorRefs = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count
@@ -165,7 +160,6 @@ async function verifyMigration() {
       console.log(`  ✅ All ProjectAdvisor references valid`);
     }
 
-    // Final result
     console.log('\n=== Verification Results ===\n');
     if (allChecksPassed) {
       console.log('✅ All verification checks passed\n');
@@ -183,5 +177,4 @@ async function verifyMigration() {
   process.exit(allChecksPassed ? 0 : 1);
 }
 
-// Run verification
 verifyMigration();

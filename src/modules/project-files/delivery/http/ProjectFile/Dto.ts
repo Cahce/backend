@@ -2,16 +2,9 @@ import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// Extend Zod with OpenAPI support
 extendZodWithOpenApi(z);
 
-/**
- * =========================
- * Request DTOs
- * =========================
- */
 
-// File Kind Schema - all 11 values from Prisma FileKind enum
 export const FileKindSchema = z.enum([
   'typst',
   'bib',
@@ -26,7 +19,6 @@ export const FileKindSchema = z.enum([
   'other',
 ]);
 
-// Create File Request
 export const CreateFileRequestSchema = z
   .object({
     path: z
@@ -54,7 +46,6 @@ export const CreateFileRequestSchema = z
 
 export type CreateFileRequestDto = z.infer<typeof CreateFileRequestSchema>;
 
-// Update File Request
 export const UpdateFileRequestSchema = z
   .object({
     content: z.string().openapi({
@@ -66,7 +57,6 @@ export const UpdateFileRequestSchema = z
 
 export type UpdateFileRequestDto = z.infer<typeof UpdateFileRequestSchema>;
 
-// Rename File Request
 export const RenameFileRequestSchema = z
   .object({
     newPath: z
@@ -82,13 +72,7 @@ export const RenameFileRequestSchema = z
 
 export type RenameFileRequestDto = z.infer<typeof RenameFileRequestSchema>;
 
-/**
- * =========================
- * Response DTOs
- * =========================
- */
 
-// File Metadata Response (excludes content)
 export const FileMetadataSchema = z
   .object({
     id: z.string().openapi({
@@ -132,7 +116,6 @@ export const FileMetadataSchema = z
 
 export type FileMetadataDto = z.infer<typeof FileMetadataSchema>;
 
-// File Response (includes content)
 export const FileResponseSchema = z
   .object({
     id: z.string().openapi({
@@ -188,7 +171,6 @@ export const FileResponseSchema = z
 
 export type FileResponseDto = z.infer<typeof FileResponseSchema>;
 
-// File List Response
 export const FileListResponseSchema = z
   .object({
     files: z.array(FileMetadataSchema).openapi({
@@ -199,7 +181,6 @@ export const FileListResponseSchema = z
 
 export type FileListResponseDto = z.infer<typeof FileListResponseSchema>;
 
-// Error Response
 export const ErrorResponseSchema = z
   .object({
     error: z.object({
@@ -217,13 +198,6 @@ export const ErrorResponseSchema = z
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- * Dùng cho schema.body / schema.querystring / schema.response
- * Không nhét raw Zod schema trực tiếp vào Fastify.
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
   const s = schema as Record<string, unknown>;

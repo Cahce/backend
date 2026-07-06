@@ -4,7 +4,6 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 
-// Load environment variables
 dotenv.config();
 
 const connectionString = process.env.DATABASE_URL;
@@ -22,7 +21,6 @@ async function main() {
     const defaultPassword = "123456";
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-    // Seed admin
     const admin = await prisma.user.upsert({
         where: { email: "admin@tlu.edu.vn" },
         update: {},
@@ -35,7 +33,6 @@ async function main() {
     });
     console.log("✓ Admin user:", admin.email);
 
-    // Seed teacher
     const teacher = await prisma.user.upsert({
         where: { email: "kieutuandung@tlu.edu.vn" },
         update: {},
@@ -48,7 +45,6 @@ async function main() {
     });
     console.log("✓ Teacher user:", teacher.email);
 
-    // Seed student
     const student = await prisma.user.upsert({
         where: { email: "2251172560@e.tlu.edu.vn" },
         update: {},

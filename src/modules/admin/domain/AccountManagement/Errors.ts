@@ -1,5 +1,3 @@
-// Domain errors for Account management
-// Vietnamese error messages for user-facing errors
 
 export const AccountErrors = {
   ACCOUNT_NOT_FOUND: {

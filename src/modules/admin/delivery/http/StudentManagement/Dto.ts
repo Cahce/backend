@@ -2,16 +2,9 @@ import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-// Extend Zod with OpenAPI support
 extendZodWithOpenApi(z);
 
-/**
- * =========================
- * Request DTOs
- * =========================
- */
 
-// Account inline creation modes
 export const AccountInlineSchema = z.discriminatedUnion("mode", [
     z.object({
         mode: z.literal("none").openapi({
@@ -57,7 +50,6 @@ export const AccountInlineSchema = z.discriminatedUnion("mode", [
 
 export type AccountInlineDto = z.infer<typeof AccountInlineSchema>;
 
-// Create Student Request
 export const CreateStudentRequestSchema = z
     .object({
         studentCode: z
@@ -133,7 +125,6 @@ export const CreateStudentRequestSchema = z
 
 export type CreateStudentRequestDto = z.infer<typeof CreateStudentRequestSchema>;
 
-// Update Student Request
 export const UpdateStudentRequestSchema = z
     .object({
         studentCode: z
@@ -201,7 +192,6 @@ export const UpdateStudentRequestSchema = z
 
 export type UpdateStudentRequestDto = z.infer<typeof UpdateStudentRequestSchema>;
 
-// List Students Query Parameters
 export const ListStudentsQuerySchema = z
     .object({
         search: z
@@ -268,7 +258,6 @@ export const ListStudentsQuerySchema = z
 
 export type ListStudentsQueryDto = z.infer<typeof ListStudentsQuerySchema>;
 
-// Link Account Request
 export const LinkAccountRequestSchema = z
     .object({
         accountId: z
@@ -284,13 +273,7 @@ export const LinkAccountRequestSchema = z
 
 export type LinkAccountRequestDto = z.infer<typeof LinkAccountRequestSchema>;
 
-/**
- * =========================
- * Response DTOs
- * =========================
- */
 
-// Student Response
 export const StudentResponseSchema = z
     .object({
         id: z.string().openapi({
@@ -373,7 +356,6 @@ export const StudentResponseSchema = z
 
 export type StudentResponseDto = z.infer<typeof StudentResponseSchema>;
 
-// List Students Response
 export const ListStudentsResponseSchema = z
     .object({
         items: z.array(StudentResponseSchema).openapi({
@@ -400,7 +382,6 @@ export const ListStudentsResponseSchema = z
 
 export type ListStudentsResponseDto = z.infer<typeof ListStudentsResponseSchema>;
 
-// Error Response
 export const ErrorResponseSchema = z
     .object({
         error: z.object({
@@ -418,7 +399,6 @@ export const ErrorResponseSchema = z
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
 
-// Message Response
 export const MessageResponseSchema = z
     .object({
         message: z.string().openapi({
@@ -430,11 +410,6 @@ export const MessageResponseSchema = z
 
 export type MessageResponseDto = z.infer<typeof MessageResponseSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
     const s = schema as Record<string, unknown>;

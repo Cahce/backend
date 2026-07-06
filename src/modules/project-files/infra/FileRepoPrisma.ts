@@ -1,9 +1,3 @@
-/**
- * Prisma implementation of File repository
- * 
- * Infrastructure layer implementation of FileRepo port.
- * Handles all File data access operations using Prisma.
- */
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import { Prisma } from '../../../generated/prisma/index.js';
@@ -12,24 +6,16 @@ import type { File, FileMetadata, CreateFileData, UpdateFileData, RenameFileData
 import { FileKind, StorageMode } from '../domain/ProjectFile/Types.js';
 import { getCompilationKinds } from '../domain/FileKindPolicy.js';
 
-/**
- * Prisma-based File repository implementation
- */
 export class FileRepoPrisma implements FileRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Create a new File
-   */
   async create(
     input: CreateFileData & { storageMode: string; sizeBytes: number; sha256: string },
   ): Promise<File> {
     try {
       const now = new Date();
       
-      // Use transaction to update both file and project
       const file = await this.prisma.$transaction(async (tx) => {
-        // Create file
         const createdFile = await tx.file.create({
           data: {
             projectId: input.projectId,
@@ -44,7 +30,6 @@ export class FileRepoPrisma implements FileRepo {
           },
         });
 
-        // Update project lastEditedAt
         await tx.project.update({
           where: { id: input.projectId },
           data: { lastEditedAt: now },
@@ -57,7 +42,6 @@ export class FileRepoPrisma implements FileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - file already exists at path
           throw new Error('FILE_ALREADY_EXISTS');
         }
       }
@@ -65,11 +49,6 @@ export class FileRepoPrisma implements FileRepo {
     }
   }
 
-  /**
-   * Create a new binary-content File. Differs from {@link create} in that
-   * `storageKey` is supplied externally (already written to blob storage) and
-   * `textContent` is forced to NULL.
-   */
   async createBinary(input: {
     projectId: string;
     path: string;
@@ -115,9 +94,6 @@ export class FileRepoPrisma implements FileRepo {
     }
   }
 
-  /**
-   * Find File by ID
-   */
   async findById(id: string): Promise<File | null> {
     const file = await this.prisma.file.findUnique({
       where: { id },
@@ -130,9 +106,6 @@ export class FileRepoPrisma implements FileRepo {
     return this.mapToFile(file, this.determineStorageMode(file));
   }
 
-  /**
-   * Find File by project ID and path
-   */
   async findByProjectIdAndPath(projectId: string, path: string): Promise<File | null> {
     const file = await this.prisma.file.findUnique({
       where: {
@@ -150,10 +123,6 @@ export class FileRepoPrisma implements FileRepo {
     return this.mapToFile(file, this.determineStorageMode(file));
   }
 
-  /**
-   * List all Files in a project
-   * Results are ordered by path alphabetically
-   */
   async listByProjectId(projectId: string): Promise<File[]> {
     const files = await this.prisma.file.findMany({
       where: { projectId },
@@ -163,11 +132,6 @@ export class FileRepoPrisma implements FileRepo {
     return files.map((file) => this.mapToFile(file, this.determineStorageMode(file)));
   }
 
-  /**
-   * List file metadata only (no textContent/storageKey/sha256). Used by the
-   * hot file-tree endpoint so a workspace open does not transfer every file's
-   * `@db.Text` content just to render names + sizes.
-   */
   async listMetadataByProjectId(projectId: string): Promise<FileMetadata[]> {
     const files = await this.prisma.file.findMany({
       where: { projectId },
@@ -198,18 +162,13 @@ export class FileRepoPrisma implements FileRepo {
     }));
   }
 
-  /**
-   * Update an existing File
-   */
   async update(
     input: UpdateFileData & { sizeBytes: number; sha256: string },
   ): Promise<File> {
     try {
       const now = new Date();
       
-      // Use transaction to update both file and project
       const file = await this.prisma.$transaction(async (tx) => {
-        // Update file
         const updatedFile = await tx.file.update({
           where: {
             projectId_path: {
@@ -225,7 +184,6 @@ export class FileRepoPrisma implements FileRepo {
           },
         });
 
-        // Update project lastEditedAt
         await tx.project.update({
           where: { id: input.projectId },
           data: { lastEditedAt: now },
@@ -238,7 +196,6 @@ export class FileRepoPrisma implements FileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('FILE_NOT_FOUND');
         }
       }
@@ -246,9 +203,6 @@ export class FileRepoPrisma implements FileRepo {
     }
   }
 
-  /**
-   * Rename a File
-   */
   async rename(input: RenameFileData): Promise<File> {
     try {
       const file = await this.prisma.file.update({
@@ -267,11 +221,9 @@ export class FileRepoPrisma implements FileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('FILE_NOT_FOUND');
         }
         if (error.code === 'P2002') {
-          // Unique constraint violation - file already exists at newPath
           throw new Error('FILE_ALREADY_EXISTS');
         }
       }
@@ -279,9 +231,6 @@ export class FileRepoPrisma implements FileRepo {
     }
   }
 
-  /**
-   * Delete a File
-   */
   async delete(projectId: string, path: string): Promise<void> {
     try {
       await this.prisma.file.delete({
@@ -295,7 +244,6 @@ export class FileRepoPrisma implements FileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('FILE_NOT_FOUND');
         }
       }
@@ -303,10 +251,6 @@ export class FileRepoPrisma implements FileRepo {
     }
   }
 
-  /**
-   * Find files for compilation
-   * Returns files with compilation-relevant kinds (typst, bib, image, vector, font, data, config)
-   */
   async findForCompilation(projectId: string): Promise<File[]> {
     const files = await this.prisma.file.findMany({
       where: {
@@ -320,9 +264,6 @@ export class FileRepoPrisma implements FileRepo {
     return files.map((file) => this.mapToFile(file, this.determineStorageMode(file)));
   }
 
-  /**
-   * Check if a file exists at the given path
-   */
   async exists(projectId: string, path: string): Promise<boolean> {
     const count = await this.prisma.file.count({
       where: {
@@ -333,9 +274,6 @@ export class FileRepoPrisma implements FileRepo {
     return count > 0;
   }
 
-  /**
-   * Determine storage mode from Prisma file record
-   */
   private determineStorageMode(file: { textContent: string | null; storageKey: string | null }): StorageMode {
     if (file.textContent !== null) {
       return StorageMode.Inline;
@@ -343,13 +281,9 @@ export class FileRepoPrisma implements FileRepo {
     if (file.storageKey !== null) {
       return StorageMode.ObjectStorage;
     }
-    // Default to inline if both are null (shouldn't happen in practice)
     return StorageMode.Inline;
   }
 
-  /**
-   * Map Prisma File model to domain File type
-   */
   private mapToFile(
     prismaFile: {
       id: string;

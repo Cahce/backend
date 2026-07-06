@@ -1,10 +1,3 @@
-/**
- * OpenAlex Identifier Fallback
- *
- * Implements the capture `IdentifierFallbackPort` over the OpenAlex API so that
- * DOI / arXiv capture works without a self-hosted translation-server. Depends
- * only on the OpenAlex domain *port* (injected), not its infra.
- */
 
 import type { IdentifierFallbackPort } from "../domain/Ports.js";
 import type { CaptureItem } from "../domain/Types.js";
@@ -29,11 +22,6 @@ export class OpenAlexIdentifierFallback implements IdentifierFallbackPort {
   }
 }
 
-/**
- * Normalize a user identifier to a bare DOI. Supports DOI (bare / `doi:` /
- * doi.org URL) and new-style arXiv IDs (mapped to their DataCite DOI). Returns
- * null for identifiers OpenAlex-by-DOI can't handle (e.g. ISBN, PMID).
- */
 export function normalizeToDoi(raw: string): string | null {
   const s = raw.trim();
 
@@ -44,7 +32,6 @@ export function normalizeToDoi(raw: string): string | null {
 
   if (/^10\.\d{4,9}\/\S+$/.test(s)) return s;
 
-  // arXiv new-style id: "2301.01234", "arXiv:2301.01234v2", or an abs URL.
   const arxiv =
     s.match(/^(?:arxiv:)?(\d{4}\.\d{4,5})(?:v\d+)?$/i) ??
     s.match(/arxiv\.org\/abs\/(\d{4}\.\d{4,5})/i);

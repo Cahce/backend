@@ -1,6 +1,3 @@
-/**
- * Prisma implementation of CompileArtifactRepository
- */
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import type {

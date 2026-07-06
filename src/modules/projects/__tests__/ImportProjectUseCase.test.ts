@@ -6,6 +6,7 @@ import AdmZip from 'adm-zip';
 
 import { ImportProjectUseCase } from '../application/ImportProjectUseCase.js';
 import { ProjectErrors } from '../domain/Project/Errors.js';
+import { TemplateCategory } from '../domain/Project/Types.js';
 import { MockProjectRepo } from './mocks/MockProjectRepo.js';
 import { MockProjectSettingsRepo } from './mocks/MockProjectSettingsRepo.js';
 import { MockFileRepo } from '../../project-files/__tests__/mocks/MockFileRepo.js';
@@ -111,6 +112,9 @@ function createRawZip(filename: string, data: Buffer): Buffer {
   return Buffer.concat([localPart, centralPart, eocd]);
 }
 
+const TGZ_BASE64 =
+  'H4sIAAAAAAAAA+3VMQ6CMBTG8c6eosG99FXaTh7AYxAkQqKFQBm8vTBhUGNMKGj8fgtJl77kzwMRs+Bkz2rNpJFkNY3PESOtiBKlpLX9uSVjGdfhR2Osa33acM6KKnWnJS78LiLOirT2edOGexE+7k80HKH/Au76l843lfDXeu47hsAmSV73p2l/ZUzfX849yDN/3n/PD0P2zdpzwDpEfElLF2LrR2/3f2cm+y+Nxv4vYlu67Nwdcx49/gcifBUAAAAAAAAAAAAAAAAAAH7GDUEjdmQAKAAA';
+
 describe('ImportProjectUseCase', () => {
   let projectRepo: MockProjectRepo;
   let fileRepo: MockFileRepo;
@@ -132,14 +136,14 @@ describe('ImportProjectUseCase', () => {
   });
 
   it('strips a single Typst archive wrapper and persists mainPath', async () => {
-    const zipBuffer = createZip({
+    const archiveBuffer = createZip({
       'templatemaudoantotnghiep/project.toml': 'name = "Do an tot nghiep"\nentry = "main.typ"\n',
       'templatemaudoantotnghiep/main.typ': '#include "chapters/Chuong3.typ"\n',
       'templatemaudoantotnghiep/chapters/Chuong3.typ': '= Chuong 3\n',
       'templatemaudoantotnghiep/bibliography.bib': '@article{sample2024}\n',
     });
 
-    const result = await useCase.execute({ userId: 'user-1', zipBuffer });
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
 
     assert.strictEqual(result.success, true);
     if (!result.success) return;
@@ -158,13 +162,13 @@ describe('ImportProjectUseCase', () => {
   });
 
   it('preserves root-relative zip paths that do not have a wrapper', async () => {
-    const zipBuffer = createZip({
+    const archiveBuffer = createZip({
       'main.typ': '#include "chapters/intro.typ"\n',
       'chapters/intro.typ': '= Intro\n',
       'project.toml': 'name = "Root Project"\nentry = "main.typ"\n',
     });
 
-    const result = await useCase.execute({ userId: 'user-1', zipBuffer });
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
 
     assert.strictEqual(result.success, true);
     if (!result.success) return;
@@ -178,13 +182,13 @@ describe('ImportProjectUseCase', () => {
   });
 
   it('uses project.toml entry when the imported main file is custom', async () => {
-    const zipBuffer = createZip({
+    const archiveBuffer = createZip({
       'template/project.toml': 'name = "Custom Entry"\nentry = "src/document.typ"\n',
       'template/src/document.typ': '= Document\n',
       'template/lib/theme.typ': '#let theme = none\n',
     });
 
-    const result = await useCase.execute({ userId: 'user-1', zipBuffer });
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
 
     assert.strictEqual(result.success, true);
     if (!result.success) return;
@@ -197,13 +201,61 @@ describe('ImportProjectUseCase', () => {
     assert.strictEqual(settingsRepo.getSettings(result.data.project.id)?.mainPath, 'src/document.typ');
   });
 
+  it('detects the include-graph root when no manifest declares an entry', async () => {
+    const archiveBuffer = createZip({
+      'Template-Import.typ': '#let format-doc-general = none\n',
+      '90-Document/90-Document.typ': [
+        '#import "../Template-Import.typ": *',
+        '#include "../00-Title/00-Title.typ"',
+        '#include "../80-Structure/82-struct-main.typ"',
+      ].join('\n'),
+      '00-Title/00-Title.typ': '= Title\n',
+      '80-Structure/82-struct-main.typ': '#include "../30-Chapters/Chapter1.typ"\n',
+      '30-Chapters/Chapter1.typ': '= Chuong 1\n',
+    });
+
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+    assert.strictEqual(
+      settingsRepo.getSettings(result.data.project.id)?.mainPath,
+      '90-Document/90-Document.typ',
+    );
+  });
+
+  it('uses typst.toml [template] entrypoint over graph detection', async () => {
+    const archiveBuffer = createZip({
+      'typst.toml': [
+        '[package]',
+        'name = "demo"',
+        'entrypoint = "lib.typ"',
+        '[template]',
+        'path = "template"',
+        'entrypoint = "main.typ"',
+      ].join('\n'),
+      'lib.typ': '#let f = none\n',
+      'template/main.typ': '#include "chapter.typ"\n',
+      'template/chapter.typ': '= C\n',
+    });
+
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+    assert.strictEqual(
+      settingsRepo.getSettings(result.data.project.id)?.mainPath,
+      'template/main.typ',
+    );
+  });
+
   it('preserves an ambiguous single top-level folder when no Typst marker exists', async () => {
-    const zipBuffer = createZip({
+    const archiveBuffer = createZip({
       'docs/readme.txt': 'plain notes\n',
       'docs/data.csv': 'a,b\n1,2\n',
     });
 
-    const result = await useCase.execute({ userId: 'user-1', zipBuffer });
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
 
     assert.strictEqual(result.success, true);
     if (!result.success) return;
@@ -217,9 +269,9 @@ describe('ImportProjectUseCase', () => {
   });
 
   it('rejects path traversal archive paths before creating a project', async () => {
-    const zipBuffer = createRawZip('../evil.typ', Buffer.from('= Evil\n', 'utf-8'));
+    const archiveBuffer = createRawZip('../evil.typ', Buffer.from('= Evil\n', 'utf-8'));
 
-    const result = await useCase.execute({ userId: 'user-1', zipBuffer });
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
 
     assert.strictEqual(result.success, false);
     if (result.success) return;
@@ -228,15 +280,130 @@ describe('ImportProjectUseCase', () => {
   });
 
   it('rejects Windows drive archive paths before creating a project', async () => {
-    const zipBuffer = createZip({
+    const archiveBuffer = createZip({
       'C:/evil.typ': '= Evil\n',
     });
 
-    const result = await useCase.execute({ userId: 'user-1', zipBuffer });
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
 
     assert.strictEqual(result.success, false);
     if (result.success) return;
     assert.strictEqual(result.error.code, ProjectErrors.ZIP_PATH_TRAVERSAL.code);
     assert.deepStrictEqual(await projectRepo.listByOwnerId('user-1'), []);
+  });
+
+  it('applies the requested category to the created project', async () => {
+    const archiveBuffer = createZip({
+      'main.typ': '= Thesis\n',
+    });
+
+    const result = await useCase.execute({
+      userId: 'user-1',
+      archiveBuffer,
+      category: TemplateCategory.Thesis,
+    });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+    assert.strictEqual(result.data.project.category, TemplateCategory.Thesis);
+  });
+
+  it('defaults the category to other when none is given', async () => {
+    const archiveBuffer = createZip({
+      'main.typ': '= Doc\n',
+    });
+
+    const result = await useCase.execute({ userId: 'user-1', archiveBuffer });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+    assert.strictEqual(result.data.project.category, TemplateCategory.Other);
+  });
+
+  it('imports a tar.gz archive through the multi-format extractor', async () => {
+    const result = await useCase.execute({
+      userId: 'user-1',
+      archiveBuffer: Buffer.from(TGZ_BASE64, 'base64'),
+      filename: 'project.tar.gz',
+    });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+
+    assert.strictEqual(result.data.project.title, 'project');
+
+    const files = await fileRepo.listByProjectId(result.data.project.id);
+    assert.deepStrictEqual(
+      files.map((file) => file.path).sort(),
+      ['chapters/intro.typ', 'main.typ'],
+    );
+    assert.strictEqual(
+      settingsRepo.getSettings(result.data.project.id)?.mainPath,
+      'main.typ',
+    );
+  });
+
+  it('rejects an unsupported archive format before creating a project', async () => {
+    const result = await useCase.execute({
+      userId: 'user-1',
+      archiveBuffer: Buffer.from('not an archive at all'),
+      filename: 'notes.bin',
+    });
+
+    assert.strictEqual(result.success, false);
+    if (result.success) return;
+    assert.strictEqual(result.error.code, ProjectErrors.UNSUPPORTED_ARCHIVE.code);
+    assert.deepStrictEqual(await projectRepo.listByOwnerId('user-1'), []);
+  });
+
+  it('uses the requested title (trimmed) over the archive manifest name', async () => {
+    const archiveBuffer = createZip({
+      'project.toml': 'name = "Ten trong toml"\nentry = "main.typ"\n',
+      'main.typ': '= Doc\n',
+    });
+
+    const result = await useCase.execute({
+      userId: 'user-1',
+      archiveBuffer,
+      title: '  Đồ án tốt nghiệp  ',
+    });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+    assert.strictEqual(result.data.project.title, 'Đồ án tốt nghiệp');
+  });
+
+  it('falls back to the manifest title when the given title is blank', async () => {
+    const archiveBuffer = createZip({
+      'project.toml': 'name = "Ten trong toml"\nentry = "main.typ"\n',
+      'main.typ': '= Doc\n',
+    });
+
+    const result = await useCase.execute({
+      userId: 'user-1',
+      archiveBuffer,
+      filename: 'ten-file-khac.zip',
+      title: '   ',
+    });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+    assert.strictEqual(result.data.project.title, 'Ten trong toml');
+  });
+
+  it('falls back to the uploaded filename when the manifest has no name', async () => {
+    const archiveBuffer = createZip({
+      'main.typ': '= Doc\n',
+    });
+
+    const result = await useCase.execute({
+      userId: 'user-1',
+      archiveBuffer,
+      filename: 'Bao cao DATN.zip',
+    });
+
+    assert.strictEqual(result.success, true);
+    if (!result.success) return;
+    assert.strictEqual(result.data.project.title, 'Bao cao DATN');
   });
 });

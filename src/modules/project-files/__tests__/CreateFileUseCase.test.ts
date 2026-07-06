@@ -1,6 +1,3 @@
-/**
- * Unit Tests for CreateFileUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -78,7 +75,7 @@ describe('CreateFileUseCase', () => {
     if (result.success) {
       assert.strictEqual(result.data.sizeBytes, Buffer.byteLength(content, 'utf8'));
       assert.ok(result.data.sha256);
-      assert.strictEqual(result.data.sha256!.length, 64); // SHA-256 hex length
+      assert.strictEqual(result.data.sha256!.length, 64);
     }
   });
 
@@ -106,7 +103,7 @@ describe('CreateFileUseCase', () => {
       path: 'main.typ',
       kind: FileKind.Typst,
       content: 'content',
-      userId: 'user-456', // Different user
+      userId: 'user-456',
       userRole: 'student' as const,
     };
 
@@ -186,7 +183,6 @@ describe('CreateFileUseCase', () => {
     assert.strictEqual(result.success, false);
     if (!result.success) {
       assert.strictEqual(result.error.code, FileErrors.INVALID_FILE_PATH.code);
-      // Domain PathValidator reports the rejected '..' traversal segment.
       assert.ok(result.error.message.includes('..'));
     }
   });
@@ -221,9 +217,6 @@ describe('CreateFileUseCase', () => {
 
     const result = await useCase.execute(command);
 
-    // Domain PathValidator strips the leading slash (paths are relative to the
-    // project root); the file is created at the sandboxed relative path. The
-    // real escape protection is the '..' traversal rejection tested above.
     assert.strictEqual(result.success, true);
     if (result.success) {
       assert.strictEqual(result.data.path, 'etc/passwd');

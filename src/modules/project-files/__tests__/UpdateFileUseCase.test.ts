@@ -1,6 +1,3 @@
-/**
- * Unit Tests for UpdateFileUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -86,14 +83,12 @@ describe('UpdateFileUseCase', () => {
 
     assert.strictEqual(result.success, true);
     if (result.success) {
-      // Verify size is recomputed
       const expectedSize = Buffer.byteLength(newContent, 'utf8');
       assert.strictEqual(result.data.sizeBytes, expectedSize);
       
-      // Verify hash is recomputed (should be different from old hash)
       assert.notStrictEqual(result.data.sha256, 'old-hash');
       assert.ok(result.data.sha256);
-      assert.strictEqual(result.data.sha256.length, 64); // SHA256 hex length
+      assert.strictEqual(result.data.sha256.length, 64);
     }
   });
 
@@ -220,7 +215,6 @@ describe('UpdateFileUseCase', () => {
     assert.strictEqual(result.success, true);
     if (result.success) {
       assert.strictEqual(result.data.textContent, utf8Content);
-      // UTF-8 byte length should be greater than character length
       const expectedSize = Buffer.byteLength(utf8Content, 'utf8');
       assert.strictEqual(result.data.sizeBytes, expectedSize);
     }

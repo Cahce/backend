@@ -1,8 +1,3 @@
-/**
- * Mock Template Repository for Unit Testing
- * 
- * Test double that implements TemplateRepo interface for isolated testing.
- */
 
 import type { TemplateRepo } from '../../domain/Ports.js';
 import type {
@@ -15,9 +10,6 @@ import type {
   CreateVersionData,
 } from '../../domain/Types.js';
 
-/**
- * Mock implementation of TemplateRepo for unit tests
- */
 export class MockTemplateRepo implements TemplateRepo {
   private templates: Map<string, Template> = new Map();
   private versions: Map<string, TemplateVersion> = new Map();
@@ -25,9 +17,6 @@ export class MockTemplateRepo implements TemplateRepo {
   private nextId = 1;
   private nextVersionId = 1;
 
-  /**
-   * Configure mock to return specific templates
-   */
   setTemplates(templates: Template[]): void {
     this.templates.clear();
     for (const template of templates) {
@@ -35,9 +24,6 @@ export class MockTemplateRepo implements TemplateRepo {
     }
   }
 
-  /**
-   * Configure mock to return specific versions
-   */
   setVersions(versions: TemplateVersion[]): void {
     this.versions.clear();
     for (const version of versions) {
@@ -45,16 +31,10 @@ export class MockTemplateRepo implements TemplateRepo {
     }
   }
 
-  /**
-   * Configure mock project usage count
-   */
   setProjectUsageCount(templateId: string, count: number): void {
     this.projectUsageCount.set(templateId, count);
   }
 
-  /**
-   * Clear all mock data
-   */
   clear(): void {
     this.templates.clear();
     this.versions.clear();
@@ -87,7 +67,6 @@ export class MockTemplateRepo implements TemplateRepo {
   async list(filter: TemplateFilter): Promise<{ items: Template[]; total: number }> {
     let templates = Array.from(this.templates.values());
 
-    // Apply filters
     if (filter.search) {
       const search = filter.search.toLowerCase();
       templates = templates.filter(
@@ -111,7 +90,6 @@ export class MockTemplateRepo implements TemplateRepo {
 
     const total = templates.length;
 
-    // Apply pagination
     const start = (filter.page - 1) * filter.pageSize;
     const end = start + filter.pageSize;
     templates = templates.slice(start, end);
@@ -137,7 +115,6 @@ export class MockTemplateRepo implements TemplateRepo {
           }
         : null;
 
-      // Only include templates with at least one active version
       if (latestVersion) {
         result.push({
           ...template,
@@ -174,7 +151,6 @@ export class MockTemplateRepo implements TemplateRepo {
       throw new Error('TEMPLATE_NOT_FOUND');
     }
     this.templates.delete(id);
-    // Also delete associated versions
     for (const [versionId, version] of this.versions.entries()) {
       if (version.templateId === id) {
         this.versions.delete(versionId);
@@ -206,7 +182,6 @@ export class MockTemplateRepo implements TemplateRepo {
   }
 
   async createVersion(data: CreateVersionData): Promise<TemplateVersion> {
-    // Check if version already exists
     const existingVersion = Array.from(this.versions.values()).find(
       (v) => v.templateId === data.templateId && v.versionNumber === data.versionNumber,
     );

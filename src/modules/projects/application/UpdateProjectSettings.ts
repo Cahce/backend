@@ -26,14 +26,11 @@ export class UpdateProjectSettings {
     ) {}
 
     async execute(cmd: UpdateProjectSettingsCommand): Promise<ProjectSettings> {
-        // Check if project exists and user has access
         const project = await this.projectRepo.findById(cmd.projectId);
         if (!project) {
             throw new Error(ProjectErrors.PROJECT_NOT_FOUND.code);
         }
 
-        // Resolve ProjectMember / advisor relations so editor members can update
-        // settings (inline AuthContext left membershipRole/isAdvisor undefined).
         const authContext = await buildProjectAuthContext(
             this.projectRepo,
             project,
@@ -45,21 +42,17 @@ export class UpdateProjectSettings {
             throw new Error(ProjectErrors.UNAUTHORIZED.code);
         }
 
-        // Get current settings
         const current = await this.settingsRepo.findOrCreate(cmd.projectId);
 
-        // Validate mainPath if provided
         if (cmd.patch.mainPath !== undefined) {
             this.validateMainPath(cmd.patch.mainPath);
             
-            // Check if file exists
             const fileExists = await this.fileRepo.exists(cmd.projectId, cmd.patch.mainPath);
             if (!fileExists) {
                 throw new Error("INVALID_MAIN_PATH");
             }
         }
 
-        // Build updated settings
         const updated = new (current.constructor as typeof ProjectSettings)(
             current.projectId,
             cmd.patch.mainPath ?? current.mainPath,
@@ -79,12 +72,10 @@ export class UpdateProjectSettings {
     }
 
     private validateMainPath(path: string): void {
-        // Check for path traversal
         if (path.startsWith("/") || path.includes("..")) {
             throw new Error("INVALID_MAIN_PATH");
         }
 
-        // Check for empty path
         if (path.trim().length === 0) {
             throw new Error("INVALID_MAIN_PATH");
         }

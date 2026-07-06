@@ -6,7 +6,6 @@ import * as XLSX from "xlsx";
 describe("FileParser", () => {
   describe("parseXlsx", () => {
     it("should parse valid XLSX file", () => {
-      // Create a simple XLSX workbook
       const workbook = XLSX.utils.book_new();
       const data = [
         ["code", "name"],
@@ -16,10 +15,8 @@ describe("FileParser", () => {
       const worksheet = XLSX.utils.aoa_to_sheet(data);
       XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
 
-      // Write to buffer
       const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 
-      // Parse
       const result = FileParser.parseXlsx(buffer);
 
       assert.strictEqual(result.rows.length, 2);
@@ -180,7 +177,7 @@ describe("FileParser", () => {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
 
       const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
-      const mimetype = "text/plain"; // Wrong MIME type
+      const mimetype = "text/plain";
 
       const result = FileParser.parseSpreadsheet(buffer, mimetype);
 
@@ -199,7 +196,6 @@ describe("FileParser", () => {
 
       const buffer = FileParser.buildXlsxTemplate(headers, exampleRow);
 
-      // Verify it's a valid XLSX file by parsing it back
       const parsed = FileParser.parseXlsx(buffer);
 
       assert.strictEqual(parsed.rows.length, 1);
@@ -218,10 +214,8 @@ describe("FileParser", () => {
 
       const template = FileParser.buildCsvTemplate(headers, exampleRow);
 
-      // Should start with BOM
       assert.strictEqual(template.charCodeAt(0), 0xfeff);
 
-      // Should contain header and example row
       assert.ok(template.includes("code,name"));
       assert.ok(template.includes("CNTT,Khoa Công nghệ Thông tin"));
     });

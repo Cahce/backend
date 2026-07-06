@@ -1,10 +1,3 @@
-/**
- * Import Template Source Project Use Case
- *
- * Creates an admin-owned "source project" seeded from an uploaded .zip and
- * links it to the template via `Template.sourceProjectId`. The actual zip
- * import is delegated to the projects module through `SourceProjectGateway`.
- */
 
 import type { SourceProjectGateway, TemplateRepo } from '../domain/Ports.js';
 import { TemplateErrors } from '../domain/Errors.js';
@@ -42,7 +35,6 @@ export class ImportTemplateSourceProjectUseCase {
         });
         projectId = res.projectId;
       } catch (error) {
-        // The gateway surfaces projects-module zip errors via a `code`.
         const code = (error as { code?: string }).code;
         if (code === 'ZIP_MALFORMED' || code === 'ZIP_PATH_TRAVERSAL') {
           return { success: false, error: TemplateErrors.INVALID_ARCHIVE };

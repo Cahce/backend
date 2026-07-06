@@ -1,6 +1,3 @@
-/**
- * Unit Tests for CreateTemplateUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';

@@ -1,14 +1,3 @@
-/**
- * UploadBinaryFile Use Case
- *
- * Persists a binary file (image / font / PDF / etc) into a project.
- * Flow:
- *   1. Authorize: caller must be the project owner or a member.
- *   2. Validate: sanitize path + reject forbidden extensions + check declared MIME.
- *   3. Reject duplicates: path must not already exist (caller deletes first).
- *   4. Stream the upload to BlobStorage — this also computes sha256 + sizeBytes.
- *   5. Persist the File row via FileRepo.createBinary.
- */
 
 import { randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
@@ -24,9 +13,6 @@ import {
 import { validateProjectFilePath, InvalidPathError } from "../domain/PathValidator.js";
 import type { ProjectWriteAccessPolicy } from "../../projects/domain/access/ProjectAccessPolicies.js";
 
-// ---------------------------------------------------------------------------
-// Errors
-// ---------------------------------------------------------------------------
 
 export class InvalidMimeError extends Error {
   constructor(public readonly declaredMimeType: string) {
@@ -56,12 +42,8 @@ export class ProjectAccessDeniedError extends Error {
   }
 }
 
-// Re-export for convenience
 export { InvalidPathError };
 
-// ---------------------------------------------------------------------------
-// Command + Result
-// ---------------------------------------------------------------------------
 
 export interface UploadBinaryFileCommand {
   projectId: string;
@@ -74,9 +56,6 @@ export interface UploadBinaryFileCommand {
 
 export type UploadBinaryFileResult = File;
 
-// ---------------------------------------------------------------------------
-// Use case
-// ---------------------------------------------------------------------------
 
 export class UploadBinaryFileUseCase {
   constructor(
@@ -86,39 +65,29 @@ export class UploadBinaryFileUseCase {
   ) {}
 
   async execute(cmd: UploadBinaryFileCommand): Promise<UploadBinaryFileResult> {
-    // 1. Authorization. The compile module's policy throws on denial — we
-    //    re-wrap into our typed error so the HTTP layer maps to 403 cleanly.
     try {
       await this.projectAccess.requireWriteAccess(cmd.projectId, cmd.userId);
     } catch (err) {
-      // Bubble up project-not-found unchanged; map access-denied to typed.
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("PROJECT_NOT_FOUND")) throw err;
       throw new ProjectAccessDeniedError();
     }
 
-    // 2. Path validation + extension check.
     const normalisedPath = validateProjectFilePath(cmd.path);
     if (hasForbiddenExtension(normalisedPath)) {
       throw new ForbiddenExtensionError(normalisedPath);
     }
 
-    // 3. MIME allow-list.
     if (!isAllowedMimeType(cmd.declaredMimeType)) {
       throw new InvalidMimeError(cmd.declaredMimeType);
     }
 
-    // 4. Reject duplicates.
     if (await this.fileRepo.exists(cmd.projectId, normalisedPath)) {
       throw new FileExistsError(normalisedPath);
     }
 
-    // 5. Detect kind if caller didn't supply one.
     const kind = cmd.kind ?? detectKindFromPath(normalisedPath);
 
-    // 6. Stream into blob storage. The key contains a UUID prefix so two
-    //    uploads with the same filename don't collide; the human-readable
-    //    suffix is preserved for ops debugging.
     const basename = normalisedPath.split("/").pop() ?? "file";
     const storageKey = `projects/${cmd.projectId}/${randomUUID()}-${basename}`;
     const metadata = await this.blobStorage.put(
@@ -127,7 +96,6 @@ export class UploadBinaryFileUseCase {
       cmd.declaredMimeType,
     );
 
-    // 7. Persist row.
     const file = await this.fileRepo.createBinary({
       projectId: cmd.projectId,
       path: normalisedPath,

@@ -22,11 +22,6 @@ import {
   ErrorResponseJsonSchema,
 } from './Dto.js';
 
-/**
- * Map a domain File entity to its public HTTP response DTO. Avoids leaking
- * domain-only fields like `storageMode` and converts Date fields to ISO
- * strings explicitly instead of relying on JSON.stringify side effects.
- */
 function toFileResponseDto(file: File): FileResponseDto {
   return {
     id: file.id,
@@ -44,9 +39,6 @@ function toFileResponseDto(file: File): FileResponseDto {
   };
 }
 
-/**
- * Project Files module HTTP routes
- */
 export async function projectFileRoutes(
   app: FastifyInstance,
   container: ProjectFilesContainer,
@@ -60,7 +52,6 @@ export async function projectFileRoutes(
     deleteFileUseCase,
   } = container;
 
-  // GET /api/v1/projects/:projectId/files - list files
   app.get<{ Params: { projectId: string } }>(
     '/projects/:projectId/files',
     {
@@ -122,7 +113,6 @@ export async function projectFileRoutes(
     },
   );
 
-  // POST /api/v1/projects/:projectId/files - create file
   app.post<{ Params: { projectId: string }; Body: CreateFileRequestDto }>(
     '/projects/:projectId/files',
     {
@@ -207,16 +197,6 @@ export async function projectFileRoutes(
     },
   );
 
-  // POST /api/v1/projects/:projectId/files:upload - multipart binary upload
-  //
-  // Accepts `multipart/form-data` with two parts:
-  //   - `file` (required): the raw binary payload.
-  //   - `path` (required): target path inside the project (e.g. "assets/logo.png").
-  //   - `kind` (optional): one of FileKind; auto-detected from path if omitted.
-  //
-  // The JSON `POST /files` endpoint remains for text content. This endpoint is
-  // additive — separating the two avoids the JSON Schema body validator from
-  // tripping over multipart requests.
   app.post<{ Params: { projectId: string } }>(
     '/projects/:projectId/files:upload',
     {
@@ -257,12 +237,6 @@ export async function projectFileRoutes(
       let declaredMimeType = 'application/octet-stream';
       let path: string | null = null;
       let kind: FileKind | undefined;
-      // Buffer fallback: when the multipart sends `file` BEFORE `path` (typical
-      // browser FormData serialization order), we can't break out of the loop
-      // because we'd lose the path field. Instead, we consume the file part
-      // into a Buffer and replay it as a Readable later. Safe because the
-      // multipart plugin already enforces `MAX_UPLOAD_SIZE_BYTES`, so the
-      // buffer is bounded.
       let fileBuffer: Buffer | null = null;
 
       try {
@@ -271,12 +245,9 @@ export async function projectFileRoutes(
           if (part.type === 'file' && part.fieldname === 'file') {
             declaredMimeType = part.mimetype || 'application/octet-stream';
             if (path) {
-              // Path already known — stream straight through, then break.
               fileStream = part.file as NodeJS.ReadableStream;
               break;
             }
-            // Path not yet seen — buffer the file so the iterator can advance
-            // to subsequent field parts without invalidating the stream.
             fileBuffer = await (part as any).toBuffer();
             continue;
           }
@@ -285,14 +256,11 @@ export async function projectFileRoutes(
             else if (part.fieldname === 'kind') kind = String(part.value) as FileKind;
           }
         }
-        // If we buffered the file (because it came before `path`), wrap the
-        // buffer in a Readable so the use case sees a uniform interface.
         if (fileBuffer && !fileStream) {
           const { Readable } = await import('node:stream');
           fileStream = Readable.from(fileBuffer);
         }
       } catch (err: any) {
-        // @fastify/multipart throws when fileSize limit is exceeded.
         if (err?.code === 'FST_REQ_FILE_TOO_LARGE') {
           return reply.code(413).send({
             error: { code: 'PAYLOAD_TOO_LARGE', message: 'Tệp vượt quá giới hạn cho phép' },
@@ -350,7 +318,6 @@ export async function projectFileRoutes(
     },
   );
 
-  // GET /api/v1/projects/:projectId/files/* - get file by path
   app.get<{ Params: { projectId: string; '*': string } }>(
     '/projects/:projectId/files/*',
     {
@@ -410,7 +377,6 @@ export async function projectFileRoutes(
       if (result.success) {
         const file = result.data;
 
-        // Binary streaming for binary file kinds with storageKey
         if (isBinaryKind(file.kind) && file.storageKey) {
           try {
             const stream = await app.storage.get(file.storageKey);
@@ -422,12 +388,6 @@ export async function projectFileRoutes(
               reply.header('Content-Length', file.sizeBytes);
             }
 
-            // Ship metadata via headers so the frontend can populate the file
-            // viewer's "Last changed" / id / storageKey without a second
-            // round-trip. The JSON response branch carries these in the body;
-            // binary streams cannot, so headers are the only channel. These
-            // header names are mirrored in the CORS `exposedHeaders` config
-            // in app.ts — keep both lists in sync.
             reply.header('X-File-Id', file.id);
             if (file.lastEditedAt) {
               reply.header('X-Last-Edited-At', file.lastEditedAt.toISOString());
@@ -436,12 +396,6 @@ export async function projectFileRoutes(
             reply.header('X-Updated-At', file.updatedAt.toISOString());
             reply.header('X-Storage-Key', file.storageKey);
 
-            // If the client disconnects mid-download, Fastify v5 does not
-            // auto-destroy the stream sourced via `reply.send(readable)`.
-            // Without this hook, backend keeps reading from disk/object
-            // storage until the source EOF — wasted I/O and held file
-            // descriptors. The `destroyed` guard avoids a double-destroy
-            // on normal completion.
             request.raw.on('close', () => {
               if (!stream.destroyed) {
                 stream.destroy();
@@ -463,7 +417,6 @@ export async function projectFileRoutes(
           }
         }
 
-        // JSON response for text files
         return reply.code(200).send(toFileResponseDto(file));
       }
 
@@ -473,7 +426,6 @@ export async function projectFileRoutes(
     },
   );
 
-  // PUT /api/v1/projects/:projectId/files/* - update file
   app.put<{ Params: { projectId: string; '*': string }; Body: UpdateFileRequestDto }>(
     '/projects/:projectId/files/*',
     {
@@ -557,7 +509,6 @@ export async function projectFileRoutes(
     },
   );
 
-  // PATCH /api/v1/projects/:projectId/files:rename - rename file (using query param for path)
   app.patch<{ Params: { projectId: string }; Querystring: { path: string }; Body: RenameFileRequestDto }>(
     '/projects/:projectId/files:rename',
     {
@@ -651,7 +602,6 @@ export async function projectFileRoutes(
     },
   );
 
-  // DELETE /api/v1/projects/:projectId/files/* - delete file
   app.delete<{ Params: { projectId: string; '*': string } }>(
     '/projects/:projectId/files/*',
     {
@@ -719,9 +669,6 @@ export async function projectFileRoutes(
   );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
   switch (errorCode) {
     case 'VALIDATION_ERROR':
@@ -732,10 +679,6 @@ function getStatusCodeForError(errorCode: string): number {
     case 'FILE_NOT_FOUND':
     case 'PROJECT_NOT_FOUND':
       return 404;
-    // Three semantically distinct "already exists" codes from the application
-    // layer all map to HTTP 409. Keeping them separate at the domain layer
-    // lets the frontend distinguish create-conflict vs rename-conflict in
-    // toast messages; the status code is the same either way.
     case 'FILE_ALREADY_EXISTS':
     case 'FILE_PATH_CONFLICT':
     case 'RENAME_TARGET_EXISTS':

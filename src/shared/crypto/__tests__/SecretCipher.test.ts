@@ -32,7 +32,6 @@ describe("SecretCipher", () => {
         const plaintext = "secret-data";
         
         const encrypted = cipher.encrypt(plaintext);
-        // Tamper with the ciphertext part
         const parts = encrypted.split(":");
         parts[3] = Buffer.from("tampered").toString("base64");
         const tampered = parts.join(":");
@@ -47,7 +46,6 @@ describe("SecretCipher", () => {
         const plaintext = "secret-data";
         
         const encrypted = cipher.encrypt(plaintext);
-        // Tamper with the IV
         const parts = encrypted.split(":");
         parts[1] = Buffer.from("tamperediv12").toString("base64");
         const tampered = parts.join(":");
@@ -72,12 +70,10 @@ describe("SecretCipher", () => {
     it("should throw error when version prefix is missing or wrong", () => {
         const cipher = new SecretCipher(testSecret);
         
-        // Missing version
         assert.throws(() => {
             cipher.decrypt("invalid:format:here");
         }, /Invalid cipher blob format/);
         
-        // Wrong version
         const encrypted = cipher.encrypt("test");
         const wrongVersion = encrypted.replace("v1:", "v2:");
         

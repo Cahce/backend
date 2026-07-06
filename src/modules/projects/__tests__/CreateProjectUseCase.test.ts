@@ -1,9 +1,7 @@
-/**
- * Unit Tests for CreateProjectUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { Readable } from 'node:stream';
 import { CreateProjectUseCase } from '../application/CreateProjectUseCase.js';
 import { MockProjectRepo } from './mocks/MockProjectRepo.js';
 import { MockProjectSettingsRepo } from './mocks/MockProjectSettingsRepo.js';
@@ -11,6 +9,43 @@ import { TemplateCategory } from '../domain/Project/Types.js';
 import { ProjectErrors } from '../domain/Project/Errors.js';
 import type { MaterializeTemplate } from '../domain/MaterializeTemplate.js';
 import { MockFileRepo } from '../../project-files/__tests__/mocks/MockFileRepo.js';
+import { StorageMode } from '../../project-files/domain/ProjectFile/Types.js';
+import type { BlobMetadata, BlobStorage } from '../../../shared/storage/BlobStorage.js';
+
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+class MockBlobStorage implements BlobStorage {
+  readonly objects = new Map<string, Buffer>();
+
+  async put(key: string, body: Readable | Buffer, contentType: string): Promise<BlobMetadata> {
+    const buffer = Buffer.isBuffer(body) ? body : await streamToBuffer(body);
+    this.objects.set(key, buffer);
+    return { sizeBytes: buffer.byteLength, sha256: 'mock-sha256', contentType };
+  }
+
+  async get(key: string): Promise<Readable> {
+    const buf = this.objects.get(key);
+    if (!buf) throw new Error(`STORAGE_NOT_FOUND: ${key}`);
+    return Readable.from(buf);
+  }
+
+  async head(key: string): Promise<BlobMetadata | null> {
+    const buf = this.objects.get(key);
+    return buf
+      ? { sizeBytes: buf.byteLength, sha256: 'mock-sha256', contentType: 'application/octet-stream' }
+      : null;
+  }
+
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+}
 
 describe('CreateProjectUseCase', () => {
   let useCase: CreateProjectUseCase;
@@ -153,16 +188,13 @@ describe('CreateProjectUseCase', () => {
 
       assert.strictEqual(result.success, true);
       if (result.success) {
-        // Verify project was created
         assert.strictEqual(result.data.title, 'My Thesis');
 
-        // Verify files were created
         const files = await mockFileRepo.listByProjectId(result.data.id);
         assert.strictEqual(files.length, 2);
         assert.ok(files.find((f) => f.path === 'main.typ'));
         assert.ok(files.find((f) => f.path === 'refs.bib'));
 
-        // Verify settings were updated with correct entryPath
         const settings = mockSettingsRepo.getSettings(result.data.id);
         assert.ok(settings);
         assert.strictEqual(settings.mainPath, 'main.typ');
@@ -198,13 +230,11 @@ describe('CreateProjectUseCase', () => {
 
       assert.strictEqual(result.success, true);
       if (result.success) {
-        // Verify files were created
         const files = await mockFileRepo.listByProjectId(result.data.id);
         assert.strictEqual(files.length, 2);
         assert.ok(files.find((f) => f.path === 'src/document.typ'));
         assert.ok(files.find((f) => f.path === 'lib/utils.typ'));
 
-        // Verify settings use custom entryPath
         const settings = mockSettingsRepo.getSettings(result.data.id);
         assert.ok(settings);
         assert.strictEqual(settings.mainPath, 'src/document.typ');
@@ -257,14 +287,12 @@ describe('CreateProjectUseCase', () => {
         title: 'Empty Project',
         category: TemplateCategory.Thesis,
         userId: 'user-123',
-        // No templateVersionId
       };
 
       const result = await useCaseWithTemplate.execute(command);
 
       assert.strictEqual(result.success, true);
       if (result.success) {
-        // Verify project was created
         assert.strictEqual(result.data.title, 'Empty Project');
 
         const files = await mockFileRepo.listByProjectId(result.data.id);
@@ -305,17 +333,69 @@ describe('CreateProjectUseCase', () => {
 
       assert.strictEqual(result.success, true);
       if (result.success) {
-        // Verify project was created
         assert.strictEqual(result.data.title, 'Empty Template');
 
-        // Verify no files were created
         const files = await mockFileRepo.listByProjectId(result.data.id);
         assert.strictEqual(files.length, 0);
 
-        // Verify settings were still updated with entryPath
         const settings = mockSettingsRepo.getSettings(result.data.id);
         assert.ok(settings);
         assert.strictEqual(settings.mainPath, 'main.typ');
+      }
+    });
+
+    it('should persist binary template assets (fonts/images) to blob storage', async () => {
+      const fontBytes = Buffer.from([0x00, 0x01, 0x00, 0x00, 0xff, 0xfe]);
+      const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      const mockMaterialize: MaterializeTemplate = async (_versionId: string) => ({
+        files: [
+          { path: 'main.typ', content: '= Thesis' },
+          { path: 'assets/fonts/times.ttf', content: '', data: fontBytes },
+          { path: 'assets/images/logo-tlu.png', content: '', data: pngBytes },
+        ],
+        entryPath: 'main.typ',
+      });
+
+      const blobStorage = new MockBlobStorage();
+      useCaseWithTemplate = new CreateProjectUseCase(
+        mockRepo,
+        mockFileRepo,
+        mockSettingsRepo,
+        mockMaterialize,
+        blobStorage,
+      );
+
+      const result = await useCaseWithTemplate.execute({
+        title: 'Thesis with assets',
+        category: TemplateCategory.Thesis,
+        userId: 'user-123',
+        templateVersionId: 'version-assets',
+      });
+
+      assert.strictEqual(result.success, true);
+      if (result.success) {
+        const files = await mockFileRepo.listByProjectId(result.data.id);
+        assert.strictEqual(files.length, 3);
+
+        const main = files.find((f) => f.path === 'main.typ');
+        assert.ok(main);
+        assert.strictEqual(main.storageMode, StorageMode.Inline);
+        assert.strictEqual(main.textContent, '= Thesis');
+
+        const font = files.find((f) => f.path === 'assets/fonts/times.ttf');
+        assert.ok(font, 'font file should be materialized');
+        assert.strictEqual(font.storageMode, StorageMode.ObjectStorage);
+        assert.ok(font.storageKey);
+        assert.strictEqual(font.textContent, null);
+
+        const png = files.find((f) => f.path === 'assets/images/logo-tlu.png');
+        assert.ok(png, 'image file should be materialized');
+        assert.strictEqual(png.storageMode, StorageMode.ObjectStorage);
+        assert.ok(png.storageKey);
+
+        assert.strictEqual(blobStorage.objects.size, 2);
+        const storedFont = blobStorage.objects.get(font.storageKey as string);
+        assert.ok(storedFont && storedFont.equals(fontBytes));
       }
     });
 
@@ -349,7 +429,6 @@ describe('CreateProjectUseCase', () => {
 
       assert.strictEqual(result.success, true);
       if (result.success) {
-        // Verify all files with subdirectories were created
         const files = await mockFileRepo.listByProjectId(result.data.id);
         assert.strictEqual(files.length, 3);
         assert.ok(files.find((f) => f.path === 'main.typ'));

@@ -1,6 +1,3 @@
-/**
- * Unit Tests for CreateTemplateVersionUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -278,8 +275,6 @@ describe('CreateTemplateVersionUseCase', () => {
       assert.strictEqual(result.error.code, TemplateErrors.VERSION_EXISTS.code);
     }
 
-    // Storage should have been cleaned up (rollback)
-    // In real implementation, verify storage.remove was called
   });
 
   it('should create version with null changelog', async () => {

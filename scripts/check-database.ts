@@ -1,7 +1,3 @@
-/**
- * Database Connection and Data Check Script
- * Connects to the database and displays current data
- */
 
 import dotenv from "dotenv";
 import { PrismaClient } from "../src/generated/prisma/index.js";
@@ -10,7 +6,6 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 dotenv.config();
 
-// Create PostgreSQL connection pool
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is not set");
@@ -25,11 +20,9 @@ async function checkDatabase() {
   console.log(`📍 Database URL: ${connectionString?.replace(/:[^:@]+@/, ':****@')}\n`);
 
   try {
-    // Test connection
     await prisma.$connect();
     console.log("✅ Database connected successfully!\n");
 
-    // Check Users
     console.log("=== Users ===");
     const users = await prisma.user.findMany({
       select: {
@@ -54,7 +47,6 @@ async function checkDatabase() {
       });
     }
 
-    // Check Faculties
     console.log("=== Faculties ===");
     const faculties = await prisma.faculty.findMany({
       select: {
@@ -81,7 +73,6 @@ async function checkDatabase() {
       });
     }
 
-    // Check Departments
     console.log("=== Departments ===");
     const departments = await prisma.department.findMany({
       select: {
@@ -112,7 +103,6 @@ async function checkDatabase() {
       });
     }
 
-    // Check Majors
     console.log("=== Majors ===");
     const majors = await prisma.major.findMany({
       select: {
@@ -143,7 +133,6 @@ async function checkDatabase() {
       });
     }
 
-    // Check Classes
     console.log("=== Classes ===");
     const classes = await prisma.class.findMany({
       select: {
@@ -174,7 +163,6 @@ async function checkDatabase() {
       });
     }
 
-    // Check Teachers
     console.log("=== Teachers ===");
     const teachers = await prisma.teacher.findMany({
       select: {
@@ -205,7 +193,6 @@ async function checkDatabase() {
       });
     }
 
-    // Check Students
     console.log("=== Students ===");
     const students = await prisma.student.findMany({
       select: {
@@ -236,7 +223,6 @@ async function checkDatabase() {
       });
     }
 
-    // Summary
     console.log("=== Summary ===");
     console.log(`  Users: ${users.length}`);
     console.log(`  Faculties: ${faculties.length}`);

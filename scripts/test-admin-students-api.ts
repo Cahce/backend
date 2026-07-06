@@ -1,30 +1,3 @@
-/**
- * Admin — Students CRUD API Test
- * Script: npm run test:api:admin:students
- *
- * ┌─────┬────────────────────────────────────────────────────────┬────────┬───────────────────────────┐
- * │ #   │ Test case                                               │ Expect │ error.code                │
- * ├─────┼────────────────────────────────────────────────────────┼────────┼───────────────────────────┤
- * │  1  │ Login admin / student                                  │ 200    │ —                         │
- * │  2  │ Setup: Faculty → Major → Class + Account fixture        │ 200    │ —                         │
- * │  3  │ GET /students no token → 401                           │ 401    │ UNAUTHENTICATED           │
- * │  4  │ GET /students student token → 403                      │ 403    │ FORBIDDEN                 │
- * │  5  │ POST /students happy                                    │ 200    │ —                         │
- * │  6  │ POST /students missing required fields → 400            │ 400    │ VALIDATION_ERROR          │
- * │  7  │ POST /students bad classId → 404                        │ 404    │ CLASS_NOT_FOUND           │
- * │  8  │ POST /students duplicate studentCode → DUPLICATE        │ 4xx    │ DUPLICATE_STUDENT_CODE    │
- * │  9  │ GET /students list contains new item                   │ 200    │ —                         │
- * │ 10  │ GET /students/:id found                                │ 200    │ —                         │
- * │ 11  │ GET /students/:id not-found → 404                      │ 404    │ STUDENT_NOT_FOUND         │
- * │ 12  │ PUT /students/:id update                               │ 200    │ —                         │
- * │ 13  │ DELETE /students (class has student) → Class restrict   │ verify │ HAS_LINKED_STUDENTS       │
- * │ 14  │ POST /students/:id/link-account happy                  │ 200    │ —                         │
- * │ 15  │ POST /students/:id/link-account already linked         │ 4xx    │ STUDENT_ALREADY_LINKED    │
- * │ 16  │ DELETE /students/:id/unlink-account → 200              │ 200    │ —                         │
- * │ 17  │ DELETE /students/:id → 200                             │ 200    │ —                         │
- * │ 18  │ GET /students/:id after delete → 404                   │ 404    │ STUDENT_NOT_FOUND         │
- * └─────┴────────────────────────────────────────────────────────┴────────┴───────────────────────────┘
- */
 
 import {
   api, loginAdmin, loginStudent,
@@ -51,7 +24,6 @@ async function run() {
     await test('1. Login admin', async () => { await loginAdmin(); });
     const studentToken = await loginStudent();
 
-    // ── Fixtures ──────────────────────────────────────────────────────────
     await test('2a. Setup Faculty', async () => {
       const r = await api('POST', `${BASE}/faculties`, {
         body: { name: `FAC for Student ${sfx}`, code: `FAC_S_${sfx}` },
@@ -88,7 +60,6 @@ async function run() {
       accountId = (r.data as { id: string }).id;
     });
 
-    // ── RBAC ──────────────────────────────────────────────────────────────
     await test('3. GET /students no token → 401', async () => {
       expectStatus(await api('GET', `${BASE}/students`, { token: null }), 401);
     });
@@ -100,7 +71,6 @@ async function run() {
       expectErrorCode(r, 'FORBIDDEN');
     });
 
-    // ── Create ────────────────────────────────────────────────────────────
     await test('5. POST /students happy', async () => {
       const r = await api('POST', `${BASE}/students`, {
         body: {
@@ -116,7 +86,7 @@ async function run() {
 
     await test('6. POST /students missing required fields → 400', async () => {
       const r = await api('POST', `${BASE}/students`, {
-        body: { classId },  // missing studentCode + fullName
+        body: { classId },
       });
       expectStatus(r, 400);
     });
@@ -137,7 +107,6 @@ async function run() {
       expectErrorCode(r, 'DUPLICATE_STUDENT_CODE');
     });
 
-    // ── List / Get ────────────────────────────────────────────────────────
     await test('9. GET /students list contains new item', async () => {
       const r = await api('GET', `${BASE}/students?pageSize=100`);
       expectStatus(r, 200);
@@ -155,7 +124,6 @@ async function run() {
       expectErrorCode(r, 'STUDENT_NOT_FOUND');
     });
 
-    // ── Update ────────────────────────────────────────────────────────────
     await test('12. PUT /students/:id update fullName', async () => {
       const r = await api('PUT', `${BASE}/students/${studentId}`, {
         body: { fullName: `SV Updated ${sfx}` },
@@ -164,16 +132,13 @@ async function run() {
       assert((r.data as { fullName: string }).fullName === `SV Updated ${sfx}`, 'fullName updated');
     });
 
-    // ── Delete-restrict: class still has student ──────────────────────────
     await test('13. DELETE /classes/:id with student → HAS_LINKED_STUDENTS', async () => {
       const r = await api('DELETE', `${BASE}/classes/${classId}`);
       assert(r.status >= 400, `expected 4xx (restrict), got ${r.status}`);
       expectErrorCode(r, 'HAS_LINKED_STUDENTS');
-      // Class still exists
       expectStatus(await api('GET', `${BASE}/classes/${classId}`), 200, 'class still exists');
     });
 
-    // ── Link / Unlink account ─────────────────────────────────────────────
     await test('14. POST /students/:id/link-account happy', async () => {
       const r = await api('POST', `${BASE}/students/${studentId}/link-account`, {
         body: { accountId },
@@ -199,7 +164,6 @@ async function run() {
       expectStatus(await api('DELETE', `${BASE}/students/${studentId}/unlink-account`), 200);
     });
 
-    // ── Delete ────────────────────────────────────────────────────────────
     await test('17. DELETE /students/:id → 200', async () => {
       expectStatus(await api('DELETE', `${BASE}/students/${studentId}`), 200);
       studentId = '';

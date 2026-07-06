@@ -1,9 +1,3 @@
-/**
- * Create Template Use Case
- * 
- * Application layer orchestration for creating a new template.
- * No persistence logic - delegates to repository.
- */
 
 import type { TemplateRepo } from '../domain/Ports.js';
 import type { Template, CreateTemplateData } from '../domain/Types.js';
@@ -13,15 +7,11 @@ export type CreateTemplateResult =
   | { success: true; data: Template }
   | { success: false; error: { code: string; message: string } };
 
-/**
- * Use case for creating a new template
- */
 export class CreateTemplateUseCase {
   constructor(private readonly templateRepo: TemplateRepo) {}
 
   async execute(input: CreateTemplateData): Promise<CreateTemplateResult> {
     try {
-      // Validate input
       if (!input.name || input.name.trim().length === 0) {
         return {
           success: false,

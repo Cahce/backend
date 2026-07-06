@@ -1,9 +1,3 @@
-/**
- * Project Files Module Container
- * 
- * Centralized dependency wiring for the project-files module.
- * Instantiates repositories and use cases with proper dependencies.
- */
 
 import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { ProjectRepo } from '../projects/domain/Project/Ports.js';
@@ -21,16 +15,9 @@ import { UploadBinaryFileUseCase } from './application/UploadBinaryFileUseCase.j
 import type { BlobStorage } from '../../shared/storage/BlobStorage.js';
 import type { ProjectWriteAccessPolicy } from '../projects/domain/access/ProjectAccessPolicies.js';
 
-/**
- * Project Files Module Container
- * 
- * Provides centralized dependency injection for the project-files module.
- */
 export class ProjectFilesContainer {
-  // Repository (typed as interface for DIP compliance)
   private fileRepo: FileRepo;
 
-  // Use Cases
   public listFilesUseCase: ListFilesUseCase;
   public getFileUseCase: GetFileUseCase;
   public createFileUseCase: CreateFileUseCase;
@@ -39,14 +26,11 @@ export class ProjectFilesContainer {
   public deleteFileUseCase: DeleteFileUseCase;
   public getFilesForCompilationUseCase: GetFilesForCompilationUseCase;
   public createFilesFromTemplateUseCase: CreateFilesFromTemplateUseCase;
-  // Lazy: wired only when uploadBinary deps are supplied to wireBinaryUpload().
   public uploadBinaryFileUseCase: UploadBinaryFileUseCase | null = null;
 
   constructor(prisma: PrismaClient, private readonly projectRepo: ProjectRepo) {
-    // Initialize repository
     this.fileRepo = new FileRepoPrisma(prisma);
 
-    // Wire use cases
     this.listFilesUseCase = new ListFilesUseCase(this.fileRepo, projectRepo);
     this.getFileUseCase = new GetFileUseCase(this.fileRepo, projectRepo);
     this.createFileUseCase = new CreateFileUseCase(this.fileRepo, projectRepo);
@@ -60,20 +44,12 @@ export class ProjectFilesContainer {
     this.createFilesFromTemplateUseCase = new CreateFilesFromTemplateUseCase(this.fileRepo);
   }
 
-  /**
-   * Wire the binary-upload use case. Separate from the constructor because
-   * BlobStorage and ProjectAccessPolicy are infrastructure decorations that
-   * become available later in `app.ts` after their respective plugins register.
-   * Call once from app.ts after both deps are ready.
-   */
   wireBinaryUpload(blobStorage: BlobStorage, projectAccess: ProjectWriteAccessPolicy): void {
     this.uploadBinaryFileUseCase = new UploadBinaryFileUseCase(
       this.fileRepo,
       blobStorage,
       projectAccess,
     );
-    // Re-wire delete with BlobStorage now that it is available, so deleting a
-    // binary file also removes its backing blob (no orphaned on-disk objects).
     this.deleteFileUseCase = new DeleteFileUseCase(
       this.fileRepo,
       this.projectRepo,
@@ -81,10 +57,6 @@ export class ProjectFilesContainer {
     );
   }
 
-  /**
-   * Get the file repository instance
-   * Useful for cross-module dependencies
-   */
   getFileRepo(): FileRepo {
     return this.fileRepo;
   }

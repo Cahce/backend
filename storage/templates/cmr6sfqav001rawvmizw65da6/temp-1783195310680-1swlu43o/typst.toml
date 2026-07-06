@@ -1,0 +1,8 @@
+# typst.toml — Cấu hình dự án Typst.
+[package]
+name = "baocao-nghien-cuu-khoa-hoc-tlu"
+version = "1.0.0"
+entrypoint = "main.typ"
+authors = ["Trường Đại học Thủy lợi"]
+license = "MIT"
+description = "Mẫu Báo cáo nghiên cứu khoa học chuẩn (bìa, cam đoan, mục lục, danh mục, mở đầu, 4 chương, kết luận – kiến nghị, tài liệu tham khảo, phụ lục)."

@@ -1,8 +1,3 @@
-/**
- * Create Files From Template Use Case
- * 
- * Application layer orchestration for creating multiple files from a template.
- */
 
 import * as crypto from 'node:crypto';
 import type { FileRepo } from '../domain/ProjectFile/Ports.js';
@@ -11,9 +6,6 @@ import { StoragePolicy } from '../domain/ProjectFile/Policies.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
-/**
- * Template file definition
- */
 export interface TemplateFile {
   path: string;
   kind: FileKind;
@@ -21,19 +13,11 @@ export interface TemplateFile {
   mimeType?: string;
 }
 
-/**
- * Command for creating files from template
- */
 export interface CreateFilesFromTemplateCommand {
   projectId: string;
   files: TemplateFile[];
 }
 
-/**
- * Create Files From Template Use Case
- * 
- * Creates multiple files from a template, applying storage policy to each.
- */
 export class CreateFilesFromTemplateUseCase {
   constructor(private readonly fileRepo: FileRepo) {}
 
@@ -43,14 +27,11 @@ export class CreateFilesFromTemplateUseCase {
 
       for (const templateFile of command.files) {
         try {
-          // Compute size and hash
           const sizeBytes = Buffer.byteLength(templateFile.content, 'utf8');
           const sha256 = crypto.createHash('sha256').update(templateFile.content, 'utf8').digest('hex');
 
-          // Apply storage policy
           const storageMode = StoragePolicy.determineStorageMode(sizeBytes, templateFile.kind);
 
-          // Create file via repository
           const file = await this.fileRepo.create({
             projectId: command.projectId,
             path: templateFile.path,
@@ -64,7 +45,6 @@ export class CreateFilesFromTemplateUseCase {
 
           createdFiles.push(file);
         } catch (error) {
-          // Return error indicating which file failed
           return failure(
             'FILE_CREATION_FAILED',
             `Lỗi khi tạo tệp từ mẫu: ${templateFile.path}`,

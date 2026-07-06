@@ -1,0 +1,7 @@
+[package]
+name = "baocao-thuctap-totnghiep-nganhthuydien-vanangluong"
+version = "0.1.0"
+entrypoint = "main.typ"
+authors = ["Sinh viên"]
+license = "MIT"
+description = "Mẫu báo cáo thực tập tốt nghiệp ngành Thủy điện và Công trình năng lượng - Đại học Thủy lợi"

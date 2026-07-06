@@ -1,15 +1,10 @@
-/**
- * TypstCompileService port
- * 
- * Port for invoking the Typst compiler.
- */
 
 import type { CompileDiagnostic } from './CompileDiagnostic.js';
 
 export interface TypstCompileInput {
-  workDir: string;        // temp dir already populated with project files
-  entryPath: string;      // relative to workDir
-  outputPath: string;     // absolute, where the PDF should be written
+  workDir: string;
+  entryPath: string;
+  outputPath: string;
   timeoutMs: number;
 }
 

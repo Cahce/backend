@@ -1,10 +1,3 @@
-/**
- * Verify Zotero API key (no persistence).
- *
- * Validates a Zotero API key against the Zotero Web API and returns the
- * accessible libraries (personal + groups) so the UI can let the user pick
- * which library to connect.
- */
 
 import type { ZoteroApiPort } from "../domain/Ports.js";
 

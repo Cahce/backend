@@ -4,10 +4,6 @@ import { parseHayagriva } from "../domain/HayagrivaParser.js";
 import { serializeHayagriva } from "../domain/HayagrivaSerializer.js";
 import type { BibEntry } from "../domain/BibEntry.js";
 
-/**
- * Round-trip: BibEntry → serialize → parse → BibEntry, must preserve data.
- * Tests cover all 8 BibEntryType + edge cases.
- */
 describe("Hayagriva round-trip", () => {
   const fixtures: BibEntry[] = [
     {
@@ -111,10 +107,6 @@ describe("Hayagriva round-trip", () => {
       assert.strictEqual(reparsed.type, original.type);
       for (const [field, value] of Object.entries(original.fields)) {
         if (value === undefined) continue;
-        // Skip month for the with-month case — Hayagriva stores it inside
-        // `date` as "YYYY-MM", and the reverse parser normalises month back
-        // to its numeric string ("3" not "march"). Round-trip preserves the
-        // information, just in a normalised form.
         if (field === "month") {
           assert.strictEqual(reparsed.fields.month, "3");
           continue;

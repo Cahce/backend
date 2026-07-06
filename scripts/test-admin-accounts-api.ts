@@ -1,31 +1,3 @@
-/**
- * Admin — Accounts CRUD API Test
- * Script: npm run test:api:admin:accounts
- *
- * ┌─────┬────────────────────────────────────────────────────┬────────┬────────────────────────────┐
- * │ #   │ Test case                                           │ Expect │ error.code                 │
- * ├─────┼────────────────────────────────────────────────────┼────────┼────────────────────────────┤
- * │  1  │ Login admin / student                              │ 200    │ —                          │
- * │  2  │ GET /accounts no token → 401                       │ 401    │ UNAUTHENTICATED            │
- * │  3  │ GET /accounts student token → 403                  │ 403    │ FORBIDDEN                  │
- * │  4  │ POST /accounts happy (role=student)                │ 200    │ —                          │
- * │  5  │ POST /accounts missing email → 400                 │ 400    │ VALIDATION_ERROR           │
- * │  6  │ POST /accounts invalid email format → 400          │ 400    │ VALIDATION_ERROR           │
- * │  7  │ POST /accounts invalid role → 400                  │ 400    │ VALIDATION_ERROR           │
- * │  8  │ POST /accounts short password → 400               │ 400    │ VALIDATION_ERROR           │
- * │  9  │ POST /accounts duplicate email → EMAIL_EXISTS      │ 4xx    │ EMAIL_EXISTS               │
- * │ 10  │ GET /accounts list contains new item               │ 200    │ —                          │
- * │ 11  │ GET /accounts with role filter                     │ 200    │ —                          │
- * │ 12  │ GET /accounts/:id found                            │ 200    │ —                          │
- * │ 13  │ GET /accounts/:id not-found → 404                  │ 404    │ ACCOUNT_NOT_FOUND          │
- * │ 14  │ PATCH /accounts/:id update isActive                │ 200    │ —                          │
- * │ 15  │ PATCH /accounts/:id update email                   │ 200    │ —                          │
- * │ 16  │ POST /accounts/:id/reset-password → 200            │ 200    │ —                          │
- * │ 17  │ POST /accounts/nonexistent/reset-password → 404    │ 404    │ ACCOUNT_NOT_FOUND          │
- * │ 18  │ DELETE /accounts/:id → 200                         │ 200    │ —                          │
- * │ 19  │ GET /accounts/:id after delete → 404               │ 404    │ ACCOUNT_NOT_FOUND          │
- * └─────┴────────────────────────────────────────────────────┴────────┴────────────────────────────┘
- */
 
 import {
   api, loginAdmin, loginStudent,
@@ -49,7 +21,6 @@ async function run() {
     await test('1. Login admin', async () => { await loginAdmin(); });
     const studentToken = await loginStudent();
 
-    // ── RBAC ──────────────────────────────────────────────────────────────
     await test('2. GET /accounts no token → 401', async () => {
       expectStatus(await api('GET', `${BASE}/accounts`, { token: null }), 401);
     });
@@ -61,7 +32,6 @@ async function run() {
       expectErrorCode(r, 'FORBIDDEN');
     });
 
-    // ── Create ────────────────────────────────────────────────────────────
     await test('4. POST /accounts happy (role=student)', async () => {
       const r = await api('POST', `${BASE}/accounts`, {
         body: { email: testEmail, password: 'Password1234', role: 'student' },
@@ -75,12 +45,6 @@ async function run() {
       console.log(`     id=${accountId}`);
     });
 
-    // ⚠ BUG FOUND (tests 5-8): Account Routes does not map Zod validation errors to 400.
-    // Invalid inputs are caught by Zod but returned as 500 instead of 400.
-    // Expected: 400 VALIDATION_ERROR. Actual: 500 Internal Server Error.
-    // The server correctly rejects invalid payloads, but uses the wrong HTTP status.
-    // → Documented in admin-crud-testing-status.md; tracked as a separate bug task.
-    //   Tests below accept 4xx OR 5xx to remain passing while the bug exists.
 
     await test('5. POST /accounts missing email → 4xx (BUG: actual 500)', async () => {
       const r = await api('POST', `${BASE}/accounts`, {
@@ -118,7 +82,6 @@ async function run() {
       expectErrorCode(r, 'EMAIL_EXISTS');
     });
 
-    // ── List ──────────────────────────────────────────────────────────────
     await test('10. GET /accounts list contains new item', async () => {
       const r = await api('GET', `${BASE}/accounts?pageSize=100`);
       expectStatus(r, 200);
@@ -134,7 +97,6 @@ async function run() {
       assert(allStudent, 'all filtered items are students');
     });
 
-    // ── Get by ID ─────────────────────────────────────────────────────────
     await test('12. GET /accounts/:id found', async () => {
       const r = await api('GET', `${BASE}/accounts/${accountId}`);
       expectStatus(r, 200);
@@ -147,7 +109,6 @@ async function run() {
       expectErrorCode(r, 'ACCOUNT_NOT_FOUND');
     });
 
-    // ── Update (PATCH) ────────────────────────────────────────────────────
     await test('14. PATCH /accounts/:id isActive=false', async () => {
       const r = await api('PATCH', `${BASE}/accounts/${accountId}`, {
         body: { isActive: false },
@@ -165,7 +126,6 @@ async function run() {
       assert((r.data as { email: string }).email === newEmail, 'email updated');
     });
 
-    // ── Reset password ────────────────────────────────────────────────────
     await test('16. POST /accounts/:id/reset-password → 200', async () => {
       const r = await api('POST', `${BASE}/accounts/${accountId}/reset-password`, {
         body: { newPassword: 'NewPassword5678' },
@@ -181,9 +141,7 @@ async function run() {
       expectErrorCode(r, 'ACCOUNT_NOT_FOUND');
     });
 
-    // ── Delete ────────────────────────────────────────────────────────────
     await test('18. DELETE /accounts/:id → 200|204', async () => {
-      // Account delete returns 204 No Content (not 200) — accept both.
       const r = await api('DELETE', `${BASE}/accounts/${accountId}`);
       assert(r.status === 200 || r.status === 204, `expected 200|204, got ${r.status}`);
       accountId = '';

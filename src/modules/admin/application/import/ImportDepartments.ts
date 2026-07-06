@@ -5,9 +5,6 @@ import type { Department } from "../../domain/Department/Types.js";
 import { ImportService, type ImportResult } from "./ImportTypes.js";
 import { normalizeRow, type HeaderMap } from "./HeaderMap.js";
 
-/**
- * Department import row schema
- */
 const DepartmentImportRowSchema = z.object({
   code: z.string().min(1, "Mã bộ môn không được để trống"),
   name: z.string().min(1, "Tên bộ môn không được để trống"),
@@ -16,19 +13,12 @@ const DepartmentImportRowSchema = z.object({
 
 type DepartmentImportRow = z.infer<typeof DepartmentImportRowSchema>;
 
-/**
- * Matches columns in "Mẫu Import Bộ môn V2.xlsx" (STT ignored).
- */
 const DEPARTMENT_HEADER_MAP: HeaderMap = {
   "Mã Bộ Môn": "code",
   "Bộ Môn": "name",
   Khoa: "facultyCode",
 };
 
-/**
- * Import departments from CSV / XLSX. Application use case — depends only on
- * the FacultyRepo + DepartmentRepo domain ports, never on Prisma.
- */
 export class ImportDepartments {
   constructor(
     private readonly facultyRepo: FacultyRepo,

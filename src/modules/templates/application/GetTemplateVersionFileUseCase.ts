@@ -1,14 +1,3 @@
-/**
- * Get Template Version File Use Case
- *
- * Resolves a version by ID, verifies it belongs to the requested template,
- * then asks the storage gateway to bundle the version directory into a .zip
- * Buffer. The route handler streams the buffer back with a Content-Disposition
- * header.
- *
- * We always return a .zip — even for the single-`.typ` upload path — so the
- * frontend can use one filename pattern and one extension.
- */
 
 import type { TemplateRepo, TemplateStorageGateway } from '../domain/Ports.js';
 import { TemplateErrors } from '../domain/Errors.js';

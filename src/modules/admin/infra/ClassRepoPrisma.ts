@@ -1,9 +1,3 @@
-/**
- * Prisma implementation of Class repository
- * 
- * Infrastructure layer implementation of ClassRepo port.
- * Handles all Class data access operations using Prisma.
- */
 
 import type { PrismaClient } from '../../../generated/prisma/index.js';
 import type { ClassRepo } from '../domain/Class/Ports.js';
@@ -17,15 +11,9 @@ import type {
 import type { PaginatedResult } from '../domain/shared/Pagination.js';
 import { Prisma } from '../../../generated/prisma/index.js';
 
-/**
- * Prisma-based Class repository implementation
- */
 export class ClassRepoPrisma implements ClassRepo {
   constructor(private readonly prisma: PrismaClient) {}
 
-  /**
-   * Create a new Class
-   */
   async create(data: CreateClassData): Promise<Class> {
     try {
       const classEntity = await this.prisma.class.create({
@@ -38,14 +26,11 @@ export class ClassRepoPrisma implements ClassRepo {
 
       return this.mapToClass(classEntity);
     } catch (error) {
-      // Handle Prisma unique constraint violation
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - code already exists
           throw new Error('DUPLICATE_CODE');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation - majorId does not exist
           throw new Error('MAJOR_NOT_FOUND');
         }
       }
@@ -53,9 +38,6 @@ export class ClassRepoPrisma implements ClassRepo {
     }
   }
 
-  /**
-   * Find Class by ID with enriched context (nested Major and Faculty)
-   */
   async findById(id: string): Promise<ClassWithContext | null> {
     const classEntity = await this.prisma.class.findUnique({
       where: { id },
@@ -75,10 +57,6 @@ export class ClassRepoPrisma implements ClassRepo {
     return this.mapToClassWithContext(classEntity);
   }
 
-  /**
-   * Find Class by code
-   * Used for duplicate code checking during create/update
-   */
   async findByCode(code: string): Promise<Class | null> {
     const classEntity = await this.prisma.class.findUnique({
       where: { code },
@@ -91,16 +69,11 @@ export class ClassRepoPrisma implements ClassRepo {
     return this.mapToClass(classEntity);
   }
 
-  /**
-   * Find all Classes with optional filters and enriched context
-   * Results are ordered by updatedAt descending (newest first)
-   */
   async findAll(filters: ClassFilters): Promise<PaginatedResult<ClassWithContext>> {
     const page = filters.page ?? 1;
     const pageSize = Math.min(filters.pageSize ?? 20, 100);
     const skip = (page - 1) * pageSize;
 
-    // Build where clause for search, majorId filter, and facultyId filter (via Major)
     const whereClause: Prisma.ClassWhereInput = {};
 
     if (filters.search) {
@@ -120,7 +93,6 @@ export class ClassRepoPrisma implements ClassRepo {
       };
     }
 
-    // Execute query with pagination, nested includes, and default ordering
     const [items, total] = await Promise.all([
       this.prisma.class.findMany({
         where: whereClause,
@@ -131,7 +103,7 @@ export class ClassRepoPrisma implements ClassRepo {
             },
           },
         },
-        orderBy: { updatedAt: 'desc' }, // Default ordering: newest first
+        orderBy: { updatedAt: 'desc' },
         skip,
         take: pageSize,
       }),
@@ -147,9 +119,6 @@ export class ClassRepoPrisma implements ClassRepo {
     };
   }
 
-  /**
-   * Update an existing Class
-   */
   async update(id: string, data: UpdateClassData): Promise<Class> {
     try {
       const classEntity = await this.prisma.class.update({
@@ -163,18 +132,14 @@ export class ClassRepoPrisma implements ClassRepo {
 
       return this.mapToClass(classEntity);
     } catch (error) {
-      // Handle Prisma unique constraint violation
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
-          // Unique constraint violation - code already exists
           throw new Error('DUPLICATE_CODE');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation - majorId does not exist
           throw new Error('MAJOR_NOT_FOUND');
         }
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('CLASS_NOT_FOUND');
         }
       }
@@ -182,10 +147,6 @@ export class ClassRepoPrisma implements ClassRepo {
     }
   }
 
-  /**
-   * Delete a Class
-   * Should only be called after checking deletion policies
-   */
   async delete(id: string): Promise<void> {
     try {
       await this.prisma.class.delete({
@@ -194,11 +155,9 @@ export class ClassRepoPrisma implements ClassRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          // Record not found
           throw new Error('CLASS_NOT_FOUND');
         }
         if (error.code === 'P2003') {
-          // Foreign key constraint violation
           throw new Error('HAS_LINKED_ENTITIES');
         }
       }
@@ -206,10 +165,6 @@ export class ClassRepoPrisma implements ClassRepo {
     }
   }
 
-  /**
-   * Check if Class has any linked Students
-   * Used by deletion policy to prevent orphaned data
-   */
   async hasLinkedStudents(id: string): Promise<boolean> {
     const count = await this.prisma.student.count({
       where: { classId: id },
@@ -217,9 +172,6 @@ export class ClassRepoPrisma implements ClassRepo {
     return count > 0;
   }
 
-  /**
-   * Map Prisma Class model to domain Class type
-   */
   private mapToClass(prismaClass: {
     id: string;
     name: string;
@@ -238,9 +190,6 @@ export class ClassRepoPrisma implements ClassRepo {
     };
   }
 
-  /**
-   * Map Prisma Class with nested Major and Faculty includes to domain ClassWithContext type
-   */
   private mapToClassWithContext(prismaClass: {
     id: string;
     name: string;

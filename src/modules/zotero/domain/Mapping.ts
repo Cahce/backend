@@ -1,38 +1,21 @@
-/**
- * Zotero to BibEntry Mapping
- * 
- * Maps Zotero items to BibTeX entries.
- * No framework dependencies.
- */
 
 import type { ZoteroItem, ZoteroCreator } from "./Types.js";
 import type { BibEntry, BibEntryType } from "../../bibliography/domain/BibEntry.js";
 import { generateCitationKey } from "../../bibliography/domain/CitationKeyGen.js";
 
-/**
- * Map Zotero item to BibEntry
- * 
- * @param item - Zotero item
- * @returns BibTeX entry
- */
 export function mapZoteroItemToBibEntry(item: ZoteroItem): BibEntry {
-  // Map item type
   const type = mapItemType(item.itemType);
 
-  // Extract authors
   const authors = extractAuthors(item.creators || []);
 
-  // Extract year
   const year = extractYear(item.date);
 
-  // Generate citation key
   const key = generateCitationKey({
     authors: authors.map(a => ({ lastName: a.split(", ")[0] || "Unknown" })),
     year,
     title: item.title,
   });
 
-  // Build fields based on type
   const fields = buildFields(item, type, authors, year);
 
   return {
@@ -42,9 +25,6 @@ export function mapZoteroItemToBibEntry(item: ZoteroItem): BibEntry {
   };
 }
 
-/**
- * Map Zotero item type to BibTeX entry type
- */
 function mapItemType(itemType: string): BibEntryType {
   const typeMap: Record<string, BibEntryType> = {
     journalArticle: "article",
@@ -65,17 +45,11 @@ function mapItemType(itemType: string): BibEntryType {
   return typeMap[itemType] || "misc";
 }
 
-/**
- * Extract and format authors from Zotero creators
- * 
- * Format: "Last, First and Last, First"
- */
 function extractAuthors(creators: ZoteroCreator[]): string[] {
   return creators
     .filter(c => c.creatorType === "author" || c.creatorType === "editor")
     .map(c => {
       if (c.name) {
-        // Organization name
         return c.name;
       }
       
@@ -90,28 +64,15 @@ function extractAuthors(creators: ZoteroCreator[]): string[] {
     });
 }
 
-/**
- * Extract year from Zotero date field
- * 
- * Zotero dates can be in various formats:
- * - "2024"
- * - "2024-03-15"
- * - "March 15, 2024"
- * - "2024-03"
- */
 function extractYear(date?: string): string | undefined {
   if (!date) {
     return undefined;
   }
 
-  // Try to extract 4-digit year
   const yearMatch = date.match(/\b(19|20)\d{2}\b/);
   return yearMatch ? yearMatch[0] : undefined;
 }
 
-/**
- * Build BibTeX fields based on item type
- */
 function buildFields(
   item: ZoteroItem,
   type: BibEntryType,
@@ -120,7 +81,6 @@ function buildFields(
 ): Record<string, string> {
   const fields: Record<string, string> = {};
 
-  // Common fields
   if (item.title) {
     fields.title = item.title;
   }
@@ -145,7 +105,6 @@ function buildFields(
     fields.abstract = item.abstractNote;
   }
 
-  // Type-specific fields
   switch (type) {
     case "article":
       if (item.publicationTitle) {
@@ -226,7 +185,6 @@ function buildFields(
       break;
 
     case "misc":
-      // URL and note already handled above
       if (item.websiteTitle) {
         fields.note = item.websiteTitle;
       }

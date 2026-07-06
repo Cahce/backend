@@ -3,6 +3,7 @@ import type { ProjectsContainer } from '../../../Container.js';
 import {
   CreateProjectRequestSchema,
   UpdateProjectRequestSchema,
+  ImportProjectQuerySchema,
   type CreateProjectRequestDto,
   type UpdateProjectRequestDto,
   CreateProjectBodyJsonSchema,
@@ -12,9 +13,6 @@ import {
   ErrorResponseJsonSchema,
 } from './Dto.js';
 
-/**
- * Projects module HTTP routes
- */
 export async function projectRoutes(
   app: FastifyInstance,
   container: ProjectsContainer,
@@ -27,7 +25,6 @@ export async function projectRoutes(
     deleteProjectUseCase,
   } = container;
 
-  // GET /api/v1/projects - list user's projects
   app.get(
     '/projects',
     {
@@ -71,7 +68,6 @@ export async function projectRoutes(
     },
   );
 
-  // POST /api/v1/projects - create project
   app.post<{ Body: CreateProjectRequestDto }>(
     '/projects',
     {
@@ -131,7 +127,6 @@ export async function projectRoutes(
     },
   );
 
-  // GET /api/v1/projects/:projectId - get project by id
   app.get<{ Params: { projectId: string } }>(
     '/projects/:projectId',
     {
@@ -191,7 +186,6 @@ export async function projectRoutes(
     },
   );
 
-  // PUT /api/v1/projects/:projectId - update project
   app.put<{ Params: { projectId: string }; Body: UpdateProjectRequestDto }>(
     '/projects/:projectId',
     {
@@ -270,9 +264,6 @@ export async function projectRoutes(
     },
   );
 
-  // GET /api/v1/projects/:projectId/export - download the project as a .zip
-  // Streams a Buffer with `Content-Type: application/zip` and a
-  // `Content-Disposition` header so the browser saves to disk directly.
   app.get<{ Params: { projectId: string } }>(
     '/projects/:projectId/export',
     {
@@ -288,7 +279,6 @@ export async function projectRoutes(
             projectId: { type: 'string', description: 'ID của dự án' },
           },
         },
-        // No JSON-schema for binary response — keep schema minimal.
       },
     },
     async (request, reply) => {
@@ -312,10 +302,6 @@ export async function projectRoutes(
         buildContentDisposition(result.data.filename),
       );
 
-      // If the client disconnects mid-download, tear down the archive stream
-      // so the use case stops reading from BlobStorage. Without this, archiver
-      // keeps producing chunks into a closed socket and stays in memory until
-      // its source files finish.
       request.raw.on('close', () => {
         if (!result.data.stream.destroyed) {
           result.data.stream.destroy();
@@ -326,25 +312,36 @@ export async function projectRoutes(
     },
   );
 
-  // POST /api/v1/projects/import - create a new project from an uploaded .zip
-  // Body: `multipart/form-data` with single field `file`. Cap 50 MB on the
-  // compressed size; the use case caps expanded bytes too.
-  app.post(
+  app.post<{ Querystring: { category?: string; title?: string } }>(
     '/projects/import',
     {
       preHandler: app.auth.verify,
       schema: {
-        description: 'Tạo dự án mới từ file .zip',
+        description: 'Tạo dự án mới từ tệp nén (.zip, .7z, .rar, .tar, .tar.gz)',
         tags: ['projects'],
         security: [{ bearerAuth: [] }],
-        // multipart body — schema validation handled in handler.
+        querystring: {
+          type: 'object',
+          properties: {
+            category: {
+              type: 'string',
+              description:
+                "Loại dự án: thesis | project | report | proposal | paper | presentation | other (mặc định 'other')",
+            },
+            title: {
+              type: 'string',
+              description:
+                'Tên dự án (tùy chọn) — để trống sẽ lấy tên trong project.toml, rồi đến tên tệp nén, cuối cùng "Imported <ngày>"',
+            },
+          },
+        },
         response: {
           201: {
             description: 'Tạo dự án thành công',
             ...ProjectResponseJsonSchema,
           },
           400: {
-            description: 'Tệp .zip không hợp lệ',
+            description: 'Tệp nén hoặc loại dự án không hợp lệ',
             ...ErrorResponseJsonSchema,
           },
           401: {
@@ -352,7 +349,7 @@ export async function projectRoutes(
             ...ErrorResponseJsonSchema,
           },
           413: {
-            description: 'Tệp .zip vượt quá giới hạn',
+            description: 'Tệp nén vượt quá giới hạn',
             ...ErrorResponseJsonSchema,
           },
           500: {
@@ -365,46 +362,55 @@ export async function projectRoutes(
     async (request, reply) => {
       if (!container.importProjectUseCase) {
         return reply.code(500).send({
-          error: { code: 'INTERNAL_ERROR', message: 'Tính năng nhập .zip chưa sẵn sàng' },
+          error: { code: 'INTERNAL_ERROR', message: 'Tính năng nhập tệp nén chưa sẵn sàng' },
         });
       }
 
-      // Read multipart file. `@fastify/multipart` is registered globally with
-      // a 50 MB file-size limit (see app.ts → registerMultipart).
+      const queryResult = ImportProjectQuerySchema.safeParse(request.query);
+      if (!queryResult.success) {
+        return reply.code(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Loại dự án không hợp lệ',
+          },
+        });
+      }
+
       let part;
       try {
         part = await request.file();
       } catch (err) {
-        // Likely a size-limit error thrown by @fastify/multipart.
         return reply.code(413).send({
           error: {
             code: 'ZIP_PAYLOAD_TOO_LARGE',
-            message: 'Tệp .zip vượt quá giới hạn cho phép',
+            message: 'Tệp nén vượt quá giới hạn cho phép',
           },
         });
       }
       if (!part) {
         return reply.code(400).send({
-          error: { code: 'MISSING_FILE', message: 'Cần upload một tệp .zip' },
+          error: { code: 'MISSING_FILE', message: 'Cần upload một tệp nén' },
         });
       }
 
-      let zipBuffer: Buffer;
+      let archiveBuffer: Buffer;
       try {
-        zipBuffer = await part.toBuffer();
+        archiveBuffer = await part.toBuffer();
       } catch (err) {
-        // Buffer assembly hit the size limit.
         return reply.code(413).send({
           error: {
             code: 'ZIP_PAYLOAD_TOO_LARGE',
-            message: 'Tệp .zip vượt quá giới hạn cho phép',
+            message: 'Tệp nén vượt quá giới hạn cho phép',
           },
         });
       }
 
       const result = await container.importProjectUseCase.execute({
         userId: request.user.sub,
-        zipBuffer,
+        archiveBuffer,
+        filename: part.filename,
+        category: queryResult.data.category,
+        title: queryResult.data.title,
       });
       if (!result.success) {
         const status = getStatusCodeForError(result.error.code) as
@@ -418,7 +424,81 @@ export async function projectRoutes(
     },
   );
 
-  // DELETE /api/v1/projects/:projectId - delete project
+  app.post<{ Params: { projectId: string }; Body: { title?: string } }>(
+    '/projects/:projectId/duplicate',
+    {
+      preHandler: app.auth.verify,
+      schema: {
+        description: 'Tạo bản sao của dự án (sao chép toàn bộ tệp và thiết lập)',
+        tags: ['projects'],
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['projectId'],
+          properties: {
+            projectId: { type: 'string', description: 'ID của dự án nguồn' },
+          },
+        },
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Tên cho bản sao (tùy chọn)',
+            },
+          },
+        },
+        response: {
+          201: {
+            description: 'Tạo bản sao thành công',
+            ...ProjectResponseJsonSchema,
+          },
+          401: {
+            description: 'Chưa đăng nhập hoặc token không hợp lệ',
+            ...ErrorResponseJsonSchema,
+          },
+          403: {
+            description: 'Không có quyền truy cập',
+            ...ErrorResponseJsonSchema,
+          },
+          404: {
+            description: 'Không tìm thấy dự án',
+            ...ErrorResponseJsonSchema,
+          },
+          500: {
+            description: 'Lỗi hệ thống',
+            ...ErrorResponseJsonSchema,
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!container.duplicateProjectUseCase) {
+        return reply.code(500).send({
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Tính năng tạo bản sao chưa sẵn sàng',
+          },
+        });
+      }
+
+      const result = await container.duplicateProjectUseCase.execute({
+        projectId: request.params.projectId,
+        userId: request.user.sub,
+        title: request.body?.title,
+      });
+
+      if (result.success) {
+        return reply.code(201).send(result.data.project);
+      }
+
+      return reply.code(getStatusCodeForError(result.error.code)).send({
+        error: result.error,
+      });
+    },
+  );
+
   app.delete<{ Params: { projectId: string } }>(
     '/projects/:projectId',
     {
@@ -479,39 +559,21 @@ export async function projectRoutes(
   );
 }
 
-/**
- * Build an RFC 5987 / RFC 6266 compliant Content-Disposition value.
- *
- * Vietnamese filenames (e.g. "Khóa-Luận-Tốt-Nghiệp-20260519.zip") contain
- * non-ASCII characters that cannot be placed verbatim in HTTP header values
- * — Node's HTTP serializer rejects them with `ERR_INVALID_CHAR`. The
- * standard workaround is to emit two filename parameters:
- *
- *   1. `filename="<ascii-fallback>"` for legacy clients that ignore the
- *      RFC 5987 syntax. We replace any non-ASCII byte with `_`.
- *   2. `filename*=UTF-8''<percent-encoded>` for modern browsers. They will
- *      prefer this and the user sees the original Vietnamese name.
- *
- * Reference: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Disposition
- */
 function buildContentDisposition(filename: string): string {
   const asciiFallback = filename
     .replace(/[^\x20-\x7E]/g, '_')
-    // Quotes inside filename= confuse the parser, strip them.
     .replace(/["\\]/g, '_');
   const encoded = encodeURIComponent(filename);
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
   switch (errorCode) {
     case 'VALIDATION_ERROR':
     case 'INVALID_TEMPLATE_VERSION':
     case 'ZIP_PATH_TRAVERSAL':
     case 'ZIP_MALFORMED':
+    case 'UNSUPPORTED_ARCHIVE':
     case 'MISSING_FILE':
       return 400;
     case 'UNAUTHORIZED':

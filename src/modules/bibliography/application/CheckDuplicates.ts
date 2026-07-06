@@ -1,6 +1,3 @@
-/**
- * Non-mutating bibliography duplicate check use case.
- */
 
 import type { BibEntry } from "../domain/BibEntry.js";
 import type { BibliographyService } from "./BibliographyService.js";

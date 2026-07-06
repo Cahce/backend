@@ -1,8 +1,3 @@
-/**
- * Verify shorthand Typst BẰNG compiler thật (v0.14.2): render `$ <shorthand> $`
- * và so glyph với render literal glyph tương ứng. Chỉ giữ shorthand nào khớp.
- * → bảng shorthand "đầy đủ" mà KHÔNG bịa (đối chiếu chéo docs ↔ compiler).
- */
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +11,6 @@ const pre = `#set page(width: auto, height: auto, margin: 2pt)
 `;
 
 function glyphPaths(svg) {
-  // tập d="" của các <path> (glyph) — bỏ vị trí, chỉ so hình dạng.
   const ds = [...svg.matchAll(/<path[^>]*\bd="([^"]+)"/g)].map((m) => m[1]).sort();
   return ds.join('||');
 }
@@ -32,7 +26,6 @@ function renderMarkup(inner) {
   return glyphPaths(compiler.svg(res.result));
 }
 
-// [shorthand, glyph kỳ vọng, ghi-chú]; whitespace (nbsp/shy) verify riêng = compile-OK.
 const MATH = [
   ['...', '…'], ['-', '−'], ['*', '∗'], ['~', '∼'],
   ['!=', '≠'], [':=', '≔'], ['::=', '⩴'], ['=:', '≕'],

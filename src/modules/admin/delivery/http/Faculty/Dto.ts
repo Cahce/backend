@@ -2,16 +2,9 @@ import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-// Extend Zod with OpenAPI support
 extendZodWithOpenApi(z);
 
-/**
- * =========================
- * Request DTOs
- * =========================
- */
 
-// Create Faculty Request
 export const CreateFacultyRequestSchema = z
     .object({
         name: z
@@ -35,7 +28,6 @@ export const CreateFacultyRequestSchema = z
 
 export type CreateFacultyRequestDto = z.infer<typeof CreateFacultyRequestSchema>;
 
-// Update Faculty Request
 export const UpdateFacultyRequestSchema = z
     .object({
         name: z
@@ -61,7 +53,6 @@ export const UpdateFacultyRequestSchema = z
 
 export type UpdateFacultyRequestDto = z.infer<typeof UpdateFacultyRequestSchema>;
 
-// List Faculties Query Parameters
 export const ListFacultiesQuerySchema = z
     .object({
         search: z
@@ -96,13 +87,7 @@ export const ListFacultiesQuerySchema = z
 
 export type ListFacultiesQueryDto = z.infer<typeof ListFacultiesQuerySchema>;
 
-/**
- * =========================
- * Response DTOs
- * =========================
- */
 
-// Faculty Response
 export const FacultyResponseSchema = z
     .object({
         id: z.string().openapi({
@@ -130,7 +115,6 @@ export const FacultyResponseSchema = z
 
 export type FacultyResponseDto = z.infer<typeof FacultyResponseSchema>;
 
-// List Faculties Response
 export const ListFacultiesResponseSchema = z
     .object({
         items: z.array(FacultyResponseSchema).openapi({
@@ -157,7 +141,6 @@ export const ListFacultiesResponseSchema = z
 
 export type ListFacultiesResponseDto = z.infer<typeof ListFacultiesResponseSchema>;
 
-// Error Response
 export const ErrorResponseSchema = z
     .object({
         error: z.object({
@@ -175,7 +158,6 @@ export const ErrorResponseSchema = z
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
 
-// Message Response
 export const MessageResponseSchema = z
     .object({
         message: z.string().openapi({
@@ -187,13 +169,6 @@ export const MessageResponseSchema = z
 
 export type MessageResponseDto = z.infer<typeof MessageResponseSchema>;
 
-/**
- * =========================
- * Fastify JSON Schemas
- * =========================
- * Dùng cho schema.body / schema.querystring / schema.response
- * Không nhét raw Zod schema trực tiếp vào Fastify.
- */
 
 function unwrapJsonSchema(schema: unknown): Record<string, unknown> {
     const s = schema as Record<string, unknown>;

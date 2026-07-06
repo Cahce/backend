@@ -1,9 +1,3 @@
-/**
- * Map over items running at most `limit` async tasks at once, preserving input
- * order in the returned array. Used to bound concurrency when fanning out
- * external calls (e.g. per-work OpenAlex fetches) so we neither serialize them
- * nor flood the upstream with N simultaneous requests.
- */
 export async function mapWithConcurrency<T, R>(
     items: readonly T[],
     limit: number,

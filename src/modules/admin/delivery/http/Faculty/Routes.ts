@@ -17,9 +17,6 @@ import {
     MessageResponseJsonSchema,
 } from "./Dto.js";
 
-/**
- * Faculty module HTTP routes
- */
 export async function facultyRoutes(app: FastifyInstance) {
     const container = new AdminContainer(app.prisma);
     const {
@@ -31,7 +28,6 @@ export async function facultyRoutes(app: FastifyInstance) {
         importFaculties,
     } = container;
 
-    // POST /api/v1/admin/faculties - create faculty
     app.post<{ Body: CreateFacultyRequestDto }>(
         "/faculties",
         {
@@ -94,7 +90,6 @@ export async function facultyRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/faculties - list faculties with pagination and search
     app.get<{ Querystring: ListFacultiesQueryDto }>(
         "/faculties",
         {
@@ -153,7 +148,6 @@ export async function facultyRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/faculties/:id - get faculty by id
     app.get<{ Params: { id: string } }>(
         "/faculties/:id",
         {
@@ -209,7 +203,6 @@ export async function facultyRoutes(app: FastifyInstance) {
         },
     );
 
-    // PUT /api/v1/admin/faculties/:id - update faculty
     app.put<{ Params: { id: string }; Body: UpdateFacultyRequestDto }>(
         "/faculties/:id",
         {
@@ -286,7 +279,6 @@ export async function facultyRoutes(app: FastifyInstance) {
         },
     );
 
-    // DELETE /api/v1/admin/faculties/:id - delete faculty
     app.delete<{ Params: { id: string } }>(
         "/faculties/:id",
         {
@@ -348,7 +340,6 @@ export async function facultyRoutes(app: FastifyInstance) {
         },
     );
 
-    // POST /api/v1/admin/faculties/import - import faculties from XLSX or CSV file
     app.post(
         "/faculties/import",
         {
@@ -417,7 +408,6 @@ export async function facultyRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Validate MIME type
                 const mimeValidation = FileParser.validateMimeType(data.mimetype);
                 if (!mimeValidation.valid) {
                     return reply.code(400).send({
@@ -428,7 +418,6 @@ export async function facultyRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Reject .xlsm files (with macros)
                 if (data.filename.toLowerCase().endsWith(".xlsm")) {
                     return reply.code(400).send({
                         error: {
@@ -438,11 +427,9 @@ export async function facultyRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Read file buffer
                 const buffer = await data.toBuffer();
 
-                // Check file size (5MB limit)
-                const maxSize = 5 * 1024 * 1024; // 5MB
+                const maxSize = 5 * 1024 * 1024;
                 if (buffer.length > maxSize) {
                     return reply.code(413).send({
                         error: {
@@ -452,10 +439,8 @@ export async function facultyRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Parse file (auto-detect XLSX or CSV)
                 const parsed = FileParser.parseSpreadsheet(buffer, data.mimetype);
 
-                // Check row limit (5000 rows)
                 const maxRows = 5000;
                 if (parsed.rows.length > maxRows) {
                     return reply.code(413).send({
@@ -466,7 +451,6 @@ export async function facultyRoutes(app: FastifyInstance) {
                     });
                 }
 
-                // Execute import
                 const result = await importFaculties.execute(parsed.rows);
 
                 return reply.code(200).send(result);
@@ -481,7 +465,6 @@ export async function facultyRoutes(app: FastifyInstance) {
         },
     );
 
-    // GET /api/v1/admin/faculties/import/template - download template
     app.get<{ Querystring: { format?: "xlsx" | "csv" } }>(
         "/faculties/import/template",
         {
@@ -547,9 +530,6 @@ export async function facultyRoutes(app: FastifyInstance) {
     );
 }
 
-/**
- * Maps error codes to HTTP status codes
- */
 function getStatusCodeForError(errorCode: string): number {
     switch (errorCode) {
         case "VALIDATION_ERROR":

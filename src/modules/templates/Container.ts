@@ -1,9 +1,3 @@
-/**
- * Templates Module Container
- * 
- * Centralized dependency wiring for the templates module.
- * Instantiates repositories, storage, and use cases with proper dependencies.
- */
 
 import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { TemplateRepo, TemplateStorageGateway, SourceProjectGateway } from './domain/Ports.js';
@@ -27,17 +21,10 @@ import { CreateTemplateSourceProjectUseCase } from './application/CreateTemplate
 import { ImportTemplateSourceProjectUseCase } from './application/ImportTemplateSourceProjectUseCase.js';
 import { PublishTemplateVersionFromSourceUseCase } from './application/PublishTemplateVersionFromSourceUseCase.js';
 
-/**
- * Templates Module Container
- * 
- * Provides centralized dependency injection for the templates module.
- */
 export class TemplatesContainer {
-  // Repositories and gateways
   private templateRepo: TemplateRepo;
   private storage: TemplateStorageGateway;
 
-  // Use Cases
   public createTemplate: CreateTemplateUseCase;
   public listTemplates: ListTemplatesUseCase;
   public getTemplateById: GetTemplateByIdUseCase;
@@ -49,23 +36,16 @@ export class TemplatesContainer {
   public updateTemplateVersion: UpdateTemplateVersionUseCase;
   public getTemplateVersionFile: GetTemplateVersionFileUseCase;
   public materializeTemplateVersion: MaterializeTemplateVersionUseCase;
-  /** Source-project authoring use cases — wired by {@link wireSourceProjectAuthoring}. */
   public createTemplateSourceProject: CreateTemplateSourceProjectUseCase | null = null;
   public importTemplateSourceProject: ImportTemplateSourceProjectUseCase | null = null;
   public publishTemplateVersionFromSource: PublishTemplateVersionFromSourceUseCase | null = null;
 
   constructor(deps: { prisma: PrismaClient; templateStorageDir: string }) {
-    // Initialize repositories and gateways.
-    // Storage is wrapped with an LRU cache so that hot `readFiles()` calls
-    // (every project create-from-template) skip filesystem I/O on repeat.
-    // Cache is bounded by both entry count and total bytes (xem
-    // `CachedTemplateStorageGateway` defaults).
     this.templateRepo = new TemplateRepoPrisma(deps.prisma);
     this.storage = new CachedTemplateStorageGateway(
       new TemplateStorageFs(deps.templateStorageDir),
     );
 
-    // Wire use cases
     this.createTemplate = new CreateTemplateUseCase(this.templateRepo);
     this.listTemplates = new ListTemplatesUseCase(this.templateRepo);
     this.getTemplateById = new GetTemplateByIdUseCase(this.templateRepo);
@@ -85,13 +65,6 @@ export class TemplatesContainer {
     );
   }
 
-  /**
-   * Wire the source-project authoring use cases (create/import source project,
-   * publish version from source). Deferred — like
-   * `ProjectsContainer.wireZipPortability` — because the gateway is composed
-   * from the projects + project-files containers, which are built after this
-   * container in `app.ts`.
-   */
   wireSourceProjectAuthoring(gateway: SourceProjectGateway): void {
     this.createTemplateSourceProject = new CreateTemplateSourceProjectUseCase(
       this.templateRepo,
@@ -109,43 +82,23 @@ export class TemplatesContainer {
       );
   }
 
-  /**
-   * Get materialize function for cross-module use
-   * 
-   * This is used by projects module to materialize template versions.
-   * Returns an object containing the materialized files and the entry path from the template version.
-   * 
-   * NOTE: This returns the new shape { files, entryPath }, but the MaterializeTemplate interface
-   * in projects/domain still has the old signature. This will be fixed in T1.4 when CreateProjectUseCase
-   * is updated to handle the new shape.
-   * 
-   * @returns Function that takes versionId and returns { files, entryPath }
-   * @throws InvalidTemplateVersionError if version is invalid or inactive
-   * @throws Error for other errors
-   */
   getMaterializeFunction(): (versionId: string) => Promise<{ files: MaterializedFile[]; entryPath: string }> {
     return async (versionId: string) => {
       const result = await this.materializeTemplateVersion.execute(versionId);
       
       if (!result.success) {
-        // Throw custom error class for invalid template version
         if (result.error.code === 'INVALID_TEMPLATE_VERSION') {
           throw new InvalidTemplateVersionError(result.error.message);
         }
         
-        // For other errors, throw generic Error with message
         throw new Error(result.error.message);
       }
       
-      // Return both files and entryPath from template version
       return result.data;
     };
   }
 }
 
-/**
- * Factory function to create templates container
- */
 export function createTemplatesContainer(deps: {
   prisma: PrismaClient;
   templateStorageDir: string;

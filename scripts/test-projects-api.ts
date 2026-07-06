@@ -1,7 +1,3 @@
-/**
- * Projects API Integration Test
- * Tests all project endpoints with comprehensive scenarios
- */
 
 const BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const TEST_EMAIL = "admin@tlu.edu.vn";
@@ -71,7 +67,6 @@ async function runTests() {
   console.log("PROJECTS API INTEGRATION TEST");
   console.log("=".repeat(60));
 
-  // ===== AUTHENTICATION =====
   await test("Login to get auth token", async () => {
     const result = await apiRequest("POST", "/api/v1/auth/login", {
       email: TEST_EMAIL,
@@ -86,7 +81,6 @@ async function runTests() {
     console.log(`  Token: ${authToken.substring(0, 30)}...`);
   });
 
-  // ===== CREATE PROJECT - HAPPY PATH =====
   await test("POST /api/v1/projects - Create project (happy path)", async () => {
     const result = await apiRequest("POST", "/api/v1/projects", {
       title: "Test Project",
@@ -105,7 +99,6 @@ async function runTests() {
     console.log(`  Created project: ${result.data.title} (${testProjectId})`);
   });
 
-  // ===== CREATE PROJECT - VALIDATION ERRORS =====
   await test("POST /api/v1/projects - Missing title (400)", async () => {
     const result = await apiRequest("POST", "/api/v1/projects", {
       category: "thesis",
@@ -143,7 +136,6 @@ async function runTests() {
     console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
   });
 
-  // ===== CREATE PROJECT - AUTH ERRORS =====
   await test("POST /api/v1/projects - No auth token (401)", async () => {
     const result = await apiRequest("POST", "/api/v1/projects", {
       title: "Unauthorized Project",
@@ -170,7 +162,6 @@ async function runTests() {
     console.log(`  Correctly rejected: invalid token`);
   });
 
-  // ===== LIST PROJECTS - HAPPY PATH =====
   await test("GET /api/v1/projects - List projects (happy path)", async () => {
     const result = await apiRequest("GET", "/api/v1/projects");
 
@@ -185,7 +176,6 @@ async function runTests() {
     console.log(`  Found ${result.data.projects.length} projects`);
   });
 
-  // ===== LIST PROJECTS - AUTH ERRORS =====
   await test("GET /api/v1/projects - No auth token (401)", async () => {
     const result = await apiRequest("GET", "/api/v1/projects", undefined, "");
 
@@ -196,7 +186,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== GET PROJECT BY ID - HAPPY PATH =====
   await test("GET /api/v1/projects/:id - Get project by ID (happy path)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}`);
 
@@ -211,7 +200,6 @@ async function runTests() {
     console.log(`  Retrieved: ${result.data.title}`);
   });
 
-  // ===== GET PROJECT BY ID - NOT FOUND =====
   await test("GET /api/v1/projects/:id - Non-existent project (404)", async () => {
     const fakeId = "00000000-0000-0000-0000-000000000000";
     const result = await apiRequest("GET", `/api/v1/projects/${fakeId}`);
@@ -223,7 +211,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent project`);
   });
 
-  // ===== GET PROJECT BY ID - AUTH ERRORS =====
   await test("GET /api/v1/projects/:id - No auth token (401)", async () => {
     const result = await apiRequest("GET", `/api/v1/projects/${testProjectId}`, undefined, "");
 
@@ -234,7 +221,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== UPDATE PROJECT - HAPPY PATH =====
   await test("PUT /api/v1/projects/:id - Update project (happy path)", async () => {
     const result = await apiRequest("PUT", `/api/v1/projects/${testProjectId}`, {
       title: "Updated Test Project",
@@ -252,7 +238,6 @@ async function runTests() {
     console.log(`  Updated: ${result.data.title}`);
   });
 
-  // ===== UPDATE PROJECT - VALIDATION ERRORS =====
   await test("PUT /api/v1/projects/:id - Empty title (400)", async () => {
     const result = await apiRequest("PUT", `/api/v1/projects/${testProjectId}`, {
       title: "",
@@ -265,7 +250,6 @@ async function runTests() {
     console.log(`  Correctly rejected: ${result.data?.error?.message || result.data?.error?.code}`);
   });
 
-  // ===== UPDATE PROJECT - NOT FOUND =====
   await test("PUT /api/v1/projects/:id - Non-existent project (404)", async () => {
     const fakeId = "00000000-0000-0000-0000-000000000000";
     const result = await apiRequest("PUT", `/api/v1/projects/${fakeId}`, {
@@ -279,7 +263,6 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent project`);
   });
 
-  // ===== UPDATE PROJECT - AUTH ERRORS =====
   await test("PUT /api/v1/projects/:id - No auth token (401)", async () => {
     const result = await apiRequest("PUT", `/api/v1/projects/${testProjectId}`, {
       title: "Unauthorized Update",
@@ -292,7 +275,6 @@ async function runTests() {
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== DELETE PROJECT - HAPPY PATH =====
   await test("DELETE /api/v1/projects/:id - Delete project (happy path)", async () => {
     const result = await apiRequest("DELETE", `/api/v1/projects/${testProjectId}`);
 
@@ -303,7 +285,6 @@ async function runTests() {
     console.log(`  Deleted project: ${testProjectId}`);
   });
 
-  // ===== DELETE PROJECT - NOT FOUND =====
   await test("DELETE /api/v1/projects/:id - Already deleted (404)", async () => {
     const result = await apiRequest("DELETE", `/api/v1/projects/${testProjectId}`);
 
@@ -325,9 +306,7 @@ async function runTests() {
     console.log(`  Correctly returned 404 for non-existent project`);
   });
 
-  // ===== DELETE PROJECT - AUTH ERRORS =====
   await test("DELETE /api/v1/projects/:id - No auth token (401)", async () => {
-    // Create a new project to delete
     const createResult = await apiRequest("POST", "/api/v1/projects", {
       title: "Project to Delete",
       category: "thesis",
@@ -340,13 +319,11 @@ async function runTests() {
       throw new Error(`Expected 401, got ${result.status}`);
     }
 
-    // Cleanup
     await apiRequest("DELETE", `/api/v1/projects/${projectToDelete}`);
 
     console.log(`  Correctly rejected: unauthorized`);
   });
 
-  // ===== SUMMARY =====
   console.log("\n" + "=".repeat(60));
   const passed = results.filter((r) => r.passed).length;
   const failed = results.filter((r) => !r.passed).length;

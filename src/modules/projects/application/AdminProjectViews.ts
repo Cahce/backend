@@ -1,10 +1,3 @@
-/**
- * Admin project view DTOs (application output) + pure mappers.
- *
- * These are the JSON-ready shapes (ISO strings) returned by the admin
- * oversight use cases. The delivery layer's Zod response schemas mirror these
- * structurally — same pattern as domain `Project` ↔ `ProjectResponseSchema`.
- */
 
 import type {
   AdminProjectRow,

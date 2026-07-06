@@ -1,6 +1,3 @@
-/**
- * Bibliography module container.
- */
 
 import type { ProjectAccessPolicy } from "../projects/domain/access/ProjectAccessPolicies.js";
 import type { BibliographyService } from "./application/BibliographyService.js";

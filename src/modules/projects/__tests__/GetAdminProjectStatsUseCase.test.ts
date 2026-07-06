@@ -1,6 +1,3 @@
-/**
- * Unit Tests for GetAdminProjectStatsUseCase
- */
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
@@ -27,6 +24,7 @@ describe('GetAdminProjectStatsUseCase', () => {
       byRole: { student: 8, teacher: 4 },
       byCategory: {
         thesis: 5,
+        project: 0,
         report: 3,
         proposal: 1,
         paper: 1,

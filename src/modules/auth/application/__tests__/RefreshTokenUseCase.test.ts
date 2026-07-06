@@ -42,8 +42,6 @@ function makeUserRepo(user: AuthUser | null): IUserRepository {
 }
 
 function makeRefreshRepo(row: RefreshTokenRow | null) {
-    // Mock fns carry their real signatures so `.mock.calls[i].arguments` is a
-    // correctly-typed tuple (tsc needs this to index arguments[0]/[1]).
     return {
         persist: mock.fn(
             async (_p: { tokenHash: string; userId: string; familyId: string; expiresAt: Date }) => ({
@@ -92,7 +90,6 @@ describe("RefreshTokenUseCase", () => {
             assert.strictEqual(result.user.id, "user-1");
             assert.ok(result.user.permissions.length >= 0);
         }
-        // rotate(oldId, next) called with the old row id + hashed new token, same family
         const rotateCalls = repo.rotate.mock.calls;
         assert.strictEqual(rotateCalls.length, 1);
         assert.strictEqual(rotateCalls[0].arguments[0], "rt-1");

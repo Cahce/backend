@@ -1,9 +1,3 @@
-/**
- * List Classes Use Case
- * 
- * Application layer orchestration for listing academic classes with pagination, search, and filters.
- * Pagination sanitization is handled at delivery layer; this use case applies safe defaults.
- */
 
 import type { ClassRepo } from '../../domain/Class/Ports.js';
 import type { ClassWithContext, ClassFilters } from '../../domain/Class/Types.js';
@@ -19,7 +13,6 @@ export class ListClassesUseCase {
 
   async execute(filters: ClassFilters): Promise<Result<PaginatedResult<ClassWithContext>>> {
     try {
-      // Apply safe pagination defaults
       const page = Math.max(filters.page ?? DEFAULT_PAGE, 1);
       const pageSize = Math.min(
         Math.max(filters.pageSize ?? DEFAULT_PAGE_SIZE, 1),

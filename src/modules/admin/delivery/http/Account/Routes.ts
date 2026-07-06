@@ -27,7 +27,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
   } = container;
   const importAccounts = container.importAccounts;
 
-  // POST /admin/accounts - Create account
   app.post<{ Body: unknown }>(
     "/accounts",
     {
@@ -71,7 +70,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // If linkTo was provided, refetch to include link info
       let link: AccountResponse["link"] = null;
       if (body.linkTo) {
         const withLink = await getAccountUseCase.execute({ id: result.data.id });
@@ -93,7 +91,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // GET /admin/accounts - List accounts
   app.get<{ Querystring: unknown }>(
     "/accounts",
     {
@@ -185,7 +182,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // GET /admin/accounts/:id - Get account by ID
   app.get<{ Params: { id: string } }>(
     "/accounts/:id",
     {
@@ -244,7 +240,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // PATCH /admin/accounts/:id - Update account
   app.patch<{ Params: { id: string }; Body: unknown }>(
     "/accounts/:id",
     {
@@ -296,7 +291,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // Fetch with link info for response
       const withLink = await getAccountUseCase.execute({ id: result.data.id });
       if (!withLink.success) {
         return reply.code(getStatusCodeForError(withLink.error.code)).send({
@@ -317,7 +311,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // DELETE /admin/accounts/:id - Delete account
   app.delete<{ Params: { id: string } }>(
     "/accounts/:id",
     {
@@ -349,7 +342,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // POST /admin/accounts/:id/reset-password - Reset password
   app.post<{ Params: { id: string }; Body: unknown }>(
     "/accounts/:id/reset-password",
     {
@@ -390,7 +382,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // POST /admin/accounts/import - Import accounts from XLSX or CSV file
   app.post(
     "/accounts/import",
     {
@@ -521,7 +512,6 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // GET /admin/accounts/import/template - Download XLSX or CSV template
   app.get<{ Querystring: { format?: "xlsx" | "csv" } }>(
     "/accounts/import/template",
     {

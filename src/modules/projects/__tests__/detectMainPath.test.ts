@@ -10,7 +10,6 @@ import {
   type DetectFile,
 } from '../application/detectMainPath.js';
 
-/** UniTyLab-shaped import: real entry is `90-Document/90-Document.typ`. */
 function unityLabFixture(): DetectFile[] {
   return [
     { path: 'Template-Import.typ', content: '#let format-doc-general = none\n' },
@@ -44,7 +43,6 @@ function unityLabFixture(): DetectFile[] {
 describe('detectMainPath — include-graph root (AC-1.2 / AC-1.3)', () => {
   it('picks the document root, not the alphabetically-first file', () => {
     const files = unityLabFixture();
-    // The legacy heuristic would have picked 00-Title/00-Title.typ.
     assert.strictEqual(detectMainPath(files, {}), '90-Document/90-Document.typ');
   });
 
@@ -113,7 +111,6 @@ describe('detectMainPath — priority chain (AC-1.1 / AC-1.4 / AC-1.7)', () => {
       { path: 'part.typ', content: '= Part\n' },
     ];
     const typstToml = '[package]\nname = "x"\nentrypoint = "lib.typ"\n';
-    // No [template] entry → falls to graph root, which is doc.typ (reaches part.typ).
     assert.strictEqual(detectMainPath(files, { typstToml }), 'doc.typ');
   });
 

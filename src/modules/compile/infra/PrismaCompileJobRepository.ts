@@ -1,6 +1,3 @@
-/**
- * Prisma implementation of CompileJobRepository
- */
 
 import type { Prisma, PrismaClient } from '../../../generated/prisma/index.js';
 import { z } from 'zod';
@@ -8,7 +5,6 @@ import type { CompileJobRepository, CreateCompileJobData } from '../domain/Compi
 import { CompileJob, type CompileStatus } from '../domain/CompileJob.js';
 import type { CompileDiagnostic } from '../domain/CompileDiagnostic.js';
 
-// Zod schema for validating diagnostics JSON
 const DiagnosticPositionSchema = z.object({
   line: z.number(),
   column: z.number(),
@@ -98,8 +94,6 @@ export class PrismaCompileJobRepository implements CompileJobRepository {
       where: { id: job.id },
       data: {
         status: job.status,
-        // CompileDiagnostic[] is JSON-serializable; cast to Prisma's JSON
-        // input type after asserting unknown to satisfy structural checks.
         diagnostics: job.diagnostics as unknown as Prisma.InputJsonValue,
         latestArtifactId: job.latestArtifactId,
         updatedAt: job.updatedAt,
@@ -117,7 +111,6 @@ export class PrismaCompileJobRepository implements CompileJobRepository {
     createdAt: Date;
     updatedAt: Date;
   }): CompileJob {
-    // Validate and parse diagnostics JSON
     let diagnostics: CompileDiagnostic[] = [];
     try {
       const parsed = DiagnosticsArraySchema.parse(prismaJob.diagnostics);

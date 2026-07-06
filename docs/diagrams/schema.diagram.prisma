@@ -1,0 +1,551 @@
+// =============================================================================
+// TLU Scholar Editor — Lược đồ RÚT GỌN dùng để vẽ biểu đồ (class + CSDL)
+// =============================================================================
+// File này CHỈ phục vụ tài liệu / sinh biểu đồ. KHÔNG dùng cho `prisma generate`
+// hay `prisma migrate`. Lược đồ chạy thật vẫn là backend/prisma/schema.prisma
+// (bản sao đầy đủ 25 bảng: backend/docs/diagrams/schema.full.prisma).
+//
+// Đã loại 6 bảng KHÔNG được sử dụng ở cả backend lẫn frontend:
+//   - ProjectShareLink         chia sẻ link: nút FE đã ẩn ("tạm ẩn cho đến khi
+//                              backend hỗ trợ"); backend 0 tham chiếu.
+//   - ProjectMember            cộng tác viên: backend CHỈ ĐỌC trong phân quyền,
+//                              KHÔNG bao giờ ghi (không UI/endpoint tạo) → luôn rỗng.
+//   - ProjectAdvisor           GVHD: backend CHỈ ĐỌC, KHÔNG bao giờ ghi; không UI.
+//   - ProjectSnapshot          cộng tác realtime (Yjs) chưa triển khai.
+//   - ProjectWordCountSnapshot lịch sử số từ chưa triển khai (chức năng "Đếm từ"
+//                              vẫn còn nhưng chạy client-side, không đụng bảng này).
+//   - UserQuota                hạn ngạch lưu trữ: không UI, không enforcement.
+// Kèm theo: bỏ enum ProjectRole (chỉ dùng bởi ProjectMember/ProjectShareLink) và
+// mọi quan hệ ngược trỏ tới 6 bảng trên (trong User, Project, Teacher).
+//
+// Còn lại: 19 bảng đang dùng thật.
+// =============================================================================
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * =========================
+ * Enums
+ * =========================
+ */
+enum CompileStatus {
+  queued
+  running
+  success
+  failed
+}
+
+enum UserRole {
+  admin
+  student
+  teacher
+}
+
+enum CompileMode {
+  export
+  preview
+}
+
+enum CompileEngine {
+  node
+  web
+}
+
+enum FileKind {
+  typst
+  bib
+  image
+  vector
+  font
+  markdown
+  config
+  data
+  text
+  pdf
+  other
+}
+
+enum TemplateCategory {
+  thesis
+  report
+  proposal
+  paper
+  presentation
+  other
+}
+
+enum ZoteroLibraryType {
+  user
+  group
+}
+
+enum ZoteroSyncStatus {
+  pending
+  running
+  success
+  failed
+}
+
+enum ZoteroSyncType {
+  full
+  incremental
+}
+
+enum OpenAlexImportStatus {
+  imported
+  skipped_duplicate
+  failed
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+/**
+ * =========================
+ * Users
+ * =========================
+ */
+model User {
+  id                  String           @id @default(cuid())
+  email               String           @unique
+  role                UserRole
+  passwordHash        String
+  isActive            Boolean          @default(true)
+  mustChangePassword  Boolean          @default(false)
+  passwordChangedAt   DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  // Profile relations
+  teacher             Teacher?         @relation("TeacherAccount")
+  student             Student?         @relation("StudentAccount")
+
+  // Existing relations
+  ownedProjects       Project[]        @relation("ProjectOwner")
+  requestedCompileJobs CompileJob[]    @relation("CompileJobRequestedBy")
+  invalidTokens       InvalidToken[]
+  refreshTokens       RefreshToken[]
+  zoteroConnections   ZoteroConnection[]
+  openAlexImportLogs  OpenAlexImportLog[]
+
+  @@index([createdAt])
+}
+
+/**
+ * =========================
+ * Academic Structure
+ * =========================
+ */
+model Faculty {
+  id          String       @id @default(cuid())
+  name        String
+  code        String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  departments Department[]
+  majors      Major[]
+
+  @@index([updatedAt])
+}
+
+model Department {
+  id        String    @id @default(cuid())
+  name      String
+  code      String    @unique
+  facultyId String
+  faculty   Faculty   @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  teachers  Teacher[]
+
+  @@index([facultyId])
+  @@index([updatedAt])
+}
+
+model Major {
+  id            String          @id @default(cuid())
+  name          String
+  code          String          @unique
+  facultyId     String
+  faculty       Faculty         @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  classes       Class[]
+
+  @@index([facultyId])
+  @@index([updatedAt])
+}
+
+model Class {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  majorId   String
+  major     Major    @relation(fields: [majorId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  students  Student[]
+
+  @@index([majorId])
+  @@index([updatedAt])
+}
+
+/**
+ * =========================
+ * Student / Teacher profiles
+ * =========================
+ */
+
+// Independent Teacher model
+model Teacher {
+  id             String          @id @default(cuid())
+  accountId      String?         @unique
+  account        User?           @relation("TeacherAccount", fields: [accountId], references: [id], onDelete: SetNull)
+  teacherCode    String          @unique
+  fullName       String
+  departmentId   String
+  department     Department      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  academicRank   String
+  academicDegree String
+  phone          String?
+  gender         Gender?
+  dateOfBirth    DateTime?
+  address        String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([accountId])
+  @@index([departmentId])
+  @@index([teacherCode])
+  @@index([updatedAt])
+}
+
+// Independent Student model
+model Student {
+  id          String   @id @default(cuid())
+  accountId   String?  @unique
+  account     User?    @relation("StudentAccount", fields: [accountId], references: [id], onDelete: SetNull)
+  studentCode String   @unique
+  fullName    String
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Restrict)
+  phone       String?
+  gender      Gender?
+  dateOfBirth DateTime?
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([classId])
+  @@index([studentCode])
+  @@index([updatedAt])
+}
+
+/**
+ * =========================
+ * Templates
+ * =========================
+ */
+model Template {
+  id          String             @id @default(cuid())
+  name        String
+  description String?
+  category    TemplateCategory
+  isOfficial  Boolean            @default(false)
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  versions    TemplateVersion[]
+  projects    Project[]          @relation("ProjectTemplate")
+
+  // Editable "source project" (admin-owned working copy) used to author this
+  // template's content in the workspace, then publish versions from it.
+  sourceProjectId String?
+  sourceProject   Project?       @relation("TemplateSourceProject", fields: [sourceProjectId], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@index([isOfficial, isActive])
+  @@index([sourceProjectId])
+}
+
+model TemplateVersion {
+  id            String    @id @default(cuid())
+  templateId    String
+  template      Template  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  versionNumber String
+  changelog     String?
+  storageKey    String
+  entryPath     String    @default("main.typ")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  projects      Project[]
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId, isActive])
+  @@index([createdAt])
+}
+
+/**
+ * =========================
+ * Zotero Integration
+ * =========================
+ */
+model ZoteroConnection {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        String              @default("zotero")
+  accessToken     String
+  refreshToken    String?
+  libraryId       String
+  libraryType     ZoteroLibraryType
+  connectedAt     DateTime            @default(now())
+  lastSyncedAt    DateTime?
+  updatedAt       DateTime            @updatedAt
+  syncLogs        ZoteroSyncLog[]
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model ZoteroSyncLog {
+  id            String            @id @default(cuid())
+  connectionId  String
+  connection    ZoteroConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  projectId     String?
+  project       Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  targetBibPath String?
+  syncType      ZoteroSyncType
+  status        ZoteroSyncStatus
+  itemsSynced   Int               @default(0)
+  itemsAdded    Int               @default(0)
+  itemsUpdated  Int               @default(0)
+  itemsSkipped  Int               @default(0)
+  errorCode     String?
+  errorMessage  String?
+  startedAt     DateTime          @default(now())
+  finishedAt    DateTime?
+
+  @@index([connectionId, startedAt])
+  @@index([projectId, startedAt])
+  @@index([status])
+}
+
+model OpenAlexImportLog {
+  id            String                @id @default(cuid())
+  userId        String
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  openAlexId    String
+  citationKey   String
+  targetBibPath String
+  doi           String?
+  title         String?
+  year          Int?
+  status        OpenAlexImportStatus
+  errorMessage  String?
+  importedAt    DateTime              @default(now())
+
+  @@index([projectId, importedAt])
+  @@index([userId, importedAt])
+  @@index([openAlexId])
+  @@index([projectId, openAlexId])
+}
+
+/**
+ * =========================
+ * Project
+ * =========================
+ */
+model Project {
+  id           String           @id @default(cuid())
+  title        String
+  category     TemplateCategory @default(other)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  ownerId      String?
+  owner        User?            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  lastEditedAt DateTime?
+
+  // Template relationship
+  templateId        String?
+  template          Template?        @relation("ProjectTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  templateVersionId String?
+  templateVersion   TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  // Templates that use this project as their editable source (authoring copy)
+  templateSources   Template[]       @relation("TemplateSourceProject")
+
+  settings         ProjectSettings?
+  files            File[]
+  compileJobs      CompileJob[]
+  compileArtifacts CompileArtifact[]
+  zoteroSyncLogs      ZoteroSyncLog[]
+  openAlexImportLogs  OpenAlexImportLog[]
+
+  @@index([ownerId])
+  @@index([templateId])
+  @@index([templateVersionId])
+  @@index([category])
+  @@index([updatedAt])
+  @@index([createdAt])
+}
+
+/**
+ * =========================
+ * Project Settings
+ * =========================
+ */
+model ProjectSettings {
+  projectId      String   @id
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mainPath       String   @default("main.typ")
+  compileOptions Json?
+  zoteroConfig   Json?
+  openalexConfig Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/**
+ * =========================
+ * Files
+ * =========================
+ */
+model File {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  path         String
+  kind         FileKind @default(other)
+  // preserve old DB column "content"
+  textContent  String?  @map("content") @db.Text
+  storageKey   String?
+  mimeType     String?
+  sizeBytes    Int?
+  sha256       String?
+  lastEditedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([projectId, path])
+  @@index([projectId])
+}
+
+/**
+ * =========================
+ * Compile Jobs
+ * =========================
+ */
+model CompileJob {
+  id              String         @id @default(cuid())
+  projectId       String
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  entryPath       String
+  status          CompileStatus  @default(queued)
+  mode            CompileMode    @default(export)
+  engine          CompileEngine  @default(node)
+  inputHash       String?        // legacy - keep to avoid data loss
+  artifactPath    String?
+  diagnostics     Json?
+  attempt         Int            @default(0)
+  priority        Int            @default(0)
+  requestedById   String?
+  requestedBy     User?          @relation("CompileJobRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  // job -> 0..1 latest artifact (1-1 optional)
+  latestArtifactId String?       @unique
+  latestArtifact   CompileArtifact? @relation("LatestArtifact", fields: [latestArtifactId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  startedAt       DateTime?
+  finishedAt      DateTime?
+
+  // job -> many artifacts (produced by job)
+  artifacts       CompileArtifact[] @relation("JobArtifacts")
+
+  @@index([projectId])
+  @@index([status])
+  @@index([projectId, createdAt]) // queue optimization
+  @@index([status, priority, createdAt])
+}
+
+/**
+ * =========================
+ * Compile Artifacts
+ * =========================
+ */
+model CompileArtifact {
+  id        String   @id @default(cuid())
+  projectId String
+  jobId     String?
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // produced-by relation (opposite of CompileJob.artifacts)
+  job       CompileJob? @relation("JobArtifacts", fields: [jobId], references: [id], onDelete: SetNull)
+
+  // opposite of CompileJob.latestArtifact (0..1)
+  latestOfJob CompileJob? @relation("LatestArtifact")
+
+  format      String   @default("pdf")
+  storageKey  String
+  sizeBytes   Int?
+  sha256      String?
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([jobId])
+}
+
+/**
+ * =========================
+ * JWT blacklist
+ * =========================
+ */
+model InvalidToken {
+  jti       String   @id
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
+/**
+ * =========================
+ * Refresh tokens (rotating)
+ * =========================
+ * Only the SHA-256 hash of the opaque refresh token is stored. Each successful
+ * refresh rotates the token (old row gets `revokedAt` + `replacedBy`). Reuse of
+ * a revoked token is treated as theft and burns the whole `familyId`.
+ */
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  familyId   String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+  userAgent  String?
+  ip         String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([familyId])
+}

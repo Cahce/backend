@@ -1,8 +1,3 @@
-/**
- * Get Class By Id Use Case
- * 
- * Application layer orchestration for retrieving a single academic class by ID.
- */
 
 import type { ClassRepo } from '../../domain/Class/Ports.js';
 import type { ClassWithContext } from '../../domain/Class/Types.js';

@@ -1,7 +1,4 @@
-// Domain types for Student profile management
-// No framework dependencies - pure TypeScript
 
-/** Mirrors the Prisma `Gender` enum without importing Prisma into the domain. */
 export type Gender = 'male' | 'female' | 'other';
 
 export type StudentProfile = {
@@ -52,7 +49,7 @@ export type CreateStudentData = {
   gender?: Gender | null;
   dateOfBirth?: Date | null;
   address?: string | null;
-  accountId?: string; // Optional account linking during creation
+  accountId?: string;
 };
 
 export type UpdateStudentData = {
@@ -66,16 +63,15 @@ export type UpdateStudentData = {
 };
 
 export type StudentFilters = {
-  search?: string; // Search by name or studentCode
+  search?: string;
   classId?: string;
-  majorId?: string; // Filter via Class.majorId
-  facultyId?: string; // Filter via Class.major.facultyId
-  hasAccount?: boolean; // Filter by account link status
+  majorId?: string;
+  facultyId?: string;
+  hasAccount?: boolean;
   page?: number;
   pageSize?: number;
 };
 
-// Import types for Excel import functionality
 export type StudentImportRow = {
   studentCode: string;
   fullName: string;

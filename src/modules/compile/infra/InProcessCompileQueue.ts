@@ -1,9 +1,3 @@
-/**
- * InProcessCompileQueue
- * 
- * Single-worker FIFO queue for processing compile jobs.
- * Respects COMPILE_WORKER_ENABLED environment variable.
- */
 
 import type { CompileQueue } from '../domain/CompileQueue.js';
 
@@ -23,7 +17,6 @@ export class InProcessCompileQueue implements CompileQueue {
   private queue: string[] = [];
   private processing = false;
   private stopped = false;
-  // jobId -> resolvers waiting for that job to finish processing.
   private readonly settleWaiters = new Map<string, Array<() => void>>();
 
   constructor(
@@ -40,7 +33,6 @@ export class InProcessCompileQueue implements CompileQueue {
     this.queue.push(jobId);
     this.options.log?.info(`Job ${jobId} enqueued, queue length: ${this.queue.length}`);
     
-    // Start processing if not already running
     if (!this.processing && !this.stopped) {
       this.processNext();
     }
@@ -55,17 +47,11 @@ export class InProcessCompileQueue implements CompileQueue {
     this.stopped = false;
     this.options.log?.info('Compile worker started');
     
-    // Start processing if there are queued jobs
     if (this.queue.length > 0 && !this.processing) {
       this.processNext();
     }
   }
 
-  /**
-   * Resolve when `jobId` next finishes processing. Must be raced against a
-   * timeout by the caller (a job that already settled, or one never processed
-   * by this instance, will never resolve this promise).
-   */
   waitForSettle(jobId: string): Promise<void> {
     return new Promise<void>((resolve) => {
       const waiters = this.settleWaiters.get(jobId) ?? [];
@@ -88,7 +74,6 @@ export class InProcessCompileQueue implements CompileQueue {
     this.stopped = true;
     this.options.log?.info('Compile worker stopping...');
     
-    // Wait for current job to finish
     while (this.processing) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -117,13 +102,9 @@ export class InProcessCompileQueue implements CompileQueue {
     } finally {
       this.processing = false;
 
-      // Wake anyone awaiting this job's completion (the DB status was written
-      // by the handler before it returned).
       this.notifySettled(jobId);
 
-      // Process next job if available and not stopped
       if (this.queue.length > 0 && !this.stopped) {
-        // Use setImmediate to avoid deep recursion
         setImmediate(() => this.processNext());
       }
     }

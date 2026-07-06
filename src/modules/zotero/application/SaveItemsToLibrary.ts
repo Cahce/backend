@@ -1,10 +1,3 @@
-/**
- * Save Items To Library Use Case
- *
- * Writes one or more items into the connected user's Zotero library.
- * Used by the `capture` module (via LibraryWriterPort adapter) and any
- * "save to Zotero" flow. Requires the stored API key to have write scope.
- */
 
 import type { ZoteroConnectionRepo, ZoteroApiPort } from "../domain/Ports.js";
 import type { ZoteroItem } from "../domain/Types.js";
@@ -43,7 +36,6 @@ export class SaveItemsToLibrary {
       throw new ZoteroNotConnectedError();
     }
 
-    // Proactively verify the key has write permission for the target library.
     const info = await this.apiClient.getKeyInfo(conn.accessToken);
     const canWrite =
       conn.libraryType === "user"

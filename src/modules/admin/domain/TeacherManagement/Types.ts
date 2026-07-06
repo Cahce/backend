@@ -1,7 +1,4 @@
-// Domain types for Teacher profile management
-// No framework dependencies - pure TypeScript
 
-/** Mirrors the Prisma `Gender` enum without importing Prisma into the domain. */
 export type Gender = 'male' | 'female' | 'other';
 
 export type TeacherProfile = {
@@ -50,7 +47,7 @@ export type CreateTeacherData = {
   gender?: Gender | null;
   dateOfBirth?: Date | null;
   address?: string | null;
-  accountId?: string; // Optional account linking during creation
+  accountId?: string;
 };
 
 export type UpdateTeacherData = {
@@ -66,15 +63,14 @@ export type UpdateTeacherData = {
 };
 
 export type TeacherFilters = {
-  search?: string; // Search by name or teacherCode
+  search?: string;
   departmentId?: string;
-  facultyId?: string; // Filter via Department.facultyId
-  hasAccount?: boolean; // Filter by account link status
+  facultyId?: string;
+  hasAccount?: boolean;
   page?: number;
   pageSize?: number;
 };
 
-// Import types for Excel import functionality
 export type TeacherImportRow = {
   teacherCode: string;
   fullName: string;

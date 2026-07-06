@@ -1,8 +1,3 @@
-/**
- * Update Template Use Case
- * 
- * Application layer orchestration for updating a template.
- */
 
 import type { TemplateRepo } from '../domain/Ports.js';
 import type { Template, UpdateTemplateData } from '../domain/Types.js';
@@ -12,9 +7,6 @@ export type UpdateTemplateResult =
   | { success: true; data: Template }
   | { success: false; error: { code: string; message: string } };
 
-/**
- * Use case for updating a template
- */
 export class UpdateTemplateUseCase {
   constructor(private readonly templateRepo: TemplateRepo) {}
 

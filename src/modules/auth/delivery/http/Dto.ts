@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-/**
- * Request/Response DTOs for auth endpoints
- */
 
-// Login
 export const LoginRequestSchema = z.object({
     email: z
         .string()
@@ -35,7 +31,6 @@ export const LoginResponseSchema = z.object({
 
 export type LoginResponseDto = z.infer<typeof LoginResponseSchema>;
 
-// Refresh
 export const RefreshRequestSchema = z.object({
     refreshToken: z.string().min(1, "refreshToken là bắt buộc").describe("Refresh token hiện tại"),
 });
@@ -50,7 +45,6 @@ export const RefreshResponseSchema = z.object({
 
 export type RefreshResponseDto = z.infer<typeof RefreshResponseSchema>;
 
-// Get Current User
 export const GetCurrentUserResponseSchema = z.object({
     user: z.object({
         id: z.string(),
@@ -63,14 +57,12 @@ export const GetCurrentUserResponseSchema = z.object({
 
 export type GetCurrentUserResponseDto = z.infer<typeof GetCurrentUserResponseSchema>;
 
-// Logout
 export const LogoutResponseSchema = z.object({
     message: z.string().describe("Thông báo kết quả"),
 });
 
 export type LogoutResponseDto = z.infer<typeof LogoutResponseSchema>;
 
-// Change Password
 export const ChangePasswordRequestSchema = z.object({
     oldPassword: z
         .string()
@@ -94,7 +86,6 @@ export const ChangePasswordResponseSchema = z.object({
 
 export type ChangePasswordResponseDto = z.infer<typeof ChangePasswordResponseSchema>;
 
-// Error Response
 export const ErrorResponseSchema = z.object({
     error: z.object({
         code: z.string().describe("Mã lỗi"),
@@ -104,7 +95,6 @@ export const ErrorResponseSchema = z.object({
 
 export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
 
-// Get User By Email
 export const GetUserByEmailParamsSchema = z.object({
     email: z
         .string()
@@ -170,7 +160,6 @@ export const UserWithProfileResponseSchema = z.object({
 
 export type UserWithProfileResponseDto = z.infer<typeof UserWithProfileResponseSchema>;
 
-// Update Own Profile (self-service personal info: gender/dateOfBirth/phone/address)
 export const UpdateOwnProfileRequestSchema = z.object({
     gender: z.enum(["male", "female", "other"]).nullable().optional(),
     dateOfBirth: z.coerce.date().nullable().optional(),

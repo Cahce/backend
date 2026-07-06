@@ -1,13 +1,4 @@
-/**
- * Bibliography Domain - BibEntry Types
- * 
- * Core domain types for bibliography entries.
- * No framework dependencies.
- */
 
-/**
- * Supported BibTeX entry types
- */
 export type BibEntryType =
   | "article"
   | "book"
@@ -18,13 +9,9 @@ export type BibEntryType =
   | "techreport"
   | "misc";
 
-/**
- * BibTeX entry fields
- * All fields are optional as different entry types require different fields
- */
 export interface BibEntryFields {
   title?: string;
-  author?: string;          // "Last, First and Last, First"
+  author?: string;
   year?: string;
   journal?: string;
   booktitle?: string;
@@ -46,11 +33,8 @@ export interface BibEntryFields {
   keywords?: string;
 }
 
-/**
- * Complete bibliography entry
- */
 export interface BibEntry {
-  key: string;              // Citation key (e.g., "Smith2024Machine")
+  key: string;
   type: BibEntryType;
   fields: BibEntryFields;
 }

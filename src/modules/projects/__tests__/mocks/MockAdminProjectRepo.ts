@@ -1,7 +1,3 @@
-/**
- * In-memory mock of AdminProjectRepo for use-case unit tests.
- * Captures the last filters/role so tests can assert pass-through.
- */
 
 import type {
   AdminProjectRepo,
@@ -23,6 +19,7 @@ export class MockAdminProjectRepo implements AdminProjectRepo {
     byRole: { student: 0, teacher: 0 },
     byCategory: {
       thesis: 0,
+      project: 0,
       report: 0,
       proposal: 0,
       paper: 0,

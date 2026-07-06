@@ -30,6 +30,6 @@ test("maps an arXiv abs URL to its DOI", () => {
 });
 
 test("returns null for identifiers it can't turn into a DOI", () => {
-  assert.equal(normalizeToDoi("978-3-16-148410-0"), null); // ISBN
+  assert.equal(normalizeToDoi("978-3-16-148410-0"), null);
   assert.equal(normalizeToDoi("hello world"), null);
 });

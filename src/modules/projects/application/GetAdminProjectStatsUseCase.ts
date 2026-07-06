@@ -1,9 +1,3 @@
-/**
- * Get Admin Project Stats Use Case
- *
- * Aggregate project counts for the admin oversight dashboard cards. Optional
- * ownerRole scopes `total` and `byCategory` to one role.
- */
 
 import type { AdminProjectRepo, ProjectOwnerRole } from '../domain/Project/AdminProjectPorts.js';
 import type { AdminProjectStatsDto } from './AdminProjectViews.js';

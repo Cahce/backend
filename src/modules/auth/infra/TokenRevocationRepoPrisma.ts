@@ -1,9 +1,6 @@
 import type { PrismaClient } from "../../../generated/prisma/index.js";
 import type { ITokenRevocationRepository } from "../domain/Ports.js";
 
-/**
- * Prisma implementation of token revocation repository
- */
 export class TokenRevocationRepoPrisma implements ITokenRevocationRepository {
     constructor(private readonly prisma: PrismaClient) {}
 

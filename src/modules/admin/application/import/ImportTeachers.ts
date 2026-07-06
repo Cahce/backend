@@ -12,9 +12,6 @@ import {
   type HeaderMap,
 } from "./HeaderMap.js";
 
-/**
- * Teacher import row schema
- */
 const TeacherImportRowSchema = z.object({
   teacherCode: z.string().min(1, "Mã giảng viên không được để trống"),
   fullName: z.string().min(1, "Tên giảng viên không được để trống"),
@@ -28,11 +25,6 @@ const TeacherImportRowSchema = z.object({
 
 type TeacherImportRow = z.infer<typeof TeacherImportRowSchema>;
 
-/**
- * Matches columns in "Mẫu Import Giảng viên.xlsx" (STT ignored).
- * "Mã GV" is accepted but not present in the template — when absent the
- * teacher code is auto-generated from the existing DB pattern.
- */
 const TEACHER_HEADER_MAP: HeaderMap = {
   "Mã GV": "teacherCode",
   "Họ và Tên": "fullName",
@@ -44,12 +36,6 @@ const TEACHER_HEADER_MAP: HeaderMap = {
   "Số điện thoại": "phone",
 };
 
-/**
- * Import teachers from CSV with optional account creation.
- *
- * Application use case — depends only on domain ports (department/teacher/account
- * repos + PasswordHasher), never on Prisma or bcrypt directly.
- */
 export class ImportTeachers {
   private readonly emailPolicy = new EnvEmailPolicy();
 
@@ -67,10 +53,6 @@ export class ImportTeachers {
       normalizeRow(row as Record<string, unknown>, TEACHER_HEADER_MAP),
     );
 
-    // Pre-seed a sequential generator from existing teacherCodes so rows that
-    // omit "Mã GV" follow the dominant prefix/digit-width pattern in the DB
-    // (e.g., {GV001, GV002} → GV003). Reserves any teacherCode already present
-    // in the upload so we never collide.
     const existingCodes = await this.teacherRepo.listAllTeacherCodes();
     const codeGen = new SequentialCodeGenerator(existingCodes);
     for (const row of normalized) {
@@ -139,7 +121,6 @@ export class ImportTeachers {
             throw new Error("Department ID not resolved");
           }
 
-          // Handle optional account creation / linking.
           let accountId: string | undefined;
 
           if (row.accountEmail) {
@@ -173,7 +154,7 @@ export class ImportTeachers {
 
               if (isGenerated) {
                 generatedPasswords.push({
-                  row: 0, // Will be set by caller
+                  row: 0,
                   email: normalizedEmail,
                   password,
                 });
