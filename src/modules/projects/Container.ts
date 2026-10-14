@@ -67,7 +67,7 @@ export class ProjectsContainer {
     this.getProjectUseCase = new GetProjectUseCase(this.projectRepo);
     this.listProjectsUseCase = new ListProjectsUseCase(this.projectRepo);
     this.updateProjectUseCase = new UpdateProjectUseCase(this.projectRepo);
-    this.deleteProjectUseCase = new DeleteProjectUseCase(this.projectRepo);
+    this.deleteProjectUseCase = new DeleteProjectUseCase(this.projectRepo, blobStorage);
     this.getProjectSettings = new GetProjectSettings(this.settingsRepo, this.projectRepo);
     this.updateProjectSettings = new UpdateProjectSettings(
       this.settingsRepo,

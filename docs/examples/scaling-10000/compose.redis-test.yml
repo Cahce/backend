@@ -1,0 +1,13 @@
+# Isolated, disposable local lab. Never expose this unauthenticated test service externally.
+# Run with a unique compose project name; this file is separate from the application stack.
+services:
+  redis-test:
+    image: redis:8.2.10-alpine
+    command: [redis-server, --save, '', --appendonly, 'no', --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    ports: ['127.0.0.1:16379:6379']
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD, redis-cli, -e, PING]
+      interval: 2s
+      timeout: 1s
+      retries: 10

@@ -1,3 +1,4 @@
+import { RateLimitExceeded, RateLimitUnavailable } from '../rate-limit/RateLimitStore.js';
 
 export interface ErrorEnvelope {
     error: { code: string; message: string };
@@ -68,7 +69,15 @@ function extractCode(err: unknown): string {
     return "INTERNAL_ERROR";
 }
 
-export function toErrorResponse(err: unknown): { status: number; body: ErrorEnvelope } {
+export function toErrorResponse(err: unknown): { status: number; body: ErrorEnvelope; retryAfterSeconds?: number } {
+    if (err instanceof RateLimitExceeded) return { status: 429, retryAfterSeconds: err.retryAfterSeconds,
+        body: errorEnvelope('RATE_LIMITED', 'Bạn thao tác quá nhanh. Hãy thử lại sau') };
+    if (err instanceof RateLimitUnavailable) return { status: 503, retryAfterSeconds: 1,
+        body: errorEnvelope('RATE_LIMIT_UNAVAILABLE', 'Dịch vụ đang bận. Hãy thử lại sau') };
+    if (err instanceof Error && err.name === 'CollaborationError') {
+        const domainError = err as Error & { status: number; code: string };
+        return { status: domainError.status, body: errorEnvelope(domainError.code, domainError.message) };
+    }
     if (isZodError(err)) {
         const message = err.issues[0]?.message ?? MESSAGE_BY_CODE.VALIDATION_ERROR;
         return { status: 400, body: errorEnvelope("VALIDATION_ERROR", message) };

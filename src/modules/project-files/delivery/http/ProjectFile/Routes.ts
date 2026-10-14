@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ProjectFilesContainer } from '../../../Container.js';
+import { projectFileDocumentation } from './OpenApi.js';
 import { FileKind, type File } from '../../../domain/ProjectFile/Types.js';
+import { requireCondition, CollaborationError } from '../../../../projects/domain/access/CollaborationErrors.js';
+import { z } from 'zod';
+const preconditionSchema = z.object({ fileId: z.string().min(1).max(128), baseRevision: z.coerce.number().int().positive() });
 import {
   isBinaryKind,
   getMimeTypeForKind,
@@ -29,6 +33,7 @@ function toFileResponseDto(file: File): FileResponseDto {
     path: file.path,
     kind: file.kind,
     content: file.textContent,
+    revision: file.revision ?? 1,
     storageKey: file.storageKey,
     mimeType: file.mimeType,
     sizeBytes: file.sizeBytes,
@@ -56,6 +61,7 @@ export async function projectFileRoutes(
     '/projects/:projectId/files',
     {
       preHandler: app.auth.verify,
+      ...projectFileDocumentation.list,
       schema: {
         description: 'Lấy danh sách tệp trong dự án, sắp xếp theo path tăng dần',
         tags: ['project-files'],
@@ -117,6 +123,7 @@ export async function projectFileRoutes(
     '/projects/:projectId/files',
     {
       preHandler: app.auth.verify,
+      ...projectFileDocumentation.create,
       schema: {
         description: 'Tạo tệp mới trong dự án',
         tags: ['project-files'],
@@ -201,6 +208,7 @@ export async function projectFileRoutes(
     '/projects/:projectId/files:upload',
     {
       preHandler: app.auth.verify,
+      ...projectFileDocumentation.upload,
       schema: {
         description: 'Tải lên tệp nhị phân (ảnh, font, PDF) qua multipart/form-data',
         tags: ['project-files'],
@@ -289,6 +297,7 @@ export async function projectFileRoutes(
         return reply.code(201).send(toFileResponseDto(file));
       } catch (err: any) {
         const name = err?.name ?? '';
+        if (err instanceof CollaborationError) return reply.code(err.status).send({ error: { code: err.code, message: err.message } });
         const message = err?.message ?? 'Upload thất bại';
 
         if (name === 'InvalidPathError') {
@@ -322,6 +331,7 @@ export async function projectFileRoutes(
     '/projects/:projectId/files/*',
     {
       preHandler: app.auth.verify,
+      ...projectFileDocumentation.get,
       schema: {
         description: 'Lấy nội dung tệp theo đường dẫn',
         tags: ['project-files'],
@@ -389,6 +399,7 @@ export async function projectFileRoutes(
             }
 
             reply.header('X-File-Id', file.id);
+            reply.header('X-File-Revision', file.revision ?? 1);
             if (file.lastEditedAt) {
               reply.header('X-Last-Edited-At', file.lastEditedAt.toISOString());
             }
@@ -430,6 +441,7 @@ export async function projectFileRoutes(
     '/projects/:projectId/files/*',
     {
       preHandler: app.auth.verify,
+      ...projectFileDocumentation.update,
       schema: {
         description: 'Cập nhật nội dung tệp',
         tags: ['project-files'],
@@ -491,7 +503,10 @@ export async function projectFileRoutes(
         });
       }
 
+      requireCondition(parseResult.data.fileId && parseResult.data.baseRevision, 'PRECONDITION_REQUIRED', 'Thiếu phiên bản tệp. Hãy tải lại trước khi lưu', 428);
       const result = await updateFileUseCase.execute({
+        fileId: parseResult.data.fileId,
+        baseRevision: parseResult.data.baseRevision,
         projectId: request.params.projectId,
         path: filePath,
         content: parseResult.data.content,
@@ -513,6 +528,7 @@ export async function projectFileRoutes(
     '/projects/:projectId/files:rename',
     {
       preHandler: app.auth.verify,
+      ...projectFileDocumentation.rename,
       schema: {
         description: 'Đổi tên tệp',
         tags: ['project-files'],
@@ -584,7 +600,10 @@ export async function projectFileRoutes(
         });
       }
 
+      requireCondition(parseResult.data.fileId && parseResult.data.baseRevision, 'PRECONDITION_REQUIRED', 'Thiếu phiên bản tệp. Hãy tải lại', 428);
       const result = await renameFileUseCase.execute({
+        fileId: parseResult.data.fileId,
+        baseRevision: parseResult.data.baseRevision,
         projectId: request.params.projectId,
         oldPath,
         newPath: parseResult.data.newPath,
@@ -606,6 +625,7 @@ export async function projectFileRoutes(
     '/projects/:projectId/files/*',
     {
       preHandler: app.auth.verify,
+      ...projectFileDocumentation.delete,
       schema: {
         description: 'Xóa tệp',
         tags: ['project-files'],
@@ -651,7 +671,10 @@ export async function projectFileRoutes(
     async (request, reply) => {
       const filePath = request.params['*'];
 
+      const precondition = preconditionSchema.safeParse(request.query);
+      requireCondition(precondition.success, 'PRECONDITION_REQUIRED', 'Thiếu phiên bản tệp. Hãy tải lại', 428);
       const result = await deleteFileUseCase.execute({
+        ...precondition.data,
         projectId: request.params.projectId,
         path: filePath,
         userId: request.user.sub,
@@ -670,6 +693,8 @@ export async function projectFileRoutes(
 }
 
 function getStatusCodeForError(errorCode: string): number {
+  if (errorCode === 'PROJECT_ACCESS_DENIED') return 403;
+  if (errorCode === 'FILE_VERSION_CONFLICT') return 409;
   switch (errorCode) {
     case 'VALIDATION_ERROR':
     case 'INVALID_FILE_PATH':

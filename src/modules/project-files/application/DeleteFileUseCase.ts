@@ -9,6 +9,8 @@ import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
 export interface DeleteFileCommand {
+  fileId?: string;
+  baseRevision?: number;
   projectId: string;
   path: string;
   userId: string;
@@ -50,7 +52,10 @@ export class DeleteFileUseCase {
         return failure(FileErrors.FILE_NOT_FOUND.code, FileErrors.FILE_NOT_FOUND.message);
       }
 
-      await this.fileRepo.delete(command.projectId, command.path);
+      await this.fileRepo.delete(command.projectId, command.path, {
+        actorId: command.userId, fileId: command.fileId ?? existingFile.id,
+        baseRevision: command.baseRevision ?? existingFile.revision,
+      });
 
       if (existingFile.storageKey && this.blobStorage) {
         try {
@@ -61,6 +66,9 @@ export class DeleteFileUseCase {
 
       return success(undefined);
     } catch (error) {
+      if (error instanceof Error && error.name === 'CollaborationError') {
+        return failure((error as Error & { code: string }).code, error.message);
+      }
       return failure('INTERNAL_ERROR', 'Lỗi khi xóa tệp');
     }
   }

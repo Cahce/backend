@@ -24,6 +24,9 @@ export class LruTokenRevocationCache implements TokenRevocationCachePort {
   }
 
   set(jti: string, status: TokenRevocationStatus): void {
+    // A different process can revoke a valid token immediately after a read.
+    // Keep only immutable denials; eviction always falls back to primary.
+    if (status === 'valid') { this.cache.delete(jti); return; }
     this.cache.set(jti, status);
   }
 

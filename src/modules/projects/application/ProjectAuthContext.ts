@@ -9,13 +9,9 @@ export async function buildProjectAuthContext(
   userId: string,
   role: 'admin' | 'teacher' | 'student',
 ): Promise<AuthContext> {
-  if (project.ownerId !== null && project.ownerId === userId) {
-    return { userId, role };
-  }
-
-  const { membershipRole, isAdvisor } = await projectRepo.getEffectiveAccess(
+  const facts = await projectRepo.getEffectiveAccess(
     project.id,
     userId,
   );
-  return { userId, role, membershipRole, isAdvisor };
+  return { userId, role, ...facts };
 }

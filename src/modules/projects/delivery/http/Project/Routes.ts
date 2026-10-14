@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ProjectsContainer } from '../../../Container.js';
+import { projectDocumentation } from './OpenApi.js';
 import {
   CreateProjectRequestSchema,
   UpdateProjectRequestSchema,
@@ -29,6 +30,7 @@ export async function projectRoutes(
     '/projects',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.list,
       schema: {
         description: 'Lấy danh sách dự án của người dùng, sắp xếp theo cập nhật mới nhất',
         tags: ['projects'],
@@ -72,6 +74,7 @@ export async function projectRoutes(
     '/projects',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.create,
       schema: {
         description: 'Tạo dự án mới',
         tags: ['projects'],
@@ -131,6 +134,7 @@ export async function projectRoutes(
     '/projects/:projectId',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.get,
       schema: {
         description: 'Lấy chi tiết dự án theo ID',
         tags: ['projects'],
@@ -190,6 +194,7 @@ export async function projectRoutes(
     '/projects/:projectId',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.update,
       schema: {
         description: 'Cập nhật dự án',
         tags: ['projects'],
@@ -246,7 +251,9 @@ export async function projectRoutes(
         });
       }
 
+      if (parseResult.data.baseRevision === undefined) return reply.code(428).send({ error: { code: 'PRECONDITION_REQUIRED', message: 'Thiếu phiên bản dự án. Hãy tải lại' } });
       const result = await updateProjectUseCase.execute({
+        baseRevision: parseResult.data.baseRevision,
         projectId: request.params.projectId,
         title: parseResult.data.title,
         category: parseResult.data.category,
@@ -268,6 +275,7 @@ export async function projectRoutes(
     '/projects/:projectId/export',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.export,
       schema: {
         description: 'Tải toàn bộ dự án dưới dạng .zip',
         tags: ['projects'],
@@ -316,6 +324,7 @@ export async function projectRoutes(
     '/projects/import',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.import,
       schema: {
         description: 'Tạo dự án mới từ tệp nén (.zip, .7z, .rar, .tar, .tar.gz)',
         tags: ['projects'],
@@ -428,6 +437,7 @@ export async function projectRoutes(
     '/projects/:projectId/duplicate',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.duplicate,
       schema: {
         description: 'Tạo bản sao của dự án (sao chép toàn bộ tệp và thiết lập)',
         tags: ['projects'],
@@ -503,6 +513,7 @@ export async function projectRoutes(
     '/projects/:projectId',
     {
       preHandler: app.auth.verify,
+      ...projectDocumentation.delete,
       schema: {
         description: 'Xóa dự án',
         tags: ['projects'],
@@ -568,6 +579,8 @@ function buildContentDisposition(filename: string): string {
 }
 
 function getStatusCodeForError(errorCode: string): number {
+  if (errorCode === 'PROJECT_VERSION_CONFLICT') return 409;
+  if (errorCode === 'PROJECT_ACCESS_DENIED') return 403;
   switch (errorCode) {
     case 'VALIDATION_ERROR':
     case 'INVALID_TEMPLATE_VERSION':

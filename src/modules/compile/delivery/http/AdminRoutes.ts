@@ -25,6 +25,8 @@ export async function adminCompileRoutes(app: FastifyInstance, container: Compil
           404: ErrorResponseJsonSchema,
           408: ErrorResponseJsonSchema,
           422: ErrorResponseJsonSchema,
+          429: ErrorResponseJsonSchema,
+          503: ErrorResponseJsonSchema,
           500: ErrorResponseJsonSchema,
         },
       },
@@ -66,6 +68,10 @@ export async function adminCompileRoutes(app: FastifyInstance, container: Compil
 
 function getStatusCodeForError(errorCode: string): number {
   switch (errorCode) {
+    case 'COMPILE_QUEUE_FULL':
+      return 429;
+    case 'COMPILE_UNAVAILABLE':
+      return 503;
     case 'COMPILE_ARTIFACT_NOT_READY':
     case 'STORAGE_NOT_FOUND':
       return 404;

@@ -45,6 +45,7 @@ export type CreateProjectRequestDto = z.infer<typeof CreateProjectRequestSchema>
 
 export const UpdateProjectRequestSchema = z
   .object({
+    baseRevision: z.number().int().positive().optional(),
     title: z
       .string()
       .trim()
@@ -86,6 +87,7 @@ export type ImportProjectQueryDto = z.infer<typeof ImportProjectQuerySchema>;
 
 export const ProjectResponseSchema = z
   .object({
+    metadataRevision: z.number().int().positive(),
     id: z.string().openapi({
       description: 'ID dự án',
       example: 'cmnztabnn0000e8vmyzb8gqtn',
@@ -116,7 +118,7 @@ export const ProjectResponseSchema = z
     }),
     access: z
       .object({
-        level: z.enum(['owner', 'editor', 'viewer', 'advisor', 'adminOversight']).openapi({
+        level: z.enum(['owner', 'editor', 'commenter', 'viewer', 'advisor', 'adminOversight']).openapi({
           description: 'Mức truy cập của người gọi đối với dự án',
           example: 'owner',
         }),
@@ -124,6 +126,16 @@ export const ProjectResponseSchema = z
         canDelete: z.boolean().openapi({ description: 'Được xóa dự án' }),
         canManageSettings: z.boolean().openapi({ description: 'Được đổi thiết lập dự án' }),
         canCompileOfficial: z.boolean().openapi({ description: 'Được biên dịch/xuất bản chính thức' }),
+        canManageSharing: z.boolean(),
+        canReadChat: z.boolean(),
+        canSendChat: z.boolean(),
+        canReadComments: z.boolean(),
+        canComment: z.boolean(),
+        canModerateDiscussion: z.boolean(),
+        canExportProject: z.boolean(),
+        canDuplicateProject: z.boolean(),
+        version: z.string(),
+        validUntil: z.string().nullable(),
       })
       .optional()
       .openapi({ description: 'Quyền của người gọi (có trên endpoint chi tiết dự án)' }),
@@ -131,6 +143,13 @@ export const ProjectResponseSchema = z
   .openapi('ProjectResponse');
 
 export type ProjectResponseDto = z.infer<typeof ProjectResponseSchema>;
+
+// Persistence routes return template provenance as well as the public project fields.
+// Kept separate from the shared-project projection, which does not include these fields.
+export const PersistedProjectResponseSchema = ProjectResponseSchema.omit({ access: true }).extend({
+  templateId: z.string().nullable(),
+  templateVersionId: z.string().nullable(),
+});
 
 export const ProjectListResponseSchema = z
   .object({

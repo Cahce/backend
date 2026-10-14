@@ -1,5 +1,5 @@
 import type { ProjectSettingsRepository } from "../domain/ProjectSettingsRepository.js";
-import type { ProjectSettings, CompileOptions, ZoteroConfig, OpenAlexConfig } from "../domain/ProjectSettings.js";
+import { ProjectSettings, type CompileOptions, type ZoteroConfig, type OpenAlexConfig } from "../domain/ProjectSettings.js";
 import type { ProjectRepo } from "../domain/Project/Ports.js";
 import { ProjectAuthPolicy } from "../domain/Project/Policies.js";
 import { buildProjectAuthContext } from "./ProjectAuthContext.js";
@@ -7,6 +7,7 @@ import { ProjectErrors } from "../domain/Project/Errors.js";
 import type { FileRepo } from "../../project-files/domain/ProjectFile/Ports.js";
 
 export interface UpdateProjectSettingsCommand {
+    baseRevision?: number;
     projectId: string;
     userId: string;
     userRole: "admin" | "teacher" | "student";
@@ -68,7 +69,11 @@ export class UpdateProjectSettings {
             new Date(),
         );
 
-        return await this.settingsRepo.update(updated);
+        const saved = await this.settingsRepo.update(updated, { actorId: cmd.userId,
+            baseRevision: cmd.baseRevision ?? current.revision,
+            privateConfig: cmd.patch.zoteroConfig !== undefined || cmd.patch.openalexConfig !== undefined });
+        return project.ownerId === cmd.userId ? saved : new ProjectSettings(saved.projectId, saved.mainPath,
+            saved.compileOptions, null, null, saved.updatedAt, saved.revision);
     }
 
     private validateMainPath(path: string): void {

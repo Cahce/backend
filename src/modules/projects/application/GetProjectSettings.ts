@@ -1,5 +1,5 @@
 import type { ProjectSettingsRepository } from "../domain/ProjectSettingsRepository.js";
-import type { ProjectSettings } from "../domain/ProjectSettings.js";
+import { ProjectSettings } from "../domain/ProjectSettings.js";
 import type { ProjectRepo } from "../domain/Project/Ports.js";
 import { ProjectAuthPolicy } from "../domain/Project/Policies.js";
 import { buildProjectAuthContext } from "./ProjectAuthContext.js";
@@ -34,6 +34,8 @@ export class GetProjectSettings {
             throw new Error(ProjectErrors.UNAUTHORIZED.code);
         }
 
-        return await this.settingsRepo.findOrCreate(cmd.projectId);
+        const settings = await this.settingsRepo.findOrCreate(cmd.projectId);
+        return project.ownerId === cmd.userId ? settings : new ProjectSettings(settings.projectId, settings.mainPath,
+            settings.compileOptions, null, null, settings.updatedAt, settings.revision);
     }
 }

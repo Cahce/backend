@@ -101,6 +101,8 @@ describe('capabilitiesFor', () => {
       canDelete: true,
       canManageSettings: true,
       canCompileOfficial: true,
+      canManageSharing: true, canReadChat: true, canSendChat: true, canReadComments: true, canComment: true,
+      canModerateDiscussion: true, canExportProject: true, canDuplicateProject: true,
     });
   });
 
@@ -133,6 +135,16 @@ describe('capabilitiesFor', () => {
     const c = capabilitiesFor('none');
     assert.equal(c.canRead, false);
     assert.equal(c.canEdit, false);
+  });
+  it('commenter can discuss and comment without writing source or managing shares', () => {
+    const c = capabilitiesFor('commenter');
+    assert.equal(c.canRead, true); assert.equal(c.canReadChat, true); assert.equal(c.canSendChat, true);
+    assert.equal(c.canComment, true); assert.equal(c.canEdit, false); assert.equal(c.canManageSharing, false);
+    assert.equal(c.canCompileOfficial, false); assert.equal(c.canModerateDiscussion, false);
+  });
+  it('viewer can chat but cannot comment; admin oversight gets neither discussion nor sharing', () => {
+    assert.equal(capabilitiesFor('viewer').canSendChat, true); assert.equal(capabilitiesFor('viewer').canComment, false);
+    const c = capabilitiesFor('adminOversight'); assert.equal(c.canReadChat, false); assert.equal(c.canComment, false); assert.equal(c.canManageSharing, false);
   });
 });
 

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import type { CompileJobRepository, CreateCompileJobData } from '../domain/CompileJobRepository.js';
 import { CompileJob, type CompileStatus } from '../domain/CompileJob.js';
 import type { CompileDiagnostic } from '../domain/CompileDiagnostic.js';
+import { accessFor, lockProject } from '../../projects/infra/CollaborationTransaction.js';
+import { requireCondition } from '../../projects/domain/access/CollaborationErrors.js';
 
 const DiagnosticPositionSchema = z.object({
   line: z.number(),
@@ -30,7 +32,11 @@ export class PrismaCompileJobRepository implements CompileJobRepository {
 
   async create(data: CreateCompileJobData): Promise<CompileJob> {
     const now = new Date();
-    const job = await this.prisma.compileJob.create({
+    const job = await this.prisma.$transaction(async tx => {
+      await lockProject(tx, data.projectId);
+      if (data.actorId) requireCondition((await accessFor(tx, data.projectId, { userId: data.actorId, role: 'student' })).canCompileOfficial,
+        'PROJECT_ACCESS_DENIED', 'Bạn không có quyền biên dịch chính thức');
+      return tx.compileJob.create({
       data: {
         projectId: data.projectId,
         entryPath: data.entryPath,
@@ -40,6 +46,7 @@ export class PrismaCompileJobRepository implements CompileJobRepository {
         createdAt: now,
         updatedAt: now,
       },
+      });
     });
 
     return this.toDomain(job);
@@ -76,6 +83,34 @@ export class PrismaCompileJobRepository implements CompileJobRepository {
     }
 
     return this.toDomain(job);
+  }
+
+  async findAllQueued(limit = 32, excludeIds: string[] = []): Promise<CompileJob[]> {
+    const jobs = await this.prisma.compileJob.findMany({
+      where: { status: 'queued', id: { notIn: excludeIds } },
+      take: limit,
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    return jobs.map((job) => this.toDomain(job));
+  }
+
+  async findRunningOlderThan(olderThan: Date, limit = 32, excludeIds: string[] = []): Promise<CompileJob[]> {
+    const jobs = await this.prisma.compileJob.findMany({
+      where: {
+        status: 'running',
+        updatedAt: { lt: olderThan },
+        id: { notIn: excludeIds },
+      },
+      take: limit,
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    return jobs.map((job) => this.toDomain(job));
   }
 
   async listByProjectId(projectId: string): Promise<CompileJob[]> {

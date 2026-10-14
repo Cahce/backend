@@ -43,6 +43,8 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
           401: ErrorResponseJsonSchema,
           403: ErrorResponseJsonSchema,
           404: ErrorResponseJsonSchema,
+          429: ErrorResponseJsonSchema,
+          503: ErrorResponseJsonSchema,
           500: ErrorResponseJsonSchema,
         },
       },
@@ -268,6 +270,10 @@ export async function compileRoutes(app: FastifyInstance, container: CompileCont
 
 function getStatusCodeForError(errorCode: string): number {
   switch (errorCode) {
+    case 'COMPILE_QUEUE_FULL':
+      return 429;
+    case 'COMPILE_UNAVAILABLE':
+      return 503;
     case 'INVALID_TRANSITION':
       return 400;
     case 'PROJECT_ACCESS_DENIED':

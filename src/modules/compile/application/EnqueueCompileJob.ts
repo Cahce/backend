@@ -3,6 +3,7 @@ import type { CompileJob } from '../domain/CompileJob.js';
 import type { CompileJobRepository } from '../domain/CompileJobRepository.js';
 import type { OfficialCompileAccessPolicy } from '../domain/Policies.js';
 import type { CompileQueue } from '../domain/CompileQueue.js';
+import { enqueueOrReuseCompileJob } from './EnqueueOrReuseCompileJob.js';
 
 export interface EnqueueCompileJobCommand {
   projectId: string;
@@ -18,25 +19,18 @@ export class EnqueueCompileJob {
     private readonly repo: CompileJobRepository,
     private readonly access: OfficialCompileAccessPolicy,
     private readonly queue: CompileQueue,
+    private readonly timeoutMs: number,
   ) {}
 
   async execute(cmd: EnqueueCompileJobCommand): Promise<CompileJob> {
     await this.access.requireOfficialCompileAccess(cmd.projectId, cmd.userId, cmd.userRole);
 
-    const existing = await this.repo.findActiveByEntry(cmd.projectId, cmd.entryPath);
-    if (existing) {
-      return existing;
-    }
-
-    const job = await this.repo.create({
+    return enqueueOrReuseCompileJob(this.repo, this.queue, {
+      actorId: cmd.userId,
       projectId: cmd.projectId,
       entryPath: cmd.entryPath,
       format: cmd.format,
       engine: cmd.engine,
-    });
-
-    await this.queue.enqueue(job.id);
-
-    return job;
+    }, this.timeoutMs);
   }
 }

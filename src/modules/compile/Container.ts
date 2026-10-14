@@ -35,7 +35,7 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
   });
   const settingsRepo = new PrismaProjectSettingsRepository(app.prisma);
 
-  const compiler = new NodeTypstCompileService();
+  const compiler = new NodeTypstCompileService({ fontDir: app.config.compile.fontDirs });
 
   const processJob = new ProcessCompileJob(
     jobs,
@@ -47,16 +47,28 @@ export function buildCompileContainer(app: FastifyInstance): CompileContainer {
     app.log,
   );
 
-  const queue = new InProcessCompileQueue(processJob, {
+  const queue = new InProcessCompileQueue(processJob, jobs, {
     enabled: app.config.compile.workerEnabled,
+    timeoutMs: app.config.compile.timeoutMs,
+    maxOutstandingJobs: app.config.compile.maxOutstandingJobs,
     log: app.log,
   });
 
   queue.start();
+  app.addHook('preClose', async () => {
+    const stopped = queue.stop();
+    await compiler.close();
+    await stopped;
+  });
 
   const accessPolicy = new PrismaCompileAccessRepository(app.prisma);
 
-  const enqueueCompileJob = new EnqueueCompileJob(jobs, accessPolicy, queue);
+  const enqueueCompileJob = new EnqueueCompileJob(
+    jobs,
+    accessPolicy,
+    queue,
+    app.config.compile.timeoutMs,
+  );
   const listCompileJobs = new ListCompileJobs(jobs, accessPolicy);
   const getCompileJob = new GetCompileJob(jobs, accessPolicy);
   const getLatestArtifact = new GetLatestArtifact(jobs, artifacts, accessPolicy, app.storage);

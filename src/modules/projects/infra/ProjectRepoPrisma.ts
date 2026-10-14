@@ -4,6 +4,8 @@ import { Prisma } from '../../../generated/prisma/index.js';
 import type { ProjectRepo } from '../domain/Project/Ports.js';
 import type { Project, CreateProjectData, UpdateProjectData } from '../domain/Project/Types.js';
 import { TemplateCategory } from '../domain/Project/Types.js';
+import { accessFor, appendProjectEvent, loadAccessFacts, lockProject } from './CollaborationTransaction.js';
+import { CollaborationError, requireCondition } from '../domain/access/CollaborationErrors.js';
 
 export class ProjectRepoPrisma implements ProjectRepo {
   constructor(private readonly prisma: PrismaClient) {}
@@ -17,6 +19,7 @@ export class ProjectRepoPrisma implements ProjectRepo {
           ownerId: data.ownerId,
           templateId: data.templateId || null,
           templateVersionId: data.templateVersionId || null,
+          collaborationState: { create: {} },
         },
       });
 
@@ -49,29 +52,43 @@ export class ProjectRepoPrisma implements ProjectRepo {
 
   async update(data: UpdateProjectData): Promise<Project> {
     try {
-      const project = await this.prisma.project.update({
-        where: { id: data.projectId },
+      const project = await this.prisma.$transaction(async tx => {
+        await lockProject(tx, data.projectId);
+        if (data.actorId) {
+          const access = await accessFor(tx, data.projectId, { userId: data.actorId, role: 'student' });
+          requireCondition(access.canEdit, 'PROJECT_ACCESS_DENIED', 'Bạn không có quyền chỉnh sửa dự án này');
+        }
+        const updated = await tx.project.update({
+        where: { id: data.projectId, ...(data.baseRevision ? { metadataRevision: data.baseRevision } : {}) },
         data: {
+          metadataRevision: { increment: 1 },
           ...(data.title !== undefined && { title: data.title }),
           ...(data.category !== undefined && { category: data.category }),
         },
+        });
+        await appendProjectEvent(tx, data.projectId, 'project.metadata.updated', data.projectId, data.actorId ?? null);
+        return updated;
       });
 
       return this.mapToProject(project);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new Error('PROJECT_NOT_FOUND');
+          throw new CollaborationError('PROJECT_VERSION_CONFLICT', 'Thông tin dự án đã thay đổi. Hãy tải lại', 409);
         }
       }
       throw error;
     }
   }
 
-  async delete(projectId: string): Promise<void> {
+  async delete(projectId: string, actorId?: string): Promise<void> {
     try {
-      await this.prisma.project.delete({
-        where: { id: projectId },
+      await this.prisma.$transaction(async tx => {
+        await lockProject(tx, projectId);
+        if (actorId) requireCondition((await accessFor(tx, projectId, { userId: actorId, role: 'student' })).canDelete,
+          'PROJECT_ACCESS_DENIED', 'Chỉ chủ dự án được xóa dự án');
+        await tx.projectCommentThread.updateMany({ where: { projectId }, data: { fileId: null } });
+        await tx.project.delete({ where: { id: projectId } });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -83,25 +100,36 @@ export class ProjectRepoPrisma implements ProjectRepo {
     }
   }
 
-  async getEffectiveAccess(
-    projectId: string,
-    userId: string,
-  ): Promise<{ membershipRole: 'editor' | 'viewer' | null; isAdvisor: boolean }> {
-    const [member, advisor] = await Promise.all([
-      this.prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId, userId } },
-        select: { role: true },
+  async listStorageKeys(projectId: string): Promise<string[]> {
+    const [files, artifacts] = await Promise.all([
+      this.prisma.file.findMany({
+        where: { projectId, storageKey: { not: null } },
+        select: { storageKey: true },
       }),
-      this.prisma.projectAdvisor.findFirst({
-        where: { projectId, teacher: { accountId: userId } },
-        select: { id: true },
+      this.prisma.compileArtifact.findMany({
+        where: { projectId },
+        select: { storageKey: true },
       }),
     ]);
 
-    const membershipRole: 'editor' | 'viewer' | null =
-      member?.role === 'editor' || member?.role === 'viewer' ? member.role : null;
+    const keys: string[] = [];
+    for (const file of files) {
+      if (file.storageKey) {
+        keys.push(file.storageKey);
+      }
+    }
+    for (const artifact of artifacts) {
+      keys.push(artifact.storageKey);
+    }
 
-    return { membershipRole, isAdvisor: advisor !== null };
+    return keys;
+  }
+
+  async getEffectiveAccess(
+    projectId: string,
+    userId: string,
+  ) {
+    return loadAccessFacts(this.prisma, projectId, userId);
   }
 
   private mapToProject(prismaProject: {
@@ -114,9 +142,11 @@ export class ProjectRepoPrisma implements ProjectRepo {
     createdAt: Date;
     updatedAt: Date;
     lastEditedAt: Date | null;
+    metadataRevision?: number;
   }): Project {
     return {
       id: prismaProject.id,
+      metadataRevision: prismaProject.metadataRevision ?? 1,
       title: prismaProject.title,
       category: prismaProject.category as TemplateCategory,
       ownerId: prismaProject.ownerId,

@@ -98,7 +98,7 @@ export class CaptureToProject {
           entry.key = dedupeKey(entry.key, existingKeys);
         }
         const merged = this.bibliography.mergeEntries(existing, [entry]);
-        await this.bibliography.writeBibFile(projectId, targetBibPath, merged);
+        await this.bibliography.writeBibFile(projectId, targetBibPath, merged, userId, [entry]);
         bibSaved = true;
         citationKey = entry.key;
       }

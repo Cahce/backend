@@ -138,7 +138,7 @@ export class SyncToBibFile {
       const merged = this.bibliography.mergeEntries(existing, newEntries);
 
       if (newEntries.length > 0) {
-        await this.bibliography.writeBibFile(projectId, targetBibPath, merged);
+        await this.bibliography.writeBibFile(projectId, targetBibPath, merged, userId, newEntries);
       }
 
       await this.connRepo.touchLastSyncedAt(conn.id);

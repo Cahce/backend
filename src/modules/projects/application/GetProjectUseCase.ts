@@ -23,6 +23,16 @@ export interface ProjectAccessView {
   canDelete: boolean;
   canManageSettings: boolean;
   canCompileOfficial: boolean;
+  canManageSharing: boolean;
+  canReadChat: boolean;
+  canSendChat: boolean;
+  canReadComments: boolean;
+  canComment: boolean;
+  canModerateDiscussion: boolean;
+  canExportProject: boolean;
+  canDuplicateProject: boolean;
+  version: string;
+  validUntil: string | null;
 }
 
 export type ProjectWithAccess = Project & { access: ProjectAccessView };
@@ -52,11 +62,9 @@ export class GetProjectUseCase {
       }
 
       const access: ProjectAccessView = {
-        level: capabilities.level,
-        canEdit: capabilities.canEdit,
-        canDelete: capabilities.canDelete,
-        canManageSettings: capabilities.canManageSettings,
-        canCompileOfficial: capabilities.canCompileOfficial,
+        ...capabilities,
+        version: authContext.version ?? '1',
+        validUntil: authContext.validUntil ?? null,
       };
 
       return success({ ...project, access });

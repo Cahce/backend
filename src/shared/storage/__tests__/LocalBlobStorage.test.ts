@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -67,6 +67,24 @@ describe('LocalBlobStorage', () => {
 
     const meta = await storage.head('key-delete');
     assert.equal(meta, null);
+  });
+
+  it('get() rejects with STORAGE_NOT_FOUND when the blob file is missing but metadata exists', async () => {
+    const key = 'key-orphan-meta';
+    await storage.put(key, Buffer.from('soon to be orphaned'), 'text/plain');
+
+    // Delete only the .bin payload, keeping the .json metadata (orphaned meta).
+    await unlink(join(rootDir, key.slice(0, 2), `${key}.bin`));
+
+    const meta = await storage.head(key);
+    assert.ok(meta, 'metadata must still exist');
+
+    await assert.rejects(
+      () => storage.get(key),
+      (error: unknown) =>
+        error instanceof Error &&
+        (error as Error & { code?: string }).code === 'STORAGE_NOT_FOUND',
+    );
   });
 
   it('put() is idempotent for the same key', async () => {

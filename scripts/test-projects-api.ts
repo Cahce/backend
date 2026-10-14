@@ -12,6 +12,7 @@ interface TestResult {
 const results: TestResult[] = [];
 let authToken = "";
 let testProjectId = "";
+const projectVersions = new Map<string, number>();
 
 async function test(name: string, fn: () => Promise<void>) {
   try {
@@ -32,6 +33,8 @@ async function apiRequest(
   token?: string
 ): Promise<any> {
   const url = `${BASE_URL}${path}`;
+  const updateId = /^\/api\/v1\/projects\/([^/]+)$/.exec(path)?.[1];
+  if (method === 'PUT' && updateId) body = { ...body, baseRevision: projectVersions.get(updateId) ?? 1 };
   const headers: Record<string, string> = {};
 
   if (token !== undefined) {
@@ -55,6 +58,9 @@ async function apiRequest(
   const response = await fetch(url, options);
   const data = await response.text();
   const jsonData = data ? JSON.parse(data) : null;
+  for (const project of jsonData?.projects ?? (jsonData?.id ? [jsonData] : [])) {
+    if (project.metadataRevision) projectVersions.set(project.id, project.metadataRevision);
+  }
 
   return {
     status: response.status,
@@ -78,7 +84,6 @@ async function runTests() {
     }
 
     authToken = result.data.accessToken;
-    console.log(`  Token: ${authToken.substring(0, 30)}...`);
   });
 
   await test("POST /api/v1/projects - Create project (happy path)", async () => {

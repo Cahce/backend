@@ -210,7 +210,7 @@ export class ImportToBibFile {
         existing,
         newEntries.map(({ entry }) => entry),
       );
-      await this.bibliography.writeBibFile(projectId, targetBibPath, merged);
+      await this.bibliography.writeBibFile(projectId, targetBibPath, merged, userId, newEntries.map(({ entry }) => entry));
     }
     await this.importLogRepo.createMany(logRows);
 

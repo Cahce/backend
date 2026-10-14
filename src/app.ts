@@ -2,7 +2,10 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { configPlugin } from "./plugins/Config.js";
+import { config } from './config/index.js';
 import { prismaPlugin } from "./plugins/Prisma.js";
+import { lifecyclePlugin } from './plugins/Lifecycle.js';
+import { metricsPlugin } from './plugins/Metrics.js';
 import storagePlugin from "./plugins/Storage.js";
 import { registerMultipart } from "./plugins/Multipart.js";
 import { jwtPlugin } from "./plugins/JWT.js";
@@ -48,6 +51,25 @@ import { OpenAlexIdentifierFallback } from "./modules/capture/infra/OpenAlexIden
 import type { ProjectAccessPolicy, ProjectWriteAccessPolicy } from "./modules/projects/domain/access/ProjectAccessPolicies.js";
 import { toErrorResponse, errorEnvelope } from "./shared/http/domainError.js";
 import type { Readable } from "node:stream";
+import { ProjectSharingUseCases } from './modules/projects/application/sharing/ProjectSharingUseCases.js';
+import { PrismaSharingRepository } from './modules/projects/infra/sharing/PrismaSharingRepository.js';
+import { ShareTokenCrypto } from './modules/projects/infra/sharing/ShareTokenCrypto.js';
+import { projectSharingRoutes } from './modules/projects/delivery/http/ProjectSharing/Routes.js';
+import { ProjectDiscussionUseCases } from './modules/project-discussion/application/ProjectDiscussionUseCases.js';
+import { PrismaDiscussionRepository } from './modules/project-discussion/infra/PrismaDiscussionRepository.js';
+import { projectDiscussionRoutes } from './modules/project-discussion/delivery/http/Routes.js';
+import { RealtimeTickets } from './modules/project-discussion/application/RealtimeTickets.js';
+import { randomBytes } from 'node:crypto';
+import { RealtimeSocketLeases } from './modules/project-discussion/application/RealtimeSocketLeases.js';
+import { LocalRealtimeSocketLeaseStore } from './modules/project-discussion/infra/LocalRealtimeSocketLeaseStore.js';
+import { RedisRealtimeSocketLeaseStore } from './modules/project-discussion/infra/RedisRealtimeSocketLeaseStore.js';
+import { LocalRealtimeTicketStore } from './modules/project-discussion/infra/LocalRealtimeTicketStore.js';
+import { RedisRealtimeTicketStore } from './modules/project-discussion/infra/RedisRealtimeTicketStore.js';
+import { sharedStatePlugin } from './plugins/SharedState.js';
+import { PrismaRealtimeSessionPolicy } from './modules/project-discussion/infra/PrismaRealtimeSessionPolicy.js';
+import { PostgresProjectEventWakeSource } from './modules/project-discussion/infra/PostgresProjectEventWakeSource.js';
+import { registerProjectRealtime } from './modules/project-discussion/delivery/ws/ProjectRealtime.js';
+import { discussionDocumentation } from './modules/project-discussion/delivery/http/OpenApi.js';
 
 async function streamToBuffer(stream: Readable): Promise<Buffer> {
     const chunks: Buffer[] = [];
@@ -59,6 +81,7 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
 
 export async function buildApp(): Promise<FastifyInstance> {
     const app = Fastify({
+        trustProxy: config.server.trustProxy,
         logger: {
             level: process.env.LOG_LEVEL || "info",
         },
@@ -87,6 +110,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
         const mapped = toErrorResponse(err);
         if (mapped.status !== 500) {
+            if (mapped.retryAfterSeconds !== undefined) reply.header('Retry-After', String(mapped.retryAfterSeconds));
+            if (mapped.body.error.code === 'REALTIME_UNAVAILABLE' || mapped.body.error.code === 'REALTIME_BUSY') reply.header('Retry-After', '1');
             return reply.code(mapped.status).send(mapped.body);
         }
 
@@ -102,6 +127,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
 
     await app.register(configPlugin);
+    await app.register(metricsPlugin);
 
     await app.register(cors, {
         origin: process.env.CORS_ORIGIN || true,
@@ -110,16 +136,20 @@ export async function buildApp(): Promise<FastifyInstance> {
         allowedHeaders: ['Content-Type', 'Authorization'],
         exposedHeaders: [
             'X-File-Id',
+            'X-File-Revision',
             'X-Last-Edited-At',
             'X-Created-At',
             'X-Updated-At',
             'X-Storage-Key',
             'ETag',
+            'Retry-After',
         ],
         maxAge: 86400,
     });
 
     await app.register(prismaPlugin);
+    await app.register(sharedStatePlugin);
+    await app.register(lifecyclePlugin);
 
     await app.register(storagePlugin);
 
@@ -157,12 +187,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     const bibliographyService = new BibliographyService(projectFilesContainer.getFileRepo());
 
-    const projectAccessPolicy: ProjectAccessPolicy & ProjectWriteAccessPolicy =
+    const projectAccessPolicy: ProjectAccessPolicy & ProjectWriteAccessPolicy & { requireExportAccess(projectId: string, userId: string): Promise<void> } =
         new PrismaProjectAccessRepository(app.prisma);
 
     projectFilesContainer.wireBinaryUpload(app.storage, projectAccessPolicy);
 
-    projectsContainer.wireZipPortability(app.storage, projectAccessPolicy);
+    projectsContainer.wireZipPortability(app.storage, { requireProjectAccess: (id, userId) => projectAccessPolicy.requireExportAccess(id, userId) });
 
     const sourceProjectGateway: SourceProjectGateway = {
         async createSourceProject({ title, category, ownerId, templateVersionId }) {
@@ -276,6 +306,30 @@ export async function buildApp(): Promise<FastifyInstance> {
     await app.register(async (instance) => {
         await projectRoutes(instance, projectsContainer);
     }, { prefix: "/api/v1" });
+    if (app.config.collaboration.enabled) {
+    const discussion = new ProjectDiscussionUseCases(new PrismaDiscussionRepository(app.prisma));
+    const ticketStore = app.sharedRedis
+        ? new RedisRealtimeTicketStore(app.sharedRedis, app.config.sharedState.namespace, app.config.sharedState.keySecret!)
+        : new LocalRealtimeTicketStore();
+    const tickets = new RealtimeTickets(new ShareTokenCrypto(), new PrismaRealtimeSessionPolicy(app.prisma), ticketStore);
+    const eventWakeSource = new PostgresProjectEventWakeSource({ connectionString: app.config.db.directUrl }, message => app.log.warn(message));
+    const leaseStore = app.sharedRedis
+        ? new RedisRealtimeSocketLeaseStore(app.sharedRedis, app.config.sharedState.namespace, app.config.sharedState.keySecret!, app.config.collaboration.maxSocketsGlobal)
+        : new LocalRealtimeSocketLeaseStore(app.config.collaboration.maxSocketsGlobal);
+    const socketLeases = new RealtimeSocketLeases(leaseStore, () => randomBytes(16).toString('hex'));
+    registerProjectRealtime(app, tickets, discussion, app.config.collaboration.origins, socketLeases, eventWakeSource, app.config.collaboration.maxSocketsPerInstance);
+    await app.register(async instance => {
+        await projectSharingRoutes(instance, new ProjectSharingUseCases(new PrismaSharingRepository(app.prisma), new ShareTokenCrypto()));
+    }, { prefix: '/api/v1' });
+    await app.register(async instance => {
+        await projectDiscussionRoutes(instance, discussion);
+        instance.post<{ Params: { projectId: string } }>('/projects/:projectId/realtime-ticket', { preHandler: instance.auth.verify, ...discussionDocumentation.ticket }, async req => {
+            await app.requestRateLimit!.check(`realtime-ticket:${req.user.sub}`, 60);
+            return tickets.create({ projectId: req.params.projectId, actor: { userId: req.user.sub, role: req.user.role },
+                jti: req.user.jti, expiresAt: Number(req.user.exp) * 1000 });
+        });
+    }, { prefix: '/api/v1' });
+    }
     await app.register(async (instance) => {
         await projectSettingsRoutes(instance, projectsContainer);
     }, { prefix: "/api/v1" });

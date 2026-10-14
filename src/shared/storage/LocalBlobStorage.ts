@@ -1,6 +1,6 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import type { WriteStream } from "node:fs";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
@@ -63,11 +63,15 @@ export class LocalBlobStorage implements BlobStorage {
     }
 
     async get(key: string): Promise<Readable> {
+        const file = this.absPath(key);
+        // createReadStream reports a missing file asynchronously (on the stream),
+        // so check existence up front to fail fast with a typed error.
         try {
-            return createReadStream(this.absPath(key));
-        } catch (error) {
+            await stat(file);
+        } catch {
             throw STORAGE_NOT_FOUND(key);
         }
+        return createReadStream(file);
     }
 
     async head(key: string): Promise<BlobMetadata | null> {

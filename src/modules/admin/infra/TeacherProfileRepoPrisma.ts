@@ -221,11 +221,9 @@ export class TeacherProfileRepoPrisma implements TeacherProfileRepo {
     }
   }
 
-  async hasAdvisorAssignments(id: string): Promise<boolean> {
-    const count = await this.prisma.projectAdvisor.count({
-      where: { teacherId: id },
-    });
-    return count > 0;
+  async hasAdvisorAssignments(_id: string): Promise<boolean> {
+    // ProjectAdvisor table removed; teachers have no advisor assignments to block deletion.
+    return false;
   }
 
   async linkToAccount(teacherId: string, accountId: string): Promise<void> {

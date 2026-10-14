@@ -6,8 +6,10 @@ import { ProjectAuthPolicy, type AuthContext } from '../domain/Project/Policies.
 import { buildProjectAuthContext } from './ProjectAuthContext.js';
 import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
+import { CollaborationError } from '../domain/access/CollaborationErrors.js';
 
 export interface UpdateProjectCommand {
+  baseRevision?: number;
   projectId: string;
   title?: string;
   category?: string;
@@ -44,6 +46,7 @@ export class UpdateProjectUseCase {
       }
 
       const data: UpdateProjectData = {
+        actorId: command.userId, baseRevision: command.baseRevision,
         projectId: command.projectId,
         title: command.title?.trim(),
         category: command.category as any,
@@ -52,6 +55,7 @@ export class UpdateProjectUseCase {
       const updatedProject = await this.projectRepo.update(data);
       return success(updatedProject);
     } catch (error) {
+      if (error instanceof CollaborationError) return failure(error.code, error.message);
       return failure('INTERNAL_ERROR', 'Lỗi khi cập nhật dự án');
     }
   }

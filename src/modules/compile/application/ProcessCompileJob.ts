@@ -75,14 +75,26 @@ export class ProcessCompileJob {
       await this.jobs.save(job);
       this.log?.info({ jobId, projectId: job.projectId, status: 'success', durationMs: Date.now() - startMs });
     } catch (error) {
-      job.fail([
-        {
-          severity: 'error',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        },
-      ]);
-      await this.jobs.save(job);
-      this.log?.info({ jobId, projectId: job.projectId, status: 'failed', durationMs: Date.now() - startMs });
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (job.status === 'running' || job.status === 'queued') {
+        job.fail([
+          {
+            severity: 'error',
+            message,
+          },
+        ]);
+        await this.jobs.save(job);
+        this.log?.info({ jobId, projectId: job.projectId, status: 'failed', durationMs: Date.now() - startMs });
+      } else {
+        // Job already settled (e.g. save after succeed threw): keep its final status.
+        this.log?.info({
+          jobId,
+          projectId: job.projectId,
+          status: job.status,
+          durationMs: Date.now() - startMs,
+          error: message,
+        });
+      }
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }

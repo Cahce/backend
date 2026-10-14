@@ -36,11 +36,6 @@ enum UserRole {
   teacher
 }
 
-enum ProjectRole {
-  editor
-  viewer
-}
-
 enum CompileMode {
   export
   preview
@@ -119,21 +114,25 @@ model User {
   passwordChangedAt   DateTime?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
-  
+
   // Profile relations
   teacher             Teacher?         @relation("TeacherAccount")
   student             Student?         @relation("StudentAccount")
-  
+
   // Existing relations
   ownedProjects       Project[]        @relation("ProjectOwner")
   requestedCompileJobs CompileJob[]    @relation("CompileJobRequestedBy")
-  memberships         ProjectMember[]
-  createdShareLinks   ProjectShareLink[]
-  quota               UserQuota?
   invalidTokens       InvalidToken[]
   refreshTokens       RefreshToken[]
   zoteroConnections   ZoteroConnection[]
   openAlexImportLogs  OpenAlexImportLog[]
+
+  projectMemberships ProjectMember[]
+  shareLinksCreated ProjectShareLink[]
+  chatMessages ProjectChatMessage[]
+  commentThreads ProjectCommentThread[]
+  projectComments ProjectComment[]
+  chatReadStates ProjectChatReadState[]
 
   @@index([createdAt])
 }
@@ -163,7 +162,7 @@ model Department {
   faculty   Faculty   @relation(fields: [facultyId], references: [id], onDelete: Restrict)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  
+
   // Relations
   teachers  Teacher[]
 
@@ -193,7 +192,7 @@ model Class {
   major     Major    @relation(fields: [majorId], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   // Relations
   students  Student[]
 
@@ -224,11 +223,6 @@ model Teacher {
   address        String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  
-  // Reverse relation to ProjectAdvisor (join table)
-  // This does NOT mean Teacher owns projects
-  // It only represents advisor assignment links
-  advisorAssignments ProjectAdvisor[] @relation("advisorAssignments")
 
   @@index([accountId])
   @@index([departmentId])
@@ -384,6 +378,7 @@ model OpenAlexImportLog {
  */
 model Project {
   id           String           @id @default(cuid())
+  metadataRevision Int @default(1)
   title        String
   category     TemplateCategory @default(other)
   createdAt    DateTime         @default(now())
@@ -391,7 +386,7 @@ model Project {
   ownerId      String?
   owner        User?            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   lastEditedAt DateTime?
-  
+
   // Template relationship
   templateId        String?
   template          Template?        @relation("ProjectTemplate", fields: [templateId], references: [id], onDelete: SetNull)
@@ -400,17 +395,21 @@ model Project {
   // Templates that use this project as their editable source (authoring copy)
   templateSources   Template[]       @relation("TemplateSourceProject")
 
-  settings     ProjectSettings?
-  members      ProjectMember[]
-  shareLinks   ProjectShareLink[]
-  advisors     ProjectAdvisor[]
-  files        File[]
-  compileJobs  CompileJob[]
+  settings         ProjectSettings?
+  files            File[]
+  compileJobs      CompileJob[]
   compileArtifacts CompileArtifact[]
-  snapshots    ProjectSnapshot[]
-  wordCountSnapshots ProjectWordCountSnapshot[]
   zoteroSyncLogs      ZoteroSyncLog[]
   openAlexImportLogs  OpenAlexImportLog[]
+
+  members ProjectMember[]
+  shareLinks ProjectShareLink[]
+  collaborationState ProjectCollaborationState?
+  chatMessages ProjectChatMessage[]
+  commentThreads ProjectCommentThread[]
+  chatReadStates ProjectChatReadState[]
+  events ProjectEvent[]
+  accessAudits ProjectAccessAudit[]
 
   @@index([ownerId])
   @@index([templateId])
@@ -427,6 +426,7 @@ model Project {
  */
 model ProjectSettings {
   projectId      String   @id
+  revision       Int      @default(1)
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   mainPath       String   @default("main.typ")
   compileOptions Json?
@@ -438,71 +438,12 @@ model ProjectSettings {
 
 /**
  * =========================
- * Project Membership
- * =========================
- */
-model ProjectMember {
-  id        String      @id @default(cuid())
-  projectId String
-  userId    String
-  role      ProjectRole @default(viewer)
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime    @default(now())
-
-  @@unique([projectId, userId])
-  @@index([projectId])
-  @@index([userId])
-}
-
-/**
- * =========================
- * Share link
- * =========================
- */
-model ProjectShareLink {
-  id          String      @id @default(cuid())
-  projectId   String
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  token       String      @unique
-  role        ProjectRole @default(viewer)
-  expiresAt   DateTime?
-  maxUses     Int?
-  usedCount   Int         @default(0)
-  createdById String?
-  createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime    @default(now())
-
-  @@index([projectId])
-  @@index([expiresAt])
-}
-
-/**
- * =========================
- * Teacher advising
- * =========================
- */
-model ProjectAdvisor {
-  id        String   @id @default(cuid())
-  projectId String
-  teacherId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  teacher   Teacher  @relation("advisorAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@unique([projectId, teacherId])
-  @@index([teacherId])
-  @@index([projectId])
-}
-
-/**
- * =========================
  * Files
  * =========================
  */
 model File {
   id           String   @id @default(cuid())
+  revision     Int      @default(1)
   projectId    String
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   path         String
@@ -517,8 +458,179 @@ model File {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  commentThreads ProjectCommentThread[]
+
   @@unique([projectId, path])
   @@index([projectId])
+  @@unique([id, projectId])
+}
+
+enum SharedProjectRole {
+  viewer
+  commenter
+  editor
+}
+
+enum ProjectMemberStatus {
+  active
+  blocked
+  left
+}
+
+enum ProjectCommentState {
+  open
+  resolved
+}
+
+model ProjectMember {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status ProjectMemberStatus @default(active)
+  roleOverride SharedProjectRole?
+  joinedAt DateTime @default(now())
+  changedAt DateTime @updatedAt
+  grants ProjectAccessGrant[]
+  @@unique([projectId, userId])
+  @@unique([id, projectId])
+  @@index([userId, status, projectId])
+  @@index([userId, status, id])
+  @@index([projectId, id])
+}
+
+model ProjectShareLink {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  label String?
+  role SharedProjectRole
+  tokenHash String @unique
+  expiresAt DateTime?
+  revokedAt DateTime?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  grants ProjectAccessGrant[]
+  @@unique([id, projectId])
+  @@index([projectId, revokedAt])
+  @@index([projectId, id])
+}
+
+model ProjectAccessGrant {
+  id String @id @default(cuid())
+  projectId String
+  memberId String
+  member ProjectMember @relation(fields: [memberId, projectId], references: [id, projectId], onDelete: Cascade)
+  shareLinkId String
+  shareLink ProjectShareLink @relation(fields: [shareLinkId, projectId], references: [id, projectId], onDelete: Cascade)
+  redeemedAt DateTime @default(now())
+  revokedAt DateTime?
+  @@unique([memberId, shareLinkId])
+  @@index([projectId, memberId, revokedAt])
+}
+
+model ProjectCollaborationState {
+  projectId String @id
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastEventSeq BigInt @default(0)
+  accessVersion BigInt @default(1)
+}
+
+model ProjectChatMessage {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId String?
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorLabel String
+  clientMessageId String @db.Uuid
+  creationSeq BigInt
+  body String? @db.Text
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+  @@unique([projectId, authorId, clientMessageId])
+  @@unique([projectId, creationSeq])
+  @@index([projectId, creationSeq(sort: Desc)])
+}
+
+model ProjectCommentThread {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clientCommentId String @db.Uuid
+  fileId String?
+  file File? @relation(fields: [fileId, projectId], references: [id, projectId], onDelete: Restrict)
+  filePathSnapshot String?
+  anchor Json
+  createdById String?
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  state ProjectCommentState @default(open)
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  comments ProjectComment[]
+  @@unique([projectId, createdById, clientCommentId])
+  @@unique([id, projectId])
+  @@index([projectId, state, updatedAt, id])
+  @@index([projectId, createdAt, id])
+}
+
+model ProjectComment {
+  id String @id @default(cuid())
+  projectId String
+  threadId String
+  thread ProjectCommentThread @relation(fields: [threadId, projectId], references: [id, projectId], onDelete: Cascade)
+  authorId String?
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorLabel String
+  clientCommentId String @db.Uuid
+  body String? @db.Text
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  editedAt DateTime?
+  deletedAt DateTime?
+  @@unique([threadId, authorId, clientCommentId])
+  @@index([threadId, createdAt, id])
+}
+
+model ProjectChatReadState {
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessageSeq BigInt @default(0)
+  updatedAt DateTime @updatedAt
+  @@id([projectId, userId])
+}
+
+model ProjectEvent {
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  seq BigInt
+  type String
+  entityId String?
+  actorId String?
+  metadata Json
+  createdAt DateTime @default(now())
+  dispatchedAt DateTime?
+  @@id([projectId, seq])
+  @@index([dispatchedAt, createdAt])
+}
+
+model ProjectAccessAudit {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actorId String?
+  action String
+  targetId String?
+  createdAt DateTime @default(now())
+  @@index([projectId, createdAt, id])
 }
 
 /**
@@ -541,7 +653,7 @@ model CompileJob {
   priority        Int            @default(0)
   requestedById   String?
   requestedBy     User?          @relation("CompileJobRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
-  
+
   // job -> 0..1 latest artifact (1-1 optional)
   latestArtifactId String?       @unique
   latestArtifact   CompileArtifact? @relation("LatestArtifact", fields: [latestArtifactId], references: [id], onDelete: SetNull)
@@ -570,10 +682,10 @@ model CompileArtifact {
   projectId String
   jobId     String?
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+
   // produced-by relation (opposite of CompileJob.artifacts)
   job       CompileJob? @relation("JobArtifacts", fields: [jobId], references: [id], onDelete: SetNull)
-  
+
   // opposite of CompileJob.latestArtifact (0..1)
   latestOfJob CompileJob? @relation("LatestArtifact")
 
@@ -585,52 +697,6 @@ model CompileArtifact {
 
   @@index([projectId, createdAt])
   @@index([jobId])
-}
-
-/**
- * =========================
- * Collaboration snapshots (MVP)
- * =========================
- */
-model ProjectSnapshot {
-  id        String   @id @default(cuid())
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  state     Bytes
-  revision  String?
-  createdAt DateTime @default(now())
-
-  @@index([projectId, createdAt])
-}
-
-/**
- * =========================
- * Analytics: word count growth
- * =========================
- */
-model ProjectWordCountSnapshot {
-  id         String   @id @default(cuid())
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  wordCount  Int
-  charCount  Int?
-  fileCount  Int?
-  computedAt DateTime @default(now())
-
-  @@index([projectId, computedAt])
-}
-
-/**
- * =========================
- * Quota
- * =========================
- */
-model UserQuota {
-  userId    String   @id
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  limitBytes BigInt   @default(2147483648)
-  usedBytes  BigInt   @default(0)
-  updatedAt DateTime @updatedAt
 }
 
 /**

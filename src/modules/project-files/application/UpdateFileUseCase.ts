@@ -10,6 +10,8 @@ import type { Result } from './Types.js';
 import { success, failure } from './Types.js';
 
 export interface UpdateFileCommand {
+  fileId?: string;
+  baseRevision?: number;
   projectId: string;
   path: string;
   content: string;
@@ -55,6 +57,9 @@ export class UpdateFileUseCase {
       const sha256 = crypto.createHash('sha256').update(command.content, 'utf8').digest('hex');
 
       const file = await this.fileRepo.update({
+        actorId: command.userId,
+        fileId: command.fileId ?? existingFile.id,
+        baseRevision: command.baseRevision ?? existingFile.revision,
         projectId: command.projectId,
         path: command.path,
         content: command.content,
@@ -64,6 +69,9 @@ export class UpdateFileUseCase {
 
       return success(file);
     } catch (error) {
+      if (error instanceof Error && error.name === 'CollaborationError') {
+        return failure((error as Error & { code: string }).code, error.message);
+      }
       return failure('INTERNAL_ERROR', 'Lỗi khi cập nhật tệp');
     }
   }

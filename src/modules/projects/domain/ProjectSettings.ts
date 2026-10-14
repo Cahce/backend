@@ -19,5 +19,6 @@ export class ProjectSettings {
         public readonly zoteroConfig: ZoteroConfig | null,
         public readonly openalexConfig: OpenAlexConfig | null,
         public readonly updatedAt: Date,
+        public readonly revision: number = 1,
     ) {}
 }

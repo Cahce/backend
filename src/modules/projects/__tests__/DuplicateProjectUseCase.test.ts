@@ -165,6 +165,35 @@ describe('DuplicateProjectUseCase', () => {
     assert.strictEqual(result.data.project.title, 'Bản nháp mới');
   });
 
+  it('preserves private connection settings when the source owner duplicates their project', async () => {
+    const sourceId = await seedSource();
+    const source = new ProjectSettings(sourceId, 'main.typ', { ppi: 144 },
+      { apiKey: 'fixture-owner-zotero', libraryId: 'fixture-library' }, { email: 'owner@example.invalid' }, new Date());
+    settingsRepo.setSettings(sourceId, source);
+    const result = await makeUseCase(allowAccess).execute({ projectId: sourceId, userId: 'user-1' });
+    assert.strictEqual(result.success, true); if (!result.success) return;
+    const copy = settingsRepo.getSettings(result.data.project.id);
+    assert.deepStrictEqual(copy?.zoteroConfig, source.zoteroConfig);
+    assert.deepStrictEqual(copy?.openalexConfig, source.openalexConfig);
+    assert.strictEqual(settingsRepo.getSettings(sourceId), source);
+  });
+
+  it('an authorized non-owner cannot acquire owner private connections through an owned duplicate', async () => {
+    const sourceId = await seedSource();
+    const source = new ProjectSettings(sourceId, 'main.typ', { ppi: 144 },
+      { apiKey: 'fixture-owner-zotero', libraryId: 'fixture-library' }, { email: 'owner@example.invalid' }, new Date());
+    settingsRepo.setSettings(sourceId, source);
+    const snapshot = JSON.stringify(source);
+    const result = await makeUseCase(allowAccess).execute({ projectId: sourceId, userId: 'editor-user' });
+    assert.strictEqual(result.success, true); if (!result.success) return;
+    assert.strictEqual(result.data.project.ownerId, 'editor-user');
+    const copy = settingsRepo.getSettings(result.data.project.id);
+    assert.strictEqual(copy?.zoteroConfig, null); assert.strictEqual(copy?.openalexConfig, null);
+    assert.strictEqual(copy?.mainPath, source.mainPath); assert.deepStrictEqual(copy?.compileOptions, source.compileOptions);
+    assert.strictEqual((await fileRepo.listByProjectId(result.data.project.id)).length, 2);
+    assert.strictEqual(settingsRepo.getSettings(sourceId), source); assert.strictEqual(JSON.stringify(source), snapshot);
+  });
+
   it('returns UNAUTHORIZED and creates nothing when access is denied', async () => {
     const sourceId = await seedSource();
     const result = await makeUseCase(denyAccess).execute({

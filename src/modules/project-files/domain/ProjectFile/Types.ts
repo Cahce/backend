@@ -19,6 +19,7 @@ export enum StorageMode {
 }
 
 export type File = {
+  revision?: number;
   id: string;
   projectId: string;
   path: string;
@@ -35,6 +36,7 @@ export type File = {
 };
 
 export type FileMetadata = {
+  revision?: number;
   id: string;
   projectId: string;
   path: string;
@@ -47,6 +49,7 @@ export type FileMetadata = {
 };
 
 export type CreateFileData = {
+  actorId?: string;
   projectId: string;
   path: string;
   kind: FileKind;
@@ -55,12 +58,18 @@ export type CreateFileData = {
 };
 
 export type UpdateFileData = {
+  actorId?: string;
+  fileId?: string;
+  baseRevision?: number;
   projectId: string;
   path: string;
   content: string;
 };
 
 export type RenameFileData = {
+  actorId?: string;
+  fileId?: string;
+  baseRevision?: number;
   projectId: string;
   oldPath: string;
   newPath: string;

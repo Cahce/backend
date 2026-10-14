@@ -6,6 +6,7 @@ extendZodWithOpenApi(z);
 
 export const updateProjectSettingsSchema = z
     .object({
+        baseRevision: z.number().int().positive().optional(),
         mainPath: z
             .string()
             .min(1, ZMSG.required("Đường dẫn tệp chính"))
@@ -45,6 +46,7 @@ export const updateProjectSettingsSchema = z
 export type UpdateProjectSettingsBody = z.infer<typeof updateProjectSettingsSchema>;
 
 export interface ProjectSettingsResponse {
+    revision: number;
     projectId: string;
     mainPath: string;
     compileOptions: Record<string, unknown>;
@@ -52,3 +54,14 @@ export interface ProjectSettingsResponse {
     openalexConfig: Record<string, unknown> | null;
     updatedAt: string;
 }
+
+// Documentation contracts only; existing Fastify schemas and response mapping stay authoritative.
+export const projectSettingsResponseSchema = z.object({
+    revision: z.number().int().positive(),
+    projectId: z.string(),
+    mainPath: z.string(),
+    compileOptions: z.record(z.string(), z.unknown()),
+    zoteroConfig: z.record(z.string(), z.unknown()).nullable(),
+    openalexConfig: z.record(z.string(), z.unknown()).nullable(),
+    updatedAt: z.iso.datetime(),
+}).strict();

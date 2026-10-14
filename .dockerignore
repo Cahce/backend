@@ -1,0 +1,39 @@
+# Build context for backend/Dockerfile.
+# Rule of thumb: exclude anything the image rebuilds itself (node_modules, dist)
+# or that only exists on a dev machine (local storage, secrets, reference repos).
+
+# Rebuilt inside the image by `npm ci` / `npm run build`.
+# Host node_modules holds win32-x64-msvc native binaries and must NEVER be copied.
+node_modules
+dist
+*.tsbuildinfo
+
+# Local reference checkouts (~410 MB) — architecture reading material, not code.
+references
+
+# Runtime state that belongs in named volumes, not in the image.
+.storage
+storage
+
+# Locally-cloned Zotero translation-server (runs as its own container instead).
+.translation-server
+
+# var/*: drop the dev scratch dirs but KEEP var/fonts — without those the server
+# compiles a PDF that silently falls back to New Computer Modern.
+var/*
+!var/fonts
+
+# Secrets never enter the image.
+.env
+.env.*
+
+# Noise
+.git
+.gitignore
+.vscode
+.idea
+.kiro
+.claude
+*.log
+coverage
+docs

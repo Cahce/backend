@@ -4,14 +4,20 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { UserRole } from "../shared/auth/Types.js";
 import { roleHasPermission, type Permission } from "../shared/auth/Permissions.js";
 import { LruTokenRevocationCache } from "../shared/auth/LruTokenRevocationCache.js";
+import { ReadTokenSessionUseCase } from '../modules/auth/application/ReadTokenSessionUseCase.js';
+import { PrismaTokenSessionReader } from '../modules/auth/infra/PrismaTokenSessionReader.js';
+import type { TokenSessionReader } from '../modules/auth/domain/TokenSession.js';
 
-export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
+export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance, options: { sessionReader?: TokenSessionReader }) {
     const secret = app.config.auth.jwtSecret;
 
     await app.register(fastifyJwt, { secret });
 
     const tokenRevocationCache = new LruTokenRevocationCache();
     app.decorate("tokenRevocationCache", tokenRevocationCache);
+    const sessions = new ReadTokenSessionUseCase(options.sessionReader ?? new PrismaTokenSessionReader(app.prisma));
+    app.decorate('authSessionMetrics', () => sessions.snapshot());
+    app.addHook('preClose', async () => { sessions.close(); });
 
     async function verify(req: FastifyRequest, reply: FastifyReply): Promise<void> {
         try {
@@ -30,7 +36,8 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
         }
 
         const jti = req.user?.jti;
-        if (!jti) {
+        if (typeof jti !== 'string' || !jti || jti.length > 256 ||
+            typeof req.user.sub !== 'string' || !req.user.sub || req.user.sub.length > 256) {
             return reply.code(401).send({
                 error: {
                     code: "TOKEN_MISSING_JTI",
@@ -48,16 +55,15 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
                 },
             });
         }
-        if (cached === "valid") {
-            return;
+        let state;
+        try {
+            state = await sessions.execute({ userId: req.user.sub, jti });
+        } catch {
+            return reply.header('Retry-After', '1').code(503).send({
+                error: { code: 'AUTH_UNAVAILABLE', message: 'Tạm thời không thể xác thực. Vui lòng thử lại' },
+            });
         }
-
-        const revoked = await app.prisma.invalidToken.findUnique({
-            where: { jti },
-            select: { jti: true },
-        });
-
-        if (revoked) {
+        if (state?.revoked) {
             tokenRevocationCache.set(jti, "revoked");
             return reply.code(401).send({
                 error: {
@@ -67,7 +73,22 @@ export const jwtPlugin = fp(async function jwtPlugin(app: FastifyInstance) {
             });
         }
 
-        tokenRevocationCache.set(jti, "valid");
+        if (!state || !state.isActive) {
+            return reply.code(401).send({
+                error: { code: 'ACCOUNT_INACTIVE', message: 'Tài khoản không còn hoạt động' },
+            });
+        }
+        // Role claims may outlive an admin change. All protected routes use the
+        // current role, including routes that only call auth.verify.
+        req.user.role = state.role;
+        const route = `${req.method} ${req.routeOptions.url}`;
+        const recoveryRoute = route === 'GET /api/v1/auth/me' || route === 'HEAD /api/v1/auth/me' ||
+            route === 'POST /api/v1/auth/change-password' || route === 'POST /api/v1/auth/logout';
+        if (state.mustChangePassword && !recoveryRoute) {
+            return reply.code(403).send({
+                error: { code: 'PASSWORD_CHANGE_REQUIRED', message: 'Bạn cần đổi mật khẩu trước khi tiếp tục' },
+            });
+        }
     }
 
     function requireRoles(allowedRoles: UserRole[]) {

@@ -10,6 +10,7 @@ export enum TemplateCategory {
 }
 
 export type Project = {
+  metadataRevision?: number;
   id: string;
   title: string;
   category: TemplateCategory;
@@ -30,6 +31,8 @@ export type CreateProjectData = {
 };
 
 export type UpdateProjectData = {
+  actorId?: string;
+  baseRevision?: number;
   projectId: string;
   title?: string;
   category?: TemplateCategory;

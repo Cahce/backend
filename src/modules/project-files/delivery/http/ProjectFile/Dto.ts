@@ -48,6 +48,8 @@ export type CreateFileRequestDto = z.infer<typeof CreateFileRequestSchema>;
 
 export const UpdateFileRequestSchema = z
   .object({
+    fileId: z.string().min(1).optional(),
+    baseRevision: z.number().int().positive().optional(),
     content: z.string().openapi({
       description: 'Nội dung tệp mới (UTF-8 text)',
       example: '#heading[Updated Document]',
@@ -59,6 +61,8 @@ export type UpdateFileRequestDto = z.infer<typeof UpdateFileRequestSchema>;
 
 export const RenameFileRequestSchema = z
   .object({
+    fileId: z.string().min(1).optional(),
+    baseRevision: z.number().int().positive().optional(),
     newPath: z
       .string()
       .trim()
@@ -75,6 +79,7 @@ export type RenameFileRequestDto = z.infer<typeof RenameFileRequestSchema>;
 
 export const FileMetadataSchema = z
   .object({
+    revision: z.number().int().positive(),
     id: z.string().openapi({
       description: 'ID tệp',
       example: 'cmnztabnn0000e8vmyzb8gqtn',
@@ -118,6 +123,7 @@ export type FileMetadataDto = z.infer<typeof FileMetadataSchema>;
 
 export const FileResponseSchema = z
   .object({
+    revision: z.number().int().positive(),
     id: z.string().openapi({
       description: 'ID tệp',
       example: 'cmnztabnn0000e8vmyzb8gqtn',

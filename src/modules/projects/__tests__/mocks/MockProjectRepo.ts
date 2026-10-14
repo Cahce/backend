@@ -4,7 +4,12 @@ import type { Project, CreateProjectData, UpdateProjectData } from '../../domain
 
 export class MockProjectRepo implements ProjectRepo {
   private projects: Map<string, Project> = new Map();
+  private storageKeys: Map<string, string[]> = new Map();
   private nextId = 1;
+
+  setStorageKeys(projectId: string, keys: string[]): void {
+    this.storageKeys.set(projectId, keys);
+  }
 
   setProjects(projects: Project[]): void {
     this.projects.clear();
@@ -66,6 +71,11 @@ export class MockProjectRepo implements ProjectRepo {
 
   async delete(projectId: string): Promise<void> {
     this.projects.delete(projectId);
+    this.storageKeys.delete(projectId);
+  }
+
+  async listStorageKeys(projectId: string): Promise<string[]> {
+    return this.storageKeys.get(projectId) ?? [];
   }
 
   async getEffectiveAccess(

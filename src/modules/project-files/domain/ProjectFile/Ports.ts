@@ -6,6 +6,7 @@ export interface FileRepo {
   create(data: CreateFileData & { storageMode: string; sizeBytes: number; sha256: string }): Promise<File>;
 
   createBinary(data: {
+    actorId?: string;
     projectId: string;
     path: string;
     kind: FileKind;
@@ -27,7 +28,7 @@ export interface FileRepo {
 
   rename(data: RenameFileData): Promise<File>;
 
-  delete(projectId: string, path: string): Promise<void>;
+  delete(projectId: string, path: string, precondition?: { actorId: string; fileId?: string; baseRevision?: number }): Promise<void>;
 
   findForCompilation(projectId: string): Promise<File[]>;
 

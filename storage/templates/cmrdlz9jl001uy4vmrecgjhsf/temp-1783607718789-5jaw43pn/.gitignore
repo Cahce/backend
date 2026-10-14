@@ -1,0 +1,10 @@
+# Sản phẩm biên dịch và thư mục build tạm.
+build/
+out/
+*.pdf
+!main.pdf
+
+# Tệp hệ điều hành / trình soạn thảo.
+.DS_Store
+Thumbs.db
+*.swp

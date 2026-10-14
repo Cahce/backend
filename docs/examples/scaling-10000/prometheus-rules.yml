@@ -1,0 +1,69 @@
+# Starting thresholds, not a claim that production SLOs have been verified.
+# Scrape each API /metrics separately so instance distinguishes replicas.
+groups:
+  - name: scholar-shared-state
+    interval: 30s
+    rules:
+      - alert: ScholarRedisUnavailable
+        expr: tlu_redis_state{state="ready"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Shared Redis unavailable; API readiness and ticket admission fail closed"
+      - alert: ScholarRedisCommandTimeout
+        expr: increase(tlu_redis_timeouts_total[5m]) > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis deadlines are destroying connections; inspect dependency latency"
+  - name: scholar-api-capacity
+    interval: 30s
+    rules:
+      - alert: ScholarHttpErrorRate
+        expr: |
+          sum by (instance) (rate(tlu_http_request_duration_seconds_count{status_class="5xx"}[5m]))
+          / clamp_min(sum by (instance) (rate(tlu_http_request_duration_seconds_count[5m])), 1) > 0.01
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "API 5xx exceeds 1% at non-trivial traffic"
+      - alert: ScholarReadLatency
+        expr: |
+          histogram_quantile(0.95, sum by (instance, le) (
+            rate(tlu_http_request_duration_seconds_bucket{method="GET",route!~"/health.*|/metrics|__unmatched__"}[5m])
+          )) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Read request p95 exceeds 200ms"
+      - alert: ScholarPoolWait
+        expr: |
+          histogram_quantile(0.95, sum by (instance, le) (rate(tlu_db_pool_acquire_seconds_bucket[5m]))) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Primary pool acquisition p95 exceeds 50ms"
+      - alert: ScholarAuthDependencyFailure
+        expr: increase(tlu_auth_session_database_failures_total[5m]) > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Primary session verification is failing closed"
+      - alert: ScholarAuthOverload
+        expr: increase(tlu_auth_session_rejected_capacity_total[5m]) + increase(tlu_auth_session_expired_checks_total[5m]) > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Session verification exceeded its capacity or deadline"
+      - alert: ScholarEventLoopBlocked
+        expr: tlu_event_loop_delay_seconds{quantile="0.99"} > 0.1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "API event loop p99 exceeds 100ms"
+      - alert: ScholarApiUnavailable
+        expr: up{job="scholar-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Cannot scrape scholar API; check process, network and scrape credentials"

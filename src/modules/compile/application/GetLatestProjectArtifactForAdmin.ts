@@ -5,6 +5,7 @@ import type { CompileArtifactRepository } from '../domain/CompileArtifactReposit
 import type { CompileQueue } from '../domain/CompileQueue.js';
 import type { BlobStorage, BlobMetadata } from '../../../shared/storage/BlobStorage.js';
 import { CompileJobError, CompileErrors } from '../domain/Errors.js';
+import { enqueueOrReuseCompileJob } from './EnqueueOrReuseCompileJob.js';
 
 export interface GetLatestProjectArtifactForAdminCommand {
   projectId: string;
@@ -53,11 +54,8 @@ export class GetLatestProjectArtifactForAdmin {
   private async compileAndGetArtifact(projectId: string) {
     const entryPath = await this.getMainPath(projectId);
 
-    let job = await this.jobs.findActiveByEntry(projectId, entryPath);
-    if (!job) {
-      job = await this.jobs.create({ projectId, entryPath, format: 'pdf', engine: 'node' });
-      await this.queue.enqueue(job.id);
-    }
+    const job = await enqueueOrReuseCompileJob(this.jobs, this.queue,
+      { projectId, entryPath, format: 'pdf', engine: 'node' }, this.timeoutMs);
 
     const finalJob = await this.pollUntilSettled(job.id);
 
@@ -93,20 +91,25 @@ export class GetLatestProjectArtifactForAdmin {
 
   private async pollUntilSettled(jobId: string) {
     const deadline = Date.now() + this.timeoutMs;
-    const settled = this.queue.waitForSettle?.(jobId);
-
+    const controller = new AbortController();
+    let settled = this.queue.waitForSettle?.(jobId, controller.signal);
+    try {
     let job = await this.jobs.findById(jobId);
     while (Date.now() < deadline) {
       if (job && (job.status === 'success' || job.status === 'failed')) {
         return job;
       }
       const waitMs = Math.min(SETTLE_FALLBACK_MS, Math.max(0, deadline - Date.now()));
-      await Promise.race([
-        settled ?? new Promise<void>(() => {}),
-        new Promise((resolve) => setTimeout(resolve, waitMs)),
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const reason = await Promise.race([
+        settled?.then(() => 'settled') ?? new Promise<never>(() => {}),
+        new Promise<string>(resolve => { timer = setTimeout(() => resolve('poll'), waitMs); }),
       ]);
+      clearTimeout(timer);
+      if (reason === 'settled') settled = undefined;
       job = await this.jobs.findById(jobId);
     }
     return job;
+    } finally { controller.abort(); }
   }
 }

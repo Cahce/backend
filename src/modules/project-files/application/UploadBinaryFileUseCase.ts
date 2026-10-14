@@ -96,7 +96,9 @@ export class UploadBinaryFileUseCase {
       cmd.declaredMimeType,
     );
 
+    try {
     const file = await this.fileRepo.createBinary({
+      actorId: cmd.userId,
       projectId: cmd.projectId,
       path: normalisedPath,
       kind,
@@ -107,5 +109,9 @@ export class UploadBinaryFileUseCase {
     });
 
     return file;
+    } catch (error) {
+      await this.blobStorage.delete(storageKey).catch(() => undefined);
+      throw error;
+    }
   }
 }

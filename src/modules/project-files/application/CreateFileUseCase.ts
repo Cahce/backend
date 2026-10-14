@@ -74,6 +74,7 @@ export class CreateFileUseCase {
       const storageMode = StoragePolicy.determineStorageMode(sizeBytes, fileKind);
 
       const file = await this.fileRepo.create({
+        actorId: command.userId,
         projectId: command.projectId,
         path: normalizedPath,
         kind: fileKind,

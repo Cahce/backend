@@ -37,6 +37,8 @@ function makeJobRepo(job: CompileJob, saved: Map<string, CompileJob>): CompileJo
     findById: async (id) => (id === job.id ? job : null),
     findActiveByEntry: async () => null,
     listByProjectId: async () => [],
+    findAllQueued: async () => [],
+    findRunningOlderThan: async () => [],
     save: async (j) => { saved.set(j.id, j); },
   };
 }
@@ -98,6 +100,33 @@ describe('ProcessCompileJob', () => {
     const finalJob = saved.get('job-1')!;
     assert.equal(finalJob.status, 'success');
     assert.ok(finalJob.latestArtifactId);
+  });
+
+  it('passes the injected timeoutMs to the compiler input', async () => {
+    const saved = makeSavedJobs();
+    const job = makeJob();
+    const receivedInputs: TypstCompileInput[] = [];
+    const compiler: TypstCompileService = {
+      compile: async (input) => {
+        receivedInputs.push(input);
+        await writeFile(input.outputPath, Buffer.from('%PDF-1.4 dummy'));
+        return { ok: true, diagnostics: [] };
+      },
+    };
+
+    const useCase = new ProcessCompileJob(
+      makeJobRepo(job, saved),
+      makeArtifactRepo(),
+      makeSnapshot([{ path: 'main.typ', content: '= Hello' }]),
+      compiler,
+      makeStorage(),
+      12345,
+    );
+
+    await useCase.execute('job-1');
+
+    assert.equal(receivedInputs.length, 1);
+    assert.equal(receivedInputs[0].timeoutMs, 12345);
   });
 
   it('marks job failed when compilation fails with diagnostics', async () => {
@@ -164,6 +193,40 @@ describe('ProcessCompileJob', () => {
     assert.notEqual(createdArtifacts[0].storageKey, createdArtifacts[0].sha256);
   });
 
+  it('keeps job success when save after succeed throws (no fail-after-success)', async () => {
+    const job = makeJob();
+    let successSaveAttempts = 0;
+    const repo: CompileJobRepository = {
+      create: async () => job,
+      findById: async (id) => (id === job.id ? job : null),
+      findActiveByEntry: async () => null,
+      listByProjectId: async () => [],
+      findAllQueued: async () => [],
+      findRunningOlderThan: async () => [],
+      save: async (j) => {
+        if (j.status === 'success') {
+          successSaveAttempts += 1;
+          throw new Error('db down');
+        }
+      },
+    };
+    const useCase = new ProcessCompileJob(
+      repo,
+      makeArtifactRepo(),
+      makeSnapshot([{ path: 'main.typ', content: '= Hello' }]),
+      makeCompiler({ ok: true }),
+      makeStorage(),
+      5000,
+    );
+
+    // Must not throw even though the post-succeed save failed.
+    await useCase.execute('job-1');
+
+    assert.equal(successSaveAttempts, 1);
+    assert.equal(job.status, 'success');
+    assert.ok(job.latestArtifactId);
+  });
+
   it('does nothing when job not found', async () => {
     const saved = makeSavedJobs();
     const repo: CompileJobRepository = {
@@ -171,6 +234,8 @@ describe('ProcessCompileJob', () => {
       findById: async () => null,
       findActiveByEntry: async () => null,
       listByProjectId: async () => [],
+      findAllQueued: async () => [],
+      findRunningOlderThan: async () => [],
       save: async (j) => { saved.set(j.id, j); },
     };
     const useCase = new ProcessCompileJob(

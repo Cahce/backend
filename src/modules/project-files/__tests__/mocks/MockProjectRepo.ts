@@ -36,6 +36,10 @@ export class MockProjectRepo implements ProjectRepo {
     throw new Error('Not implemented in mock');
   }
 
+  async listStorageKeys(_projectId: string): Promise<string[]> {
+    return [];
+  }
+
   async getEffectiveAccess(
     _projectId: string,
     _userId: string,

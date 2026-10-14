@@ -12,6 +12,7 @@ interface TestResult {
 const results: TestResult[] = [];
 let authToken = "";
 let testProjectId = "";
+const fileVersions = new Map<string, { fileId: string; baseRevision: number }>();
 
 async function test(name: string, fn: () => Promise<void>) {
   try {
@@ -31,7 +32,15 @@ async function apiRequest(
   body?: any,
   token?: string
 ): Promise<any> {
-  const url = `${BASE_URL}${path}`;
+  let url = `${BASE_URL}${path}`;
+  if (['PUT', 'PATCH', 'DELETE'].includes(method) && /\/projects\/[^/]+\/files(?:\/|:rename)/.test(path)) {
+    const parsed = new URL(url), match = /^\/api\/v1\/projects\/([^/]+)\/files\/(.+)$/.exec(parsed.pathname);
+    const project = match?.[1] ?? /^\/api\/v1\/projects\/([^/]+)\/files:rename$/.exec(parsed.pathname)?.[1];
+    const filePath = match ? decodeURIComponent(match[2]) : parsed.searchParams.get('path');
+    const version = fileVersions.get(`${project}:${filePath}`) ?? { fileId: 'missing-file', baseRevision: 1 };
+    if (method === 'DELETE') { parsed.searchParams.set('fileId', version.fileId); parsed.searchParams.set('baseRevision', String(version.baseRevision)); url = parsed.href; }
+    else body = { ...body, ...version };
+  }
   const headers: Record<string, string> = {};
 
   if (token !== undefined) {
@@ -55,6 +64,9 @@ async function apiRequest(
   const response = await fetch(url, options);
   const data = await response.text();
   const jsonData = data ? JSON.parse(data) : null;
+  for (const file of jsonData?.files ?? (jsonData?.path ? [jsonData] : [])) {
+    if (file.id && file.revision) fileVersions.set(`${file.projectId}:${file.path}`, { fileId: file.id, baseRevision: file.revision });
+  }
 
   return {
     status: response.status,
@@ -78,7 +90,6 @@ async function runTests() {
     }
 
     authToken = result.data.accessToken;
-    console.log(`  Token: ${authToken.substring(0, 30)}...`);
   });
 
   await test("Setup: Create test project", async () => {

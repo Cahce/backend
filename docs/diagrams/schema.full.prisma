@@ -67,6 +67,7 @@ enum FileKind {
 
 enum TemplateCategory {
   thesis
+  project
   report
   proposal
   paper

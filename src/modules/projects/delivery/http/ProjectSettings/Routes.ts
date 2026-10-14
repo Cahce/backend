@@ -3,9 +3,12 @@ import type { ProjectSettings } from "../../../domain/ProjectSettings.js";
 import type { ProjectsContainer } from "../../../Container.js";
 import { updateProjectSettingsSchema, type ProjectSettingsResponse } from "./Dto.js";
 import { toErrorResponse } from "../../../../../shared/http/domainError.js";
+import { requireCondition } from '../../../domain/access/CollaborationErrors.js';
+import { projectSettingsDocumentation } from './OpenApi.js';
 
 function toResponse(settings: ProjectSettings): ProjectSettingsResponse {
     return {
+        revision: settings.revision,
         projectId: settings.projectId,
         mainPath: settings.mainPath,
         compileOptions: settings.compileOptions,
@@ -25,6 +28,7 @@ export async function projectSettingsRoutes(
         Params: { projectId: string };
     }>("/projects/:projectId/settings", {
         preHandler: app.auth.verify,
+        ...projectSettingsDocumentation.get,
         schema: {
             tags: ["project-settings"],
             summary: "Get project settings",
@@ -44,6 +48,7 @@ export async function projectSettingsRoutes(
                             type: "object",
                             properties: {
                                 projectId: { type: "string" },
+                                revision: { type: "integer" },
                                 mainPath: { type: "string" },
                                 compileOptions: { type: "object" },
                                 zoteroConfig: { type: ["object", "null"] },
@@ -81,6 +86,7 @@ export async function projectSettingsRoutes(
         Body: unknown;
     }>("/projects/:projectId/settings", {
         preHandler: app.auth.verify,
+        ...projectSettingsDocumentation.update,
         schema: {
             tags: ["project-settings"],
             summary: "Update project settings",
@@ -95,6 +101,7 @@ export async function projectSettingsRoutes(
                 type: "object",
                 properties: {
                     mainPath: { type: "string" },
+                    baseRevision: { type: "integer", minimum: 1 },
                     compileOptions: { type: "object" },
                     zoteroConfig: { type: "object" },
                     openalexConfig: { type: "object" },
@@ -109,6 +116,7 @@ export async function projectSettingsRoutes(
                             type: "object",
                             properties: {
                                 projectId: { type: "string" },
+                                revision: { type: "integer" },
                                 mainPath: { type: "string" },
                                 compileOptions: { type: "object" },
                                 zoteroConfig: { type: ["object", "null"] },
@@ -126,11 +134,14 @@ export async function projectSettingsRoutes(
                 const userId = req.user.sub;
                 const userRole = req.user.role;
                 const body = updateProjectSettingsSchema.parse(req.body);
+                requireCondition(body.baseRevision !== undefined,
+                    'PRECONDITION_REQUIRED', 'Thiếu phiên bản thiết lập. Hãy tải lại', 428);
 
                 const settings = await updateProjectSettings.execute({
                     projectId,
                     userId,
                     userRole,
+                    baseRevision: body.baseRevision,
                     patch: {
                         mainPath: body.mainPath,
                         compileOptions: body.compileOptions,

@@ -5,11 +5,21 @@ import type { Permission } from "../shared/auth/Permissions.js";
 import type { MaterializeTemplate } from "../modules/projects/domain/MaterializeTemplate.js";
 import type { TokenRevocationCachePort } from "../shared/auth/TokenRevocationCachePort.js";
 import type { FastifyRequest, FastifyReply } from "fastify";
+import type { ServiceLifecycle } from '../plugins/Lifecycle.js';
+import type { ReadTokenSessionUseCase } from '../modules/auth/application/ReadTokenSessionUseCase.js';
+import type { ServiceMetrics } from '../shared/observability/ServiceMetrics.js';
+import type { BoundedRedisConnection } from '../shared/redis/BoundedRedisConnection.js';
+import type { RequestRateLimit } from '../shared/rate-limit/RequestRateLimit.js';
 
 declare module "fastify" {
     interface FastifyInstance {
         prisma: PrismaClient;
         config: AppConfig;
+        lifecycle: ServiceLifecycle;
+        serviceMetrics?: ServiceMetrics;
+        sharedRedis?: BoundedRedisConnection;
+        requestRateLimit?: RequestRateLimit;
+        authSessionMetrics: () => ReturnType<ReadTokenSessionUseCase['snapshot']>;
         materializeTemplate: MaterializeTemplate;
         tokenRevocationCache: TokenRevocationCachePort;
         auth: {

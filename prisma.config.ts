@@ -3,12 +3,17 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+const directUrl = process.env["DIRECT_DATABASE_URL"]?.trim();
+if (process.env["DB_POOL_MODE"] === 'transaction' && !directUrl) {
+  throw new Error('DIRECT_DATABASE_URL is required for Prisma CLI with transaction pooling');
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: directUrl || process.env["DATABASE_URL"],
   },
 });

@@ -7,6 +7,8 @@ import { serializeBib } from "../domain/BibSerializer.js";
 import { parseHayagriva } from "../domain/HayagrivaParser.js";
 import { serializeHayagriva } from "../domain/HayagrivaSerializer.js";
 import { detectBibFormat } from "../domain/BibliographyPath.js";
+import { CollaborationError } from '../../projects/domain/access/CollaborationErrors.js';
+import { createHash } from 'node:crypto';
 
 export class BibliographyService {
   constructor(private readonly fileRepo: FileRepo) {}
@@ -35,37 +37,52 @@ export class BibliographyService {
   async writeBibFile(
     projectId: string,
     path: string,
-    entries: BibEntry[]
+    entries: BibEntry[],
+    actorId?: string,
+    incoming: BibEntry[] = entries,
   ): Promise<void> {
     const fmt = detectBibFormat(path);
     if (!fmt) {
       throw new Error(`Unsupported bibliography format: ${path}`);
     }
 
-    const content =
-      fmt === "bibtex" ? serializeBib(entries) : serializeHayagriva(entries);
     const kind = fmt === "bibtex" ? FileKind.Bib : FileKind.Config;
-
+    for (let attempt = 0; attempt < 3; attempt++) {
     const existingFile = await this.fileRepo.findByProjectIdAndPath(projectId, path);
+    // Merge only the imported delta into the latest saved source, then compare revisions.
+    const current = existingFile?.textContent ? (fmt === 'bibtex' ? parseBib(existingFile.textContent) : parseHayagriva(existingFile.textContent)) : [];
+    const merged = this.mergeEntries(current, incoming);
+    const content = fmt === 'bibtex' ? serializeBib(merged) : serializeHayagriva(merged);
+    const sha256 = createHash('sha256').update(content).digest('hex');
+    try {
 
     if (existingFile) {
       await this.fileRepo.update({
+        actorId, fileId: existingFile.id, baseRevision: existingFile.revision ?? 1,
         projectId,
         path,
         content,
         sizeBytes: Buffer.byteLength(content, "utf8"),
-        sha256: "",
+        sha256,
       });
     } else {
       await this.fileRepo.create({
+        actorId,
         projectId,
         path,
         kind,
         content,
         storageMode: "inline",
         sizeBytes: Buffer.byteLength(content, "utf8"),
-        sha256: "",
+        sha256,
       });
+    }
+    return;
+    } catch (error) {
+      if (attempt < 2 && ((error instanceof CollaborationError && error.code === 'FILE_VERSION_CONFLICT') ||
+        (error instanceof Error && error.message === 'FILE_ALREADY_EXISTS'))) continue;
+      throw error;
+    }
     }
   }
 

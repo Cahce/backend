@@ -5,9 +5,19 @@ import type { FileRepo } from '../domain/ProjectFile/Ports.js';
 import type { File, FileMetadata, CreateFileData, UpdateFileData, RenameFileData } from '../domain/ProjectFile/Types.js';
 import { FileKind, StorageMode } from '../domain/ProjectFile/Types.js';
 import { getCompilationKinds } from '../domain/FileKindPolicy.js';
+import { accessFor, appendProjectEvent, lockProject } from '../../projects/infra/CollaborationTransaction.js';
+import { requireCondition } from '../../projects/domain/access/CollaborationErrors.js';
 
 export class FileRepoPrisma implements FileRepo {
   constructor(private readonly prisma: PrismaClient) {}
+
+  private async authorize(tx: Prisma.TransactionClient, projectId: string, actorId?: string) {
+    await lockProject(tx, projectId);
+    if (actorId) {
+      const access = await accessFor(tx, projectId, { userId: actorId, role: 'student' });
+      requireCondition(access.canEdit, 'PROJECT_ACCESS_DENIED', 'Bạn không có quyền chỉnh sửa dự án này');
+    }
+  }
 
   async create(
     input: CreateFileData & { storageMode: string; sizeBytes: number; sha256: string },
@@ -16,6 +26,7 @@ export class FileRepoPrisma implements FileRepo {
       const now = new Date();
       
       const file = await this.prisma.$transaction(async (tx) => {
+        await this.authorize(tx, input.projectId, input.actorId);
         const createdFile = await tx.file.create({
           data: {
             projectId: input.projectId,
@@ -35,6 +46,8 @@ export class FileRepoPrisma implements FileRepo {
           data: { lastEditedAt: now },
         });
 
+        await appendProjectEvent(tx, input.projectId, 'project.file.created', createdFile.id, input.actorId ?? null,
+          { fileId: createdFile.id, path: createdFile.path, revision: createdFile.revision });
         return createdFile;
       });
 
@@ -50,6 +63,7 @@ export class FileRepoPrisma implements FileRepo {
   }
 
   async createBinary(input: {
+    actorId?: string;
     projectId: string;
     path: string;
     kind: FileKind;
@@ -61,6 +75,7 @@ export class FileRepoPrisma implements FileRepo {
     try {
       const now = new Date();
       const file = await this.prisma.$transaction(async (tx) => {
+        await this.authorize(tx, input.projectId, input.actorId);
         const createdFile = await tx.file.create({
           data: {
             projectId: input.projectId,
@@ -80,6 +95,8 @@ export class FileRepoPrisma implements FileRepo {
           data: { lastEditedAt: now },
         });
 
+        await appendProjectEvent(tx, input.projectId, 'project.file.created', createdFile.id, input.actorId ?? null,
+          { fileId: createdFile.id, path: createdFile.path, revision: createdFile.revision });
         return createdFile;
       });
 
@@ -137,6 +154,7 @@ export class FileRepoPrisma implements FileRepo {
       where: { projectId },
       orderBy: { path: 'asc' },
       select: {
+        revision: true,
         id: true,
         projectId: true,
         path: true,
@@ -150,6 +168,7 @@ export class FileRepoPrisma implements FileRepo {
     });
 
     return files.map((file) => ({
+      revision: file.revision,
       id: file.id,
       projectId: file.projectId,
       path: file.path,
@@ -169,14 +188,18 @@ export class FileRepoPrisma implements FileRepo {
       const now = new Date();
       
       const file = await this.prisma.$transaction(async (tx) => {
+        await this.authorize(tx, input.projectId, input.actorId);
         const updatedFile = await tx.file.update({
           where: {
+            ...(input.fileId ? { id: input.fileId } : {}),
+            ...(input.baseRevision !== undefined ? { revision: input.baseRevision } : {}),
             projectId_path: {
               projectId: input.projectId,
               path: input.path,
             },
           },
           data: {
+            revision: { increment: 1 },
             textContent: input.content,
             sizeBytes: input.sizeBytes,
             sha256: input.sha256,
@@ -189,6 +212,8 @@ export class FileRepoPrisma implements FileRepo {
           data: { lastEditedAt: now },
         });
 
+        await appendProjectEvent(tx, input.projectId, 'project.file.updated', updatedFile.id, input.actorId ?? null,
+          { fileId: updatedFile.id, path: updatedFile.path, revision: updatedFile.revision });
         return updatedFile;
       });
 
@@ -196,7 +221,7 @@ export class FileRepoPrisma implements FileRepo {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new Error('FILE_NOT_FOUND');
+          requireCondition(false, 'FILE_VERSION_CONFLICT', 'Tệp đã thay đổi. Bản nháp của bạn vẫn được giữ', 409);
         }
       }
       throw error;
@@ -205,23 +230,32 @@ export class FileRepoPrisma implements FileRepo {
 
   async rename(input: RenameFileData): Promise<File> {
     try {
-      const file = await this.prisma.file.update({
+      const file = await this.prisma.$transaction(async tx => {
+        await this.authorize(tx, input.projectId, input.actorId);
+        const updated = await tx.file.update({
         where: {
+          ...(input.fileId ? { id: input.fileId } : {}),
+          ...(input.baseRevision !== undefined ? { revision: input.baseRevision } : {}),
           projectId_path: {
             projectId: input.projectId,
             path: input.oldPath,
           },
         },
         data: {
+          revision: { increment: 1 },
           path: input.newPath,
         },
+        });
+        await appendProjectEvent(tx, input.projectId, 'project.file.renamed', updated.id, input.actorId ?? null,
+          { fileId: updated.id, oldPath: input.oldPath, path: updated.path, revision: updated.revision });
+        return updated;
       });
 
       return this.mapToFile(file, this.determineStorageMode(file));
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2025') {
-          throw new Error('FILE_NOT_FOUND');
+          requireCondition(false, 'FILE_VERSION_CONFLICT', 'Tệp đã thay đổi. Hãy tải lại trước khi đổi tên', 409);
         }
         if (error.code === 'P2002') {
           throw new Error('FILE_ALREADY_EXISTS');
@@ -231,15 +265,25 @@ export class FileRepoPrisma implements FileRepo {
     }
   }
 
-  async delete(projectId: string, path: string): Promise<void> {
+  async delete(projectId: string, path: string, precondition?: { actorId: string; fileId?: string; baseRevision?: number }): Promise<void> {
     try {
-      await this.prisma.file.delete({
+      await this.prisma.$transaction(async tx => {
+        await this.authorize(tx, projectId, precondition?.actorId);
+        const file = await tx.file.findUnique({ where: { projectId_path: { projectId, path } } });
+        requireCondition(file && (!precondition?.fileId || file.id === precondition.fileId) &&
+          (precondition?.baseRevision === undefined || file.revision === precondition.baseRevision),
+          'FILE_VERSION_CONFLICT', 'Tệp đã thay đổi. Hãy tải lại trước khi xóa', 409);
+        await tx.projectCommentThread.updateMany({ where: { projectId, fileId: file.id }, data: { fileId: null } });
+        await tx.file.delete({
         where: {
           projectId_path: {
             projectId,
             path,
           },
         },
+        });
+        await appendProjectEvent(tx, projectId, 'project.file.deleted', file.id, precondition?.actorId ?? null,
+          { fileId: file.id, path });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -298,10 +342,12 @@ export class FileRepoPrisma implements FileRepo {
       lastEditedAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
+      revision: number;
     },
     storageMode: StorageMode,
   ): File {
     return {
+      revision: prismaFile.revision,
       id: prismaFile.id,
       projectId: prismaFile.projectId,
       path: prismaFile.path,

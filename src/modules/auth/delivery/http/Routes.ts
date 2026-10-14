@@ -1,4 +1,8 @@
 import type { FastifyInstance } from "fastify";
+import { createHash } from 'node:crypto';
+import { PasswordWorkAdmission } from '../../application/PasswordWorkAdmission.js';
+import { runPasswordWork } from './PasswordWorkHttp.js';
+import { RequestRateLimit } from '../../../../shared/rate-limit/RequestRateLimit.js';
 import { LoginUseCase } from "../../application/LoginUseCase.js";
 import { GetCurrentUserUseCase } from "../../application/GetCurrentUserUseCase.js";
 import { GetUserByEmailUseCase } from "../../application/GetUserByEmailUseCase.js";
@@ -271,6 +275,11 @@ const schemas = {
 export { schemas as authResponseSchemas };
 
 export async function authRoutes(app: FastifyInstance) {
+    const passwordWork = new PasswordWorkAdmission(app.config.auth.passwordWork, undefined,
+        (phase, milliseconds) => app.serviceMetrics?.observePasswordWork(phase, milliseconds));
+    const rateLimit = app.requestRateLimit ?? new RequestRateLimit();
+    app.serviceMetrics?.bindPasswordWork(() => passwordWork.snapshot());
+    app.addHook('preClose', async () => { passwordWork.close(); });
     const userRepo = new UserRepoPrisma(app.prisma);
     const userProfileQuery = new UserProfileQueryRepoPrisma(app.prisma);
     const passwordHasher = new PasswordHasherBcrypt();
@@ -296,6 +305,9 @@ export async function authRoutes(app: FastifyInstance) {
     app.post<{ Body: LoginRequestDto }>(
         "/login",
         {
+            onRequest: async request => {
+                await rateLimit.check(`login:ip:${request.ip}`, app.config.auth.loginIpPerMinute ?? 12000, 60000);
+            },
             schema: {
                 description: "Đăng nhập bằng email và mật khẩu",
                 tags: ["auth"],
@@ -305,6 +317,8 @@ export async function authRoutes(app: FastifyInstance) {
                     400: schemas.errorResponse,
                     401: schemas.errorResponse,
                     403: schemas.errorResponse,
+                    429: schemas.errorResponse,
+                    503: schemas.errorResponse,
                     500: schemas.errorResponse,
                 },
             },
@@ -322,7 +336,11 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
-            const result = await loginUseCase.execute(parseResult.data);
+            const pair = createHash('sha256').update(JSON.stringify([request.ip, parseResult.data.email.trim().toLowerCase()])).digest('hex');
+            await rateLimit.check(`login:pair:${pair}`, app.config.auth.loginPairPerMinute ?? 10, 60000);
+            const admitted = await runPasswordWork(passwordWork, request, reply, () => loginUseCase.execute(parseResult.data));
+            if (!admitted) return reply;
+            const result = admitted.value;
 
             if (result.success) {
                 return reply.code(200).send({
@@ -527,6 +545,8 @@ export async function authRoutes(app: FastifyInstance) {
                     200: schemas.messageResponse,
                     400: schemas.errorResponse,
                     401: schemas.errorResponse,
+                    429: schemas.errorResponse,
+                    503: schemas.errorResponse,
                     500: schemas.errorResponse,
                 },
             },
@@ -546,10 +566,15 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
-            const result = await changePasswordUseCase.execute({
-                userId,
-                ...parseResult.data,
+            await rateLimit.check(`change-password:${userId}`, app.config.auth.changePasswordPerMinute ?? 5, 60000);
+            const admitted = await runPasswordWork(passwordWork, request, reply, async () => {
+                // The token/account may have been revoked while waiting for a password-work slot.
+                await app.auth.verify(request, reply);
+                if (reply.sent) return undefined;
+                return changePasswordUseCase.execute({ userId, ...parseResult.data });
             });
+            if (!admitted || !admitted.value) return reply;
+            const result = admitted.value;
 
             if (result.success) {
                 return reply.code(200).send({

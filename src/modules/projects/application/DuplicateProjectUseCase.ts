@@ -130,13 +130,14 @@ export class DuplicateProjectUseCase {
 
       const srcSettings = await this.settingsRepo.findOrCreate(command.projectId);
       const newSettings = await this.settingsRepo.findOrCreate(project.id);
+      const canCopyPrivateSettings = source.ownerId === command.userId;
       await this.settingsRepo.update(
         new ProjectSettings(
           newSettings.projectId,
           srcSettings.mainPath,
           srcSettings.compileOptions,
-          srcSettings.zoteroConfig,
-          srcSettings.openalexConfig,
+          canCopyPrivateSettings ? srcSettings.zoteroConfig : null,
+          canCopyPrivateSettings ? srcSettings.openalexConfig : null,
           new Date(),
         ),
       );
