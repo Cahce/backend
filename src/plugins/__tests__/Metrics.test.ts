@@ -68,3 +68,21 @@ test('registries are app-local, keep serving while draining and clear resources 
     assert.equal((await b.app.inject({ url: '/metrics', headers: b.headers })).statusCode, 200);
   } finally { await a.app.close(); await b.app.close(); }
 });
+
+test('realtime metrics distinguish cohort work from recipients and never export room identifiers', async () => {
+  const current = await fixture(true), legacy = await fixture(true);
+  try {
+    const snapshot = { connections: 100, authenticated: 100, accounts: 100, rooms: 1, queued: 0,
+      activeReplays: 2, activeReplayRecipients: 100, projectId: 'private-project', cursor: 'private-cursor' };
+    current.app.serviceMetrics!.bindRealtime(() => snapshot);
+    legacy.app.serviceMetrics!.bindRealtime(() => ({ connections: 1, authenticated: 1, accounts: 1, rooms: 1, queued: 0, activeReplays: 1 }));
+    const response = await current.app.inject({ url: '/metrics', headers: current.headers });
+    assert.equal(response.statusCode, 200);
+    assert.match(response.body, /tlu_realtime_state\{state="activeReplays"\} 2/);
+    assert.match(response.body, /tlu_realtime_state\{state="activeReplayRecipients"\} 100/);
+    assert(!response.body.includes('private-project') && !response.body.includes('private-cursor'));
+    const old = await legacy.app.inject({ url: '/metrics', headers: legacy.headers });
+    assert.equal(old.statusCode, 200);
+    assert(!old.body.includes('state="activeReplayRecipients"'), 'old snapshot must not invent an observed recipient count');
+  } finally { await current.app.close(); await legacy.app.close(); }
+});

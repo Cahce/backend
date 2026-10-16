@@ -32,12 +32,12 @@ function page(since: string, head: number, projectId = 'p'): Page {
   return { events, nextCursor: String(last), highWatermark: String(head), hasMore: last < head };
 }
 async function fixture(events: ProjectDiscussionUseCases['events'], validate: (s: RealtimeSession) => Promise<boolean> = async () => true,
-  suppliedLeases?: RealtimeSocketLeases, maxConnections = 200) {
+  suppliedLeases?: RealtimeSocketLeases, maxConnections = 200, eventsBatch?: ProjectDiscussionUseCases['eventsBatch']) {
   const app = Fastify(), source = new WakeSource(), clients: WebSocket[] = [];
   const tickets = { consume: async (projectId: string, ticket: string): Promise<RealtimeSession> => ({ projectId,
     actor: { userId: ticket, role: 'student' }, jti: ticket, expiresAt: Date.now() + 60_000 }), validate };
   const leases = suppliedLeases ?? new RealtimeSocketLeases(new LocalRealtimeSocketLeaseStore(), () => randomBytes(16).toString('hex'));
-  registerProjectRealtime(app, tickets, { events }, ['http://realtime.test'], leases, source, maxConnections);
+  registerProjectRealtime(app, tickets, { events, ...(eventsBatch ? { eventsBatch } : {}) }, ['http://realtime.test'], leases, source, maxConnections);
   await app.listen({ host: '127.0.0.1', port: 0 });
   const address = app.server.address(); assert(address && typeof address !== 'string');
   return { source, app, url: `ws://127.0.0.1:${address.port}/api/v1/projects/p/realtime`, async connect(since = '0', projectId = 'p') {
@@ -46,9 +46,10 @@ async function fixture(events: ProjectDiscussionUseCases['events'], validate: (s
     const frames: (Page & { type: string })[] = [];
     socket.on('message', data => frames.push(JSON.parse(data.toString())));
     await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
-    socket.send(JSON.stringify({ type: 'authenticate', ticket: randomBytes(32).toString('base64url'), since }));
+    const userId = randomBytes(32).toString('base64url');
+    socket.send(JSON.stringify({ type: 'authenticate', ticket: userId, since }));
     await until(() => frames.some(f => f.type === 'ready'));
-    return { socket, frames, sequences: () => frames.flatMap(f => f.events?.map(e => e.seq) ?? []) };
+    return { socket, frames, userId, sequences: () => frames.flatMap(f => f.events?.map(e => e.seq) ?? []) };
   }, async close() {
     for (const socket of clients) socket.terminate();
     await app.close();
@@ -191,4 +192,94 @@ test('revocation after snapshot prevents delivery and close discards scheduled w
     assert.equal(await closed, 4403); assert.deepEqual(a.sequences(), []);
     await pause(50); assert.equal(reads, 1);
   } finally { blocked.resolve(); await f.close(); }
+});
+
+test('100 native room peers share exactly two frozen replay snapshots per page', { timeout: 10_000 }, async () => {
+  let head = 0, active = 0;
+  const batches: Array<{ projectId: string; since: string; users: number }> = [];
+  const f = await fixture(async () => { throw new Error('Batch transport must not call singleton replay'); }, async () => true,
+    undefined, 200, async (projectId, actors, since) => {
+      active++; batches.push({ projectId, since, users: actors.length });
+      try { await pause(2); return actors.map(actor => ({ userId: actor.userId, result: page(since, head, projectId) })); }
+      finally { active--; }
+    });
+  try {
+    const clients = await Promise.all(Array.from({ length: 100 }, () => f.connect()));
+    await until(() => active === 0); await pause(20); batches.length = 0;
+    head = 1; f.source.wake();
+    await until(() => clients.every(client => client.sequences().includes('1')));
+    assert.deepEqual(batches.map(batch => batch.users), [50, 50]);
+    assert(batches.every(batch => batch.projectId === 'p' && batch.since === '0'));
+    batches.length = 0; head = 251; f.source.wake();
+    await until(() => clients.every(client => client.sequences().length === 251));
+    assert.equal(batches.length, 6, 'three 100-event pages each need two room snapshots');
+    assert(batches.every(batch => batch.users === 50));
+    for (const client of clients) assert.deepEqual(client.sequences(), Array.from({ length: 251 }, (_, i) => String(i + 1)));
+  } finally { await f.close(); }
+});
+
+test('cohort concurrency and input size are bounded across rooms without cursor mixing', { timeout: 10_000 }, async () => {
+  let active = 0, maximum = 0;
+  const batches: Array<{ projectId: string; since: string; users: number }> = [];
+  const f = await fixture(async () => { throw new Error('No singleton reads'); }, async () => true, undefined, 200,
+    async (projectId, actors, since) => {
+      active++; maximum = Math.max(maximum, active); batches.push({ projectId, since, users: actors.length });
+      try { await pause(10); return actors.map(actor => ({ userId: actor.userId, result: page(since, 150, projectId) })); }
+      finally { active--; }
+    });
+  try {
+    const clients = await Promise.all(Array.from({ length: 90 }, (_, i) => f.connect(i % 2 ? '50' : '0', `room${Math.floor(i / 10)}`)));
+    await until(() => clients.every((client, i) => client.sequences().length === (i % 2 ? 100 : 150)));
+    assert(maximum <= 8 && maximum > 1, `Expected <=8 cohort reads, got ${maximum}`);
+    assert(batches.every(batch => batch.users > 0 && batch.users <= 50));
+    for (const [i, client] of clients.entries()) {
+      const start = i % 2 ? 51 : 1;
+      assert.deepEqual(client.sequences(), Array.from({ length: 151 - start }, (_, j) => String(start + j)));
+      for (const frame of client.frames.filter(frame => frame.type === 'events'))
+        assert(frame.events.every(event => event.projectId === `room${Math.floor(i / 10)}`));
+    }
+  } finally { await f.close(); }
+});
+
+test('a late room arrival cannot join an in-flight snapshot and denied recipients do not poison peers', async () => {
+  let head = 0, hold = false, entered = 0, denied = '';
+  const gate = deferred(), batches: string[][] = [];
+  const f = await fixture(async () => { throw new Error('No singleton reads'); }, async () => true, undefined, 200,
+    async (projectId, actors, since) => {
+      batches.push(actors.map(actor => actor.userId)); const snapshot = page(since, head, projectId);
+      if (hold) { entered++; await gate.promise; }
+      return actors.map(actor => actor.userId === denied ? { userId: actor.userId, error: new Error('Denied') } :
+        { userId: actor.userId, result: snapshot });
+    });
+  try {
+    const peers = await Promise.all([f.connect(), f.connect()]); await pause(20); batches.length = 0;
+    denied = peers[0].userId; const closed = new Promise<number>(resolve => peers[0].socket.once('close', resolve));
+    head = 1; hold = true; f.source.wake(); await until(() => entered === 1);
+    head = 2;
+    const late = await f.connect(); await until(() => entered === 2);
+    assert.equal(batches[0].includes(late.userId), false);
+    gate.resolve(); assert.equal(await closed, 4403);
+    await until(() => late.sequences().includes('2') && peers[1].sequences().includes('1'));
+    assert.deepEqual(peers[0].sequences(), []); assert.deepEqual(peers[1].sequences(), ['1']);
+    assert.deepEqual(late.sequences(), ['1', '2']);
+    hold = false; f.source.wake(); await until(() => peers[1].sequences().includes('2'));
+  } finally { gate.resolve(); await f.close(); }
+});
+
+test('post-snapshot session validation is independent for peers sharing one room cohort', async () => {
+  let head = 0, blocked = '', entered = false, hold = false;
+  const gate = deferred();
+  const f = await fixture(async () => { throw new Error('No singleton reads'); }, async session => session.actor.userId !== blocked,
+    undefined, 200, async (projectId, actors, since) => {
+      const result = page(since, head, projectId);
+      if (hold) { entered = true; await gate.promise; }
+      return actors.map(actor => ({ userId: actor.userId, result }));
+    });
+  try {
+    const peers = await Promise.all([f.connect(), f.connect()]); await pause(20);
+    head = 1; hold = true; f.source.wake(); await until(() => entered);
+    blocked = peers[0].userId; const closed = new Promise<number>(resolve => peers[0].socket.once('close', resolve));
+    gate.resolve(); assert.equal(await closed, 4403); await until(() => peers[1].sequences().includes('1'));
+    assert.deepEqual(peers[0].sequences(), []); assert.deepEqual(peers[1].sequences(), ['1']);
+  } finally { gate.resolve(); await f.close(); }
 });

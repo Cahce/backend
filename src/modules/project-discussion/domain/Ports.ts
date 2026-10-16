@@ -11,6 +11,11 @@ export type ThreadView = { id: string; projectId: string; createdById: string | 
   state: 'open' | 'resolved'; revision: number; deletedAt: string | null; comments: CommentView[]; commentsNextCursor: string | null; updatedAt: string };
 export type EventView = { type: string; projectId: string; seq: string; accessVersion: string; occurredAt: string; data: unknown };
 export type DiscussionEventSnapshot = { access: AccessView; highWatermark: string; events: EventView[] };
+export const MAX_REPLAY_ACTORS = 50;
+export type DiscussionEventPage = { events: EventView[]; nextCursor: string; highWatermark: string; hasMore: boolean };
+/** Errors stay internal: one actor's denial must not discard another actor's page. */
+export type DiscussionEventBatchResult = { userId: string; snapshot: DiscussionEventSnapshot } | { userId: string; error: Error };
+export type DiscussionEventPageResult = { userId: string; result: DiscussionEventPage } | { userId: string; error: Error };
 export interface DiscussionTransaction {
   access: AccessView;
   head(): Promise<string>;
@@ -35,4 +40,6 @@ export interface DiscussionTransaction {
 export interface DiscussionRepository {
   run<T>(projectId: string, actor: ProjectActor, work: (tx: DiscussionTransaction) => Promise<T>): Promise<T>;
   readEvents(projectId: string, actor: ProjectActor, since: string, limit: number): Promise<DiscussionEventSnapshot>;
+  /** A frozen same-project/cursor cohort; implementations must not retain fulfilled snapshots. */
+  readEventsBatch?(projectId: string, actors: readonly ProjectActor[], since: string, limit: number): Promise<DiscussionEventBatchResult[]>;
 }

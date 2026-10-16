@@ -10,7 +10,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import pg from 'pg';
 import { PasswordHasherBcrypt } from '../src/modules/auth/infra/PasswordHasherBcrypt.js';
-import { assertSeparateDatabase, databaseServer, fixturePaths, removeFixtureArtifacts, removeFixtureCredentials, writeCleanupReport } from './fixtures/browser-fixture-lifecycle.js';
+import { assertSeparateDatabase, databaseServer, fixturePaths, installFixtureRealtimeControl, removeFixtureArtifacts, removeFixtureCredentials, writeCleanupReport } from './fixtures/browser-fixture-lifecycle.js';
 import type { BrowserFixtureMetadata } from './fixtures/browser-fixture-lifecycle.js';
 
 const backend = fileURLToPath(new URL('..', import.meta.url));
@@ -36,6 +36,7 @@ const admin = new pg.Client({ connectionString: originalUrl, connectionTimeoutMi
 let created = false;
 let app: Awaited<ReturnType<typeof import('../src/app.js')['buildApp']>> | undefined;
 let vite: { close(): Promise<void> } | undefined;
+let realtimeControl: Awaited<ReturnType<typeof installFixtureRealtimeControl>> | undefined;
 let resolveStop: () => void = () => {};
 const stop = new Promise<void>(resolve => { resolveStop = resolve; });
 const onStop = () => resolveStop();
@@ -47,7 +48,10 @@ let directoryCreated = false;
 const marker = setInterval(async () => {
   if (checking) return;
   checking = true;
-  try { await access(controlPath); onStop(); } catch { /* no stop request */ }
+  try {
+    try { await access(controlPath); onStop(); } catch { /* no stop request */ }
+    await realtimeControl?.poll();
+  } catch { console.warn('Browser fixture realtime control failed; inspect its status file.'); }
   finally { checking = false; }
 }, 1000);
 
@@ -70,6 +74,7 @@ try {
   Object.assign(process.env, {
     DATABASE_URL: fixtureUrl.toString(), DIRECT_DATABASE_URL: fixtureUrl.toString(), DB_POOL_MODE: 'direct',
     HOST: '127.0.0.1', PORT: '3031', JWT_SECRET: randomBytes(32).toString('hex'),
+    JWT_ACCESS_TTL: '15m', JWT_REFRESH_TTL: '1d',
     PROJECT_SHARING_ENABLED: 'true', PROJECT_REALTIME_ORIGINS: 'http://localhost:5180,http://127.0.0.1:5180',
     SHARED_STATE_DRIVER: 'local', METRICS_ENABLED: 'false', BLOB_STORAGE_DRIVER: 'local',
     STORAGE_DIR: join(directory, 'storage'), TEMPLATE_STORAGE_DIR: join(directory, 'templates'),
@@ -81,18 +86,21 @@ try {
   const { buildApp } = await import('../src/app.js');
   app = await buildApp();
   const password = randomBytes(24).toString('base64url');
+  const newPassword = randomBytes(24).toString('base64url');
   const passwordHash = await new PasswordHasherBcrypt().hash(password);
-  const accounts: Record<string, { id: string; email: string }> = {};
-  for (const [name, role] of [['owner', 'student'], ['viewer', 'student'], ['commenter', 'teacher'], ['editor', 'student'], ['admin', 'admin']] as const) {
+  const accounts: Record<string, { id: string; email: string; mustChangePassword: boolean }> = {};
+  for (const [name, role] of [['owner', 'student'], ['viewer', 'student'], ['commenter', 'teacher'], ['editor', 'student'], ['admin', 'admin'], ['forced', 'student']] as const) {
     const email = `browser-${name}@${role === 'student' ? 'e.tlu.edu.vn' : 'tlu.edu.vn'}`;
-    const user = await app.prisma.user.create({ data: { email, role, passwordHash } });
-    accounts[name] = { id: user.id, email };
+    const mustChangePassword = name === 'forced';
+    const user = await app.prisma.user.create({ data: { email, role, passwordHash, mustChangePassword } });
+    accounts[name] = { id: user.id, email, mustChangePassword };
   }
   const project = await app.prisma.project.create({ data: { title: 'QA chia sẻ và chat — dữ liệu tạm', category: 'other', ownerId: accounts.owner.id } });
   await app.prisma.projectCollaborationState.create({ data: { projectId: project.id } });
   await app.prisma.projectSettings.create({ data: { projectId: project.id, mainPath: 'main.typ' } });
   await app.prisma.file.create({ data: { projectId: project.id, path: 'main.typ', kind: 'typst',
     textContent: '= Kiểm thử cộng tác\n\nNội dung mẫu để kiểm tra chia sẻ, nhận xét và chỉnh sửa.\n' } });
+  realtimeControl = await installFixtureRealtimeControl(app.server, backend, metadata);
   await app.listen({ host: '127.0.0.1', port: 3031 });
 
   // Load this repository's Vite, retaining its real plugins/config and using an isolated optimizer cache.
@@ -102,7 +110,8 @@ try {
     server: { host: '127.0.0.1', port: 5180, strictPort: true, open: false } });
   vite = server;
   await server.listen();
-  await writeFile(sessionPath, JSON.stringify({ ...metadata, projectId: project.id, accounts, password,
+  await writeFile(sessionPath, JSON.stringify({ ...metadata, projectId: project.id, accounts, password, newPassword,
+    realtimeControl: { markerPath: realtimeControl.markerPath, statusPath: realtimeControl.statusPath, maxDurationMs: 120_000 },
     frontend: 'http://localhost:5180', memberFrontend: 'http://127.0.0.1:5180', api: 'http://127.0.0.1:3031' }, null, 2), { mode: 0o600 });
   console.log(`Browser fixture ready. Session metadata: ${sessionPath}. Stop marker: ${controlPath}`);
   await stop;
@@ -117,6 +126,7 @@ try {
   // Remove credentials first, even if a later server/database cleanup step fails.
   await attempt('credentials', () => removeFixtureCredentials(backend, metadata));
   await attempt('vite', async () => vite?.close());
+  await attempt('realtimeControl', async () => realtimeControl?.close());
   await attempt('app', async () => app?.close());
   if (created) {
     await attempt('database', () => {

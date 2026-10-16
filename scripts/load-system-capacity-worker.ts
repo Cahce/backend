@@ -3,6 +3,7 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
+import { getHeapStatistics } from 'node:v8';
 import pg from 'pg';
 import Fastify from 'fastify';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -58,11 +59,20 @@ function percentiles(values: number[]) {
   const q = (p: number) => sorted.length ? Number(sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)].toFixed(3)) : 0;
   return { count: sorted.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: q(1) };
 }
+// Process-level numbers only. External includes arrayBuffers; V8 malloced memory
+// is not all native memory, and RSS minus heap does not identify a leak.
+function memorySnapshot() {
+  const memory = process.memoryUsage(), heap = getHeapStatistics();
+  return { rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal,
+    externalBytes: memory.external, arrayBuffersBytes: memory.arrayBuffers,
+    v8PhysicalBytes: heap.total_physical_size, v8MallocedBytes: heap.malloced_memory,
+    v8PeakMallocedBytes: heap.peak_malloced_memory, heapLimitBytes: heap.heap_size_limit };
+}
 const sampler = setInterval(() => {
   if (!measuring || !pool) return;
   const now = performance.now(), cpu = process.cpuUsage(), elapsed = now - lastSample;
   samples.push({ elapsedMs: Math.round(now - start), sqlPerSecond: (sqlCount - lastSql) / elapsed * 1000,
-    rssBytes: process.memoryUsage().rss, heapUsedBytes: process.memoryUsage().heapUsed,
+    ...memorySnapshot(),
     poolTotal: pool.totalCount, poolIdle: pool.idleCount, poolWaiting: pool.waitingCount,
     cpuCorePercent: (cpu.user + cpu.system - lastCpu.user - lastCpu.system) / elapsed / 10 });
   lastSample = now; lastSql = sqlCount; lastCpu = cpu;
@@ -131,7 +141,8 @@ async function initialize(input: Init) {
   await app.register(healthRoutes);
   const files = new FileRepoPrisma(db), projects = new ProjectsContainer(db, files), projectRepo = new ProjectRepoPrisma(db);
   const discussion = new ProjectDiscussionUseCases(new PrismaDiscussionRepository(db));
-  const tickets = new RealtimeTickets(new ShareTokenCrypto(), new PrismaRealtimeSessionPolicy(db), new LocalRealtimeTicketStore());
+  const tickets = new RealtimeTickets(new ShareTokenCrypto(), new PrismaRealtimeSessionPolicy(db,
+    { connectionTimeoutMs: input.poolTimeoutMs }), new LocalRealtimeTicketStore());
   const compiler = buildCompileContainer(app);
   await app.register(async child => {
     await child.register(authRoutes, { prefix: '/auth' });
@@ -169,13 +180,13 @@ process.on('message', async (message: { id: number; command: string; input?: Ini
         instrumentationSnapshot: app.serviceMetrics ? await app.serviceMetrics.registry.metrics() : undefined,
         poolAcquisitionMs: percentiles(waits), eventLoopDelayMs: { p50: loop.percentile(50) / 1e6, p95: loop.percentile(95) / 1e6,
           p99: loop.percentile(99) / 1e6, max: loop.max / 1e6 }, cpuSeconds: (cpu.user + cpu.system) / 1e6,
-        cpuCorePercent: (cpu.user + cpu.system) / elapsedMs / 10, rssBytes: process.memoryUsage().rss, samples };
+        cpuCorePercent: (cpu.user + cpu.system) / elapsedMs / 10, ...memorySnapshot(), samples };
       measuring = false; loop.disable();
     } else if (message.command === 'close') {
       clearInterval(sampler); loop.disable(); await app.close(); await prisma?.$disconnect(); await pool?.end();
     } else throw new Error('Unknown harness command');
     process.send?.({ id: message.id, result });
-    if (message.command === 'close') process.disconnect();
+    if (message.command === 'close') process.disconnect?.();
   } catch (error) {
     // No raw SQL parameters, credentials, or connection strings cross into the report/log.
     process.send?.({ id: message.id, error: error instanceof Error ? `${error.name}: ${error.message.replace(/postgres(?:ql)?:\/\/\S+/g, '[database]')}` : 'Harness worker error' });

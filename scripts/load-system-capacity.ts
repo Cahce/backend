@@ -214,6 +214,8 @@ try {
   storageDir = await mkdtemp(join(tmpdir(), 'codex-load-'));
   const hashFiles = ['modules/projects/infra/CollaborationTransaction.ts', 'modules/projects/infra/sharing/PrismaSharingRepository.ts',
     'modules/project-discussion/infra/PrismaRealtimeSessionPolicy.ts', 'modules/project-discussion/delivery/ws/ProjectRealtime.ts',
+    'modules/project-discussion/application/ProjectDiscussionUseCases.ts', 'modules/project-discussion/domain/Ports.ts',
+    'modules/project-discussion/domain/RealtimePorts.ts',
     'modules/project-discussion/infra/PrismaDiscussionRepository.ts', 'modules/compile/infra/NodeTypstCompileService.ts', 'modules/compile/infra/InProcessCompileQueue.ts',
     'modules/auth/infra/PasswordHasherBcrypt.ts', 'modules/auth/application/PasswordWorkAdmission.ts',
     'modules/auth/domain/PasswordWorkUnavailable.ts', 'modules/auth/delivery/http/PasswordWorkHttp.ts',

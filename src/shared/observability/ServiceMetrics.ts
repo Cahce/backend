@@ -5,7 +5,8 @@ export interface PoolSnapshot { total: number; idle: number; waiting: number }
 export interface RedisSnapshot { ready: number; pending: number; attempts: number; completed: number; errors: number; timeouts: number; rejected: number }
 export interface RateLimitSnapshot { checks: number; admitted: number; limited: number; unavailable: number }
 export interface PasswordWorkSnapshot { admitted: number; rejected: number; expired: number; cancelled: number; completed: number; running: number; queued: number }
-export interface RealtimeSnapshot { connections: number; authenticated: number; accounts: number; rooms: number; queued: number; activeReplays: number }
+export interface RealtimeSnapshot { connections: number; authenticated: number; accounts: number; rooms: number; queued: number;
+  activeReplays: number; activeReplayRecipients?: number }
 export interface AuthSnapshot {
   checks: number; batches: number; rejectedCapacity: number; expiredChecks: number; databaseFailures: number;
   coalescedChecks: number; identitiesRead: number; outstanding: number; running: number; queued: number;
@@ -94,12 +95,13 @@ export class ServiceMetrics {
     }
   }
   bindRealtime(read: () => RealtimeSnapshot) {
-    const state = new Gauge({ name: 'tlu_realtime_state', help: 'Realtime state in this API process. Account counts are not cluster-unique.',
+    const state = new Gauge({ name: 'tlu_realtime_state', help: 'Realtime state in this API process. activeReplays counts room/page cohorts, activeReplayRecipients counts their recipients. Account counts are not cluster-unique.',
       labelNames: ['state'] as const, registers: [this.registry], collect: () => {
         const snapshot = read();
         for (const key of ['connections', 'authenticated', 'accounts', 'rooms', 'queued', 'activeReplays'] as const) {
           state.set({ state: key }, snapshot[key]);
         }
+        if (snapshot.activeReplayRecipients !== undefined) state.set({ state: 'activeReplayRecipients' }, snapshot.activeReplayRecipients);
       } });
   }
   bindRateLimit(read: () => RateLimitSnapshot) {

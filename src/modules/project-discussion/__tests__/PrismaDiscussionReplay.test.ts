@@ -3,7 +3,7 @@ import test from 'node:test';
 import { Prisma, type PrismaClient } from '../../../generated/prisma/index.js';
 import { ProjectDiscussionUseCases } from '../application/ProjectDiscussionUseCases.js';
 import { PrismaDiscussionRepository } from '../infra/PrismaDiscussionRepository.js';
-import type { CommentView, MessageView, ThreadView } from '../domain/Ports.js';
+import type { CommentView, MessageView, ThreadView, DiscussionEventPageResult } from '../domain/Ports.js';
 
 type EventRow = Prisma.ProjectEventGetPayload<{}>;
 type MessageRow = Prisma.ProjectChatMessageGetPayload<{}>;
@@ -44,12 +44,31 @@ function fixture(options: {
     $queryRaw: async (query: Prisma.Sql) => {
       if (query.sql.includes('FROM "Project" p')) {
         record('accessFacts', query);
+        if (query.sql.includes('wanted."userId"')) {
+          assert.equal(query.values.at(-1), 'project');
+          assert.match(query.sql, /g\."memberId" = m\.id AND g\."projectId" = p\.id/);
+          assert.match(query.sql, /l\."projectId" = p\.id/);
+          return query.values.slice(0, -1).map(value => {
+            const userId = String(value);
+            return { userId, ownerId: 'owner', ...(options.users?.[userId] ?? { isActive: true, mustChangePassword: false, role: 'student' }),
+              version: String(state?.accessVersion ?? 1n), memberStatus: options.blocked?.includes(userId) ? 'blocked' : 'active',
+              roleOverride: 'viewer', grants: [] };
+          });
+        }
         const userId = String(query.values[0]);
         assert.equal(query.values[1], userId);
         assert.equal(query.values[2], 'project');
         return [{ ownerId: 'owner', ...(options.users?.[userId] ?? { isActive: true, mustChangePassword: false, role: 'student' }),
           version: String(state?.accessVersion ?? 1n), memberStatus: options.blocked?.includes(userId) ? 'blocked' : 'active',
           roleOverride: 'viewer', grants: [] }];
+      }
+      if (query.sql.includes('"ProjectChatReadState"')) {
+        record('privateMarks', query);
+        assert.equal(query.values[0], 'project'); assert.equal(query.values.at(-1), 'project');
+        assert.match(query.sql, /m\."deletedAt" IS NULL/);
+        assert.match(query.sql, /m\."authorId" IS DISTINCT FROM wanted\."userId"/);
+        return query.values.slice(1, -1).map(userId => ({ userId, lastReadMessageSeq: userId === 'owner' ? '10' : '20',
+          unreadCount: userId === 'owner' ? 90 : 80 }));
       }
       record('roots', query);
       assert.match(query.sql, /CROSS JOIN LATERAL/);
@@ -109,7 +128,7 @@ function fixture(options: {
   const repository = new PrismaDiscussionRepository(prisma);
   // A replay that regresses to the mutation path must fail even if the fake DB supports its reads.
   repository.run = async () => { throw new Error('Replay must not acquire a mutation session'); };
-  return { uc: new ProjectDiscussionUseCases(repository), calls,
+  return { uc: new ProjectDiscussionUseCases(repository), repository, calls,
     count: (name: string) => calls.filter(c => c.method === name).length };
 }
 
@@ -128,6 +147,82 @@ test('replay batches 200 mixed events using the same bounded repository calls as
     return f.calls.length;
   };
   assert.equal(await callsFor(50), await callsFor(1));
+});
+
+function pageFor(results: DiscussionEventPageResult[], userId: string) {
+  const entry = results.find(result => result.userId === userId);
+  assert(entry && 'result' in entry, `Expected an allowed page for ${userId}`);
+  return entry.result;
+}
+
+test('a frozen 50-actor cohort hydrates a mixed page once and projects private read-state per actor', async () => {
+  const f = fixture({ events: [event(1, 'chat.message.created', 'm'), event(2, 'comment.thread.created', 't'),
+    event(3, 'comment.reply.created', 'c'), event(4, 'chat.read.changed', 'owner'),
+    event(5, 'chat.read.changed', 'viewer', 'viewer')], messages: [message('m')], threads: [thread('t')], comments: [comment('c', 't')] });
+  const actors = [owner, ...Array.from({ length: 49 }, (_, i) => ({ userId: i ? `viewer${i}` : 'viewer', role: 'student' as const }))];
+  const results = await f.uc.eventsBatch('project', actors, '0');
+  assert.equal(results.length, 50);
+  for (const method of ['transaction', 'accessFacts', 'state', 'events', 'messages', 'replies', 'threads', 'roots', 'privateMarks'])
+    assert.equal(f.count(method), 1, method);
+  assert.equal(f.count('mark'), 0); assert.equal(f.count('unread'), 0);
+  const a = pageFor(results, 'owner'), b = pageFor(results, 'viewer'), c = pageFor(results, 'viewer1');
+  assert.deepEqual(a.events.slice(3).map(e => e.data), [{ lastReadMessageSeq: '10', unreadCount: 90 }, {}]);
+  assert.deepEqual(b.events.slice(3).map(e => e.data), [{}, { lastReadMessageSeq: '20', unreadCount: 80 }]);
+  assert.deepEqual(c.events.slice(3).map(e => e.data), [{}, {}]);
+  assert.notStrictEqual(a.events, b.events); assert.notStrictEqual(a.events[0], b.events[0]);
+  assert(a.events.every(e => e.accessVersion === '7'));
+  assert.deepEqual(a.events.map(e => e.seq), ['1', '2', '3', '4', '5']);
+});
+
+test('one denied recipient does not poison cohort peers and all-denied cohorts skip payload reads', async () => {
+  const f = fixture({ events: [event(1, 'chat.message.created', 'm')], messages: [message('m')], blocked: ['blocked'],
+    users: { inactive: { isActive: false, mustChangePassword: false, role: 'student' },
+      reset: { isActive: true, mustChangePassword: true, role: 'student' } } });
+  const actors = [owner, ...['blocked', 'inactive', 'reset'].map(userId => ({ userId, role: 'admin' as const }))];
+  const results = await f.uc.eventsBatch('project', actors, '0');
+  assert.equal(pageFor(results, 'owner').events.length, 1);
+  for (const entry of results.slice(1)) { assert('error' in entry); assert.equal((entry.error as Error & { code: string }).code, 'PROJECT_ACCESS_DENIED'); }
+  await f.uc.eventsBatch('project', actors.slice(1), '0');
+  assert.equal(f.count('accessFacts'), 2); assert.equal(f.count('events'), 1); assert.equal(f.count('state'), 1);
+});
+
+test('cohort input is bounded before queries and duplicate actor tabs share a single projection', async () => {
+  const f = fixture();
+  assert.deepEqual(await f.uc.eventsBatch('project', [], '0'), []);
+  const results = await f.uc.eventsBatch('project', [owner, owner], '1000');
+  assert.equal(results.length, 1); assert.equal(f.count('accessFacts'), 1);
+  const tooMany = Array.from({ length: 51 }, () => owner);
+  await assert.rejects(f.uc.eventsBatch('project', tooMany, '0'), { code: 'VALIDATION_ERROR' });
+  assert.throws(() => f.repository.readEventsBatch('project', tooMany, '0', 100), { code: 'VALIDATION_ERROR' });
+  assert.equal(f.count('transaction'), 1);
+  await assert.rejects(f.uc.eventsBatch('project', [owner], '0', 201), { code: 'VALIDATION_ERROR' });
+  assert.equal(f.count('transaction'), 1);
+});
+
+test('cohorts never reuse fulfilled snapshots across deletion, account changes or future cursors', async () => {
+  const stored = message('m'), users = { owner: { isActive: true, mustChangePassword: false, role: 'student' as const } };
+  const f = fixture({ events: [event(1, 'chat.message.created', 'm')], messages: [stored], users });
+  const first = pageFor(await f.uc.eventsBatch('project', [owner], '0'), 'owner');
+  assert.equal((first.events[0].data as { message: MessageView }).message.body, 'message m');
+  stored.deletedAt = timestamp;
+  const second = pageFor(await f.uc.eventsBatch('project', [owner], '0'), 'owner');
+  assert.equal((second.events[0].data as { message: MessageView }).message.body, null);
+  assert.equal((first.events[0].data as { message: MessageView }).message.body, 'message m');
+  users.owner.isActive = false;
+  const [denied] = await f.uc.eventsBatch('project', [owner], '0');
+  assert('error' in denied); assert.equal(f.count('accessFacts'), 3); assert.equal(f.count('messages'), 2);
+  users.owner.isActive = true;
+  const [ahead] = await f.uc.eventsBatch('project', [owner], '1001');
+  assert('error' in ahead); assert.equal((ahead.error as Error & { code: string }).code, 'INVALID_CURSOR');
+});
+
+test('foreign read-state events neither load private marks nor disappear from a cohort cursor', async () => {
+  const f = fixture({ events: [event(1, 'chat.read.changed', 'other', 'other')], state: { lastEventSeq: 1n, accessVersion: 8n } });
+  const results = await f.uc.eventsBatch('project', [owner, { userId: 'viewer', role: 'student' }], '0');
+  for (const entry of results) {
+    assert('result' in entry); assert.deepEqual(entry.result.events[0].data, {}); assert.equal(entry.result.nextCursor, '1');
+  }
+  assert.equal(f.count('privateMarks'), 0); assert.equal(f.count('mark'), 0); assert.equal(f.count('unread'), 0);
 });
 
 test('replay keeps the root/cursor and a changed reply beyond the initial page with current thread state', async () => {

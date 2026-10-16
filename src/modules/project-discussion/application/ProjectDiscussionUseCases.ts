@@ -1,4 +1,5 @@
-import type { Anchor, DiscussionRepository, DiscussionTransaction } from '../domain/Ports.js';
+import { MAX_REPLAY_ACTORS, type Anchor, type DiscussionRepository, type DiscussionTransaction,
+  type DiscussionEventSnapshot, type DiscussionEventPage, type DiscussionEventPageResult } from '../domain/Ports.js';
 import type { ProjectActor } from '../../projects/domain/sharing/Ports.js';
 import { requireCondition } from '../../projects/domain/access/CollaborationErrors.js';
 
@@ -122,7 +123,24 @@ export class ProjectDiscussionUseCases {
     });
   }
   async events(projectId: string, actor: ProjectActor, since: string, limit = 100) {
-    const { access, highWatermark, events } = await this.repo.readEvents(projectId, actor, since, limit);
+    return this.eventPage(await this.repo.readEvents(projectId, actor, since, limit), since, limit);
+  }
+  async eventsBatch(projectId: string, actors: readonly ProjectActor[], since: string, limit = 100): Promise<DiscussionEventPageResult[]> {
+    requireCondition(actors.length <= MAX_REPLAY_ACTORS, 'VALIDATION_ERROR', 'Nhóm đọc sự kiện quá lớn', 400);
+    const distinct = [...new Map(actors.map(actor => [actor.userId, actor])).values()];
+    if (!distinct.length) return [];
+    const snapshots = this.repo.readEventsBatch ? await this.repo.readEventsBatch(projectId, distinct, since, limit) :
+      await Promise.all(distinct.map(async actor => {
+        try { return { userId: actor.userId, snapshot: await this.repo.readEvents(projectId, actor, since, limit) }; }
+        catch (error) { return { userId: actor.userId, error: error instanceof Error ? error : new Error('Replay unavailable') }; }
+      }));
+    return snapshots.map(entry => {
+      if ('error' in entry) return entry;
+      try { return { userId: entry.userId, result: this.eventPage(entry.snapshot, since, limit) }; }
+      catch (error) { return { userId: entry.userId, error: error instanceof Error ? error : new Error('Replay unavailable') }; }
+    });
+  }
+  private eventPage({ access, highWatermark, events }: DiscussionEventSnapshot, since: string, limit: number): DiscussionEventPage {
     requireCondition(access.canReadChat, 'PROJECT_ACCESS_DENIED', 'Bạn không có quyền đọc thảo luận của dự án');
     requireCondition(BigInt(since) <= BigInt(highWatermark), 'INVALID_CURSOR', 'Mốc sự kiện không hợp lệ', 400);
     return { events, nextCursor: events.length === limit ? events.at(-1)!.seq : highWatermark,

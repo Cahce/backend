@@ -311,7 +311,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     const ticketStore = app.sharedRedis
         ? new RedisRealtimeTicketStore(app.sharedRedis, app.config.sharedState.namespace, app.config.sharedState.keySecret!)
         : new LocalRealtimeTicketStore();
-    const tickets = new RealtimeTickets(new ShareTokenCrypto(), new PrismaRealtimeSessionPolicy(app.prisma), ticketStore);
+    const tickets = new RealtimeTickets(new ShareTokenCrypto(), new PrismaRealtimeSessionPolicy(app.prisma,
+        { connectionTimeoutMs: app.config.db.connectionTimeoutMs }), ticketStore);
     const eventWakeSource = new PostgresProjectEventWakeSource({ connectionString: app.config.db.directUrl }, message => app.log.warn(message));
     const leaseStore = app.sharedRedis
         ? new RedisRealtimeSocketLeaseStore(app.sharedRedis, app.config.sharedState.namespace, app.config.sharedState.keySecret!, app.config.collaboration.maxSocketsGlobal)

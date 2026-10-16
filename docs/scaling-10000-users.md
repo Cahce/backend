@@ -5,7 +5,15 @@ Ngày 2026-10-08. **Đang triển khai, chưa chứng minh tải10k.** Đợt P0
 - [Requirements](../../.kiro/specs/system-capacity-10000-users/requirements.md): ba profile tải, SLO, backward compatibility.
 - [Design](../../.kiro/specs/system-capacity-10000-users/design.md): phân tích đủ database/application/cache/infrastructure/async/monitoring/load, code wiring, connection budget, trade-offs và rollout.
 - [Tasks](../../.kiro/specs/system-capacity-10000-users/tasks.md): thứ tự PR, affected files, acceptance và kiểm chứng.
-- [Baseline100](../../.kiro/reports/system-capacity/100-users-capacity.md): số đo thật gần nhất, không thay cho benchmark10k.
+- [Baseline100](../../.kiro/reports/system-capacity/100-users-capacity.md): số đo lịch sử; không coi là source hiện tại hoặc benchmark10k.
+- [Realtime memory/recovery](../../.kiro/reports/system-capacity/realtime-memory-and-recovery-2026-10-15.md): diagnostic mới100users/20projects300s,30.004deliveries/15PDF, memorytimeline và giới hạn.
+- [Frontend read-state backpressure](../../.kiro/reports/system-capacity/chat-read-sync-backpressure-2026-10-15.md): cadence2s+jitter, latest intent và bounded retry/Retry-After. Synthetic600events/60s tạo30requests trong window,31sau drain; chưa phải browser hot-room benchmark và không thay các raw baseline trước.
+
+## Local memory diagnostic
+
+`node --import tsx scripts/load-system-capacity.ts --label realtime-memory-diagnostic-300s --users 100 --projects 20 --seconds 300 --file-bytes 16384 --pool-max 10 --pool-timeout-ms 5000 --instrumentation true` chạy actual module routes/nativeWS/Typst trong scratch schema và temp storage riêng; không phải fullbuildApp/proxy/Redis/pooler/staging. Không chạy build/test cùng benchmark; nguồn đo/guard/cleanup nằm trong report mới.
+
+Worker sample mỗi giây thêm HeapTotal/External/ArrayBuffer/V8physical/malloced/heaplimit bên cạnh RSS/HeapUsed. External đã gồmArrayBuffer; V8malloced không phải toànnative, peak tính từ lúc process chạy, finalstats sau percentile/metrics khác mẫu định kỳ cuối. Exact pool-wait samplearray và instrumentation cũng giữ memory trong process. Không forceGC/heapdump hoặc suy leak từ một endpoint RSS; phân tích từng cửa sổ, loại drain khỏi offeredload, rồi mới làm retained-object/native allocation/soak dài. Đây là diagnostics additive, không đổi production metric/endpoint hoặc cache authorization.
 
 ## Những điểm thay đổi ưu tiên
 
@@ -39,7 +47,7 @@ Config **đã được wire** trong đợt P0:
 
 `GET /health` giữ contract cũ. `/health/live` trả200 không query DB; `/health/ready` trả200/503 theo probe primary chạy nền mỗi1s, timeout500ms, không có query song song do scrape dồn. Khi drain, request nghiệp vụ mới và WS Upgrade trả503 + Retry-After1. WS hiện hữu đóng1012, chờ tối đa2s rồi terminate. Nếu deadline shutdown vượt quá, process thoát1 để supervisor thay thế.
 
-Auth overload/dependency lỗi trả503 `AUTH_UNAVAILABLE` + Retry-After1; inactive401 `ACCOUNT_INACTIVE`, revoked401 `TOKEN_REVOKED`, bắt đổi password403 `PASSWORD_CHANGE_REQUIRED`. Login/refresh/me DTO giữ nguyên. `/auth/me`, `/change-password`, `/logout` vẫn dùng được khi chỉ cần đổi password. Frontend tự logout ở401; lỗi503 không tự phát lại write và local draft tiếp tục do editor giữ. Thay đổi role/flag có hiệu lực trên request mới; client đang mở trang có thể cần reload/login lại để cập nhật điều hướng.
+Auth overload/dependency lỗi trả503 `AUTH_UNAVAILABLE` + Retry-After1; inactive401 `ACCOUNT_INACTIVE`, revoked401 `TOKEN_REVOKED`, bắt đổi password403 `PASSWORD_CHANGE_REQUIRED`. Login/refresh/me DTO giữ nguyên. `/auth/me`, `/change-password`, `/logout` vẫn dùng được khi chỉ cần đổi password. Frontend thử refresh ởTOKEN_EXPIRED trước khi logout; không thêm generic write retry ở503 và local draft tiếp tục do editor giữ. Riêng read-state GET/monotonic PUT có bounded retry3/backoff/Retry-After như report trên; mutation khác giữ chính sách hiện có. Thay đổi role/flag có hiệu lực trên request mới; client đang mở trang có thể cần reload/login lại để cập nhật điều hướng.
 
 - [pgbouncer.ini](examples/scaling-10000/pgbouncer.ini): transaction pooling, prepared statement tracking, TLS và budget.
 - [nginx.conf](examples/scaling-10000/nginx.conf): LB2upstreams và WS. Đây là full standalone config; không copy cả file vào frontend `conf.d` vì file đó nằm trong http scope.

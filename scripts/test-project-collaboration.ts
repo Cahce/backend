@@ -45,11 +45,107 @@ import { PrismaCompileAccessRepository } from '../src/modules/compile/infra/Pris
 import { PrismaProjectAccessRepository } from '../src/modules/projects/infra/PrismaProjectAccessRepository.js';
 import { UploadBinaryFileUseCase } from '../src/modules/project-files/application/UploadBinaryFileUseCase.js';
 import type { BlobStorage } from '../src/shared/storage/BlobStorage.js';
+import type { CommentView, MessageView, ThreadView } from '../src/modules/project-discussion/domain/Ports.js';
+import type { ProjectActor } from '../src/modules/projects/domain/sharing/Ports.js';
+import type { ProjectEventWakeSource } from '../src/modules/project-discussion/domain/RealtimePorts.js';
+import { ServiceMetrics } from '../src/shared/observability/ServiceMetrics.js';
+
+type ReplayPage = Awaited<ReturnType<ProjectDiscussionUseCases['events']>>;
+type ReplayFrame = Partial<ReplayPage> & { type: string };
+async function connectRealtime(url: string, ticket: string, since: string, sockets: Set<WebSocket>) {
+  const socket = new WebSocket(url, { origin: 'http://collaboration.test' });
+  sockets.add(socket);
+  const frames: ReplayFrame[] = [];
+  let closeCode: number | undefined;
+  socket.on('message', data => frames.push(JSON.parse(data.toString())));
+  socket.on('close', code => { closeCode = code; });
+  await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+  socket.send(JSON.stringify({ type: 'authenticate', ticket, since }));
+  await waitUntil(() => frames.some(frame => frame.type === 'ready'));
+  return { socket, frames, closeCode: () => closeCode,
+    sequences: () => frames.flatMap(frame => frame.events?.map(event => event.seq) ?? []) };
+}
+
+class ControlledProjectWakeSource implements ProjectEventWakeSource {
+  private listener?: (projectId: string) => void;
+  async start() {}
+  async stop() { this.listener = undefined; }
+  subscribe(listener: (projectId: string) => void) { this.listener = listener; return () => { this.listener = undefined; }; }
+  wake(projectId: string) { this.listener?.(projectId); }
+}
 
 async function waitUntil(condition: () => boolean, timeout = 5000) {
   const deadline = Date.now() + timeout;
   while (!condition() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
   assert(condition(), `Condition was not met within ${timeout}ms`);
+}
+
+async function waitForDatabase<T>(read: () => Promise<T>, condition: (value: T) => boolean, timeout = 5000): Promise<T> {
+  const deadline = performance.now() + timeout;
+  let value = await read();
+  while (!condition(value) && performance.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 20));
+    value = await read();
+  }
+  assert(condition(value), `Database condition was not met within ${timeout}ms`);
+  return value;
+}
+
+function policyTimeoutFixture(schema: string, observer: pg.Client) {
+  assert.match(schema, /^codex_collab_[a-f0-9]{16}$/);
+  const applicationName = `${schema}_policy_timeout_${randomBytes(4).toString('hex')}`;
+  // A distinct session default proves that SET LOCAL never leaks back into the pool.
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1, connectionTimeoutMillis: 5000,
+    options: `-c search_path=${schema} -c statement_timeout=7000`, application_name: applicationName });
+  const prisma = new PrismaClient({ adapter: new PrismaPg(pool, { schema }) });
+  const policy = new PrismaRealtimeSessionPolicy(prisma, { connectionTimeoutMs: 5000 });
+  const locker = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000,
+    options: `-c search_path=${schema}`, application_name: `${schema}_policy_lock` });
+  const table = `"${schema}"."User"`;
+  let lockerPid: number | undefined, connected = false;
+  return { policy,
+    settings: () => prisma.$queryRaw<Array<{ timeout: string; pid: number }>>`
+      SELECT current_setting('statement_timeout') AS timeout, pg_backend_pid() AS pid`,
+    async lock() {
+      await locker.connect();
+      connected = true;
+      await locker.query('BEGIN');
+      await locker.query("SET LOCAL lock_timeout = '3s'");
+      await locker.query("SET LOCAL idle_in_transaction_session_timeout = '30s'");
+      lockerPid = (await locker.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      // Only this generated, fully qualified table is ever locked.
+      await locker.query(`LOCK TABLE ${table} IN ACCESS EXCLUSIVE MODE`);
+    },
+    async unlock() { if (connected) await locker.query('ROLLBACK'); },
+    async isHeld() {
+      const result = await observer.query<{ held: boolean }>(`
+        SELECT EXISTS(SELECT 1 FROM pg_locks WHERE pid = $1 AND relation = to_regclass($2)
+          AND mode = 'AccessExclusiveLock' AND granted) AS held`, [lockerPid, table]);
+      return result.rows[0].held;
+    },
+    async waiting() {
+      const result = await observer.query<{ pid: number; queryStartedAt: string }>(`
+        SELECT DISTINCT a.pid, a.query_start::text AS "queryStartedAt"
+        FROM pg_stat_activity a JOIN pg_locks l ON l.pid = a.pid
+        WHERE a.application_name = $1 AND l.relation = to_regclass($2)
+          AND l.mode = 'AccessShareLock' AND NOT l.granted
+          AND $3 = ANY(pg_blocking_pids(a.pid))`, [applicationName, table, lockerPid]);
+      return result.rows;
+    },
+    async activeWork() {
+      return (await observer.query<{ active: number }>(`
+        SELECT count(*)::integer AS active FROM pg_stat_activity
+        WHERE application_name = $1 AND state IN ('active', 'idle in transaction', 'idle in transaction (aborted)')`,
+      [applicationName])).rows[0].active;
+    },
+    async close(pending: readonly Promise<unknown>[] = []) {
+      // Unlock before draining; a failed assertion must not leave a blocked backend behind.
+      if (connected) await locker.query('ROLLBACK').catch(() => {});
+      await Promise.allSettled(pending);
+      try { await prisma.$disconnect(); }
+      finally { await Promise.all([pool.end(), locker.end()]); }
+    },
+  };
 }
 
 // OpenAPI 3.0 uses boolean exclusive bounds; Ajv 8 consumes JSON Schema Draft 7.
@@ -77,11 +173,16 @@ test('Project collaboration: additive migration, PostgreSQL, HTTP and native Web
   const admin = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, options: `-c search_path=${schema}`, max: 10 });
   const prisma = new PrismaClient({ adapter: new PrismaPg(pool, { schema }), log: [{ emit: 'event', level: 'query' }] });
-  let eventReads = 0, replayReads = 0, queryCount = 0;
+  let eventReads = 0, replayHeadReads = 0, queryCount = 0;
+  const queryObservers = new Set<(query: string) => void>();
   prisma.$on('query', event => {
     queryCount++;
-    if (event.query.includes('SET TRANSACTION READ ONLY')) replayReads++;
+    // Fresh authorization also uses READ ONLY transactions. Count replay's actual
+    // head lookup rather than mistaking an authorization transaction for replay.
+    if (/^SELECT\b/.test(event.query) && /\bFROM\s+(?:"[^"]+"\.)?"ProjectCollaborationState"(?:\s|$)/.test(event.query) &&
+      !/\bFOR\s+UPDATE\b/.test(event.query)) replayHeadReads++;
     if (/^SELECT\b/.test(event.query) && event.query.includes('"ProjectEvent"')) eventReads++;
+    for (const observe of queryObservers) observe(event.query);
   });
   const wakeSource = new PostgresProjectEventWakeSource({ connectionString: process.env.DATABASE_URL,
     options: `-c search_path=${schema}`, application_name: `${schema}_wake` });
@@ -425,6 +526,352 @@ test('Project collaboration: additive migration, PostgreSQL, HTTP and native Web
       assert(reply.comment.body.startsWith('Reply ')); assert(reply.thread.commentsNextCursor);
       t.diagnostic(`Actual SQL queries for mixed replay: 20 events = ${smallQueries}; 100 events = ${largeQueries}.`);
     });
+    await t.test('batch replay isolates private read-state, failures and cursor results on real PostgreSQL', async () => {
+      const project = await prisma.project.create({ data: { title: 'Batch private-state fixture', category: 'other', ownerId: owner.userId } });
+      const recipients = await Promise.all(['a', 'b', 'oversight'].map(async label => {
+        const account = await prisma.user.create({ data: { email: `batch-state-${label}@example.invalid`,
+          passwordHash: randomBytes(32).toString('hex'), role: label === 'oversight' ? 'admin' : 'student' } });
+        return { userId: account.id, role: 'student' as const };
+      }));
+      const [a, b, oversight] = recipients;
+      await prisma.projectMember.createMany({ data: [a, b].map(actor => ({ projectId: project.id, userId: actor.userId, roleOverride: 'viewer' })) });
+      const first = await discussion.send(project.id, owner, randomUUID(), 'Owner private-state fixture');
+      const second = await discussion.send(project.id, a, randomUUID(), 'Recipient a message');
+      await discussion.send(project.id, b, randomUUID(), 'Recipient b message');
+      const expected = new Map([
+        [owner.userId, await discussion.readState(project.id, owner, first.message.seq)],
+        [a.userId, await discussion.readState(project.id, a, first.message.seq)],
+        [b.userId, await discussion.readState(project.id, b, second.message.seq)],
+      ]);
+      assert.deepEqual([...expected.values()].map(value => value.unreadCount), [2, 1, 0]);
+      const requested = [owner, a, b, oversight, owner];
+      const batch = await discussion.eventsBatch(project.id, requested, '0');
+      assert.equal(batch.length, 4, 'Repeated sockets of the same user share one projection');
+      for (const actor of [owner, a, b]) {
+        const entry = batch.find(value => value.userId === actor.userId)!;
+        assert('result' in entry, 'An oversight denial must not reject room peers');
+        assert.deepEqual(entry.result, await discussion.events(project.id, actor, '0'));
+        const readEvents = entry.result.events.filter(event => event.type === 'chat.read.changed');
+        assert.equal(readEvents.length, 3, 'Foreign private events still preserve the sequence/cursor contract');
+        assert.deepEqual(readEvents.map(event => event.data), [owner, a, b].map(who => who.userId === actor.userId ? expected.get(who.userId) : {}));
+        assert(readEvents.every(event => !('actorId' in event)), 'Internal routing identifiers must not enter EventView');
+      }
+      const denied = batch.find(value => value.userId === oversight.userId)!;
+      assert('error' in denied); assert.equal((denied.error as { code?: string }).code, 'PROJECT_ACCESS_DENIED');
+      const page = await discussion.eventsBatch(project.id, [owner, b], first.message.seq, 1);
+      for (const entry of page) {
+        assert('result' in entry);
+        assert.deepEqual(entry.result.events.map(event => event.seq), [second.message.seq]);
+        assert.equal(entry.result.nextCursor, second.message.seq); assert.equal(entry.result.hasMore, true);
+      }
+      const head = (await discussion.events(project.id, owner, '0')).highWatermark;
+      const upToDate = await discussion.eventsBatch(project.id, [owner, b], head);
+      assert(upToDate.every(entry => 'result' in entry && entry.result.events.length === 0 && entry.result.nextCursor === head));
+      const ahead = await discussion.eventsBatch(project.id, [owner, b], (BigInt(head) + 1n).toString());
+      assert(ahead.every(entry => 'error' in entry && (entry.error as { code?: string }).code === 'INVALID_CURSOR'));
+      const member = await prisma.projectMember.findUniqueOrThrow({ where: { projectId_userId: { projectId: project.id, userId: a.userId } } });
+      await sharing.changeMember(project.id, member.id, owner, {}, true);
+      const afterBlock = await discussion.eventsBatch(project.id, [a, b, owner], '0');
+      assert('error' in afterBlock.find(entry => entry.userId === a.userId)!);
+      const version = (await sharing.access(project.id, owner)).version;
+      for (const actor of [owner, b]) {
+        const entry = afterBlock.find(value => value.userId === actor.userId)!;
+        assert('result' in entry); assert(entry.result.events.every(event => event.accessVersion === version));
+      }
+      await prisma.user.update({ where: { id: b.userId }, data: { mustChangePassword: true } });
+      try {
+        const reset = await discussion.eventsBatch(project.id, [owner, b], '0');
+        assert('result' in reset.find(entry => entry.userId === owner.userId)!);
+        assert('error' in reset.find(entry => entry.userId === b.userId)!);
+      } finally { await prisma.user.update({ where: { id: b.userId }, data: { mustChangePassword: false } }); }
+    });
+    await t.test('separate batch snapshots hydrate current author, comment revision, file anchor and tombstones', async () => {
+      const project = await prisma.project.create({ data: { title: 'Fresh batch hydration fixture', category: 'other', ownerId: owner.userId } });
+      const account = await prisma.user.create({ data: { email: 'batch-deleted-author@example.invalid', role: 'student', passwordHash: randomBytes(32).toString('hex') } });
+      const author: ProjectActor = { userId: account.id, role: 'student' };
+      await prisma.projectMember.create({ data: { projectId: project.id, userId: author.userId, roleOverride: 'commenter' } });
+      const source = await fileRepo.create({ actorId: owner.userId, projectId: project.id, path: 'batch.typ', kind: FileKind.Typst,
+        content: 'A😀B\n', storageMode: 'inline', sizeBytes: 7, sha256: 'fixture-only' });
+      assert.equal(typeof source.revision, 'number'); assert(source.revision !== undefined);
+      const message = await discussion.send(project.id, author, randomUUID(), 'Batch retained message');
+      const thread = await discussion.createThread(project.id, author, randomUUID(), 'Batch private root body',
+        { kind: 'range', fileId: source.id, baseRevision: source.revision, from: 1, to: 3, quote: '😀' });
+      const reply = await discussion.reply(project.id, author, thread.id, randomUUID(), 'Batch old reply body');
+      const read = async () => {
+        const entry = (await discussion.eventsBatch(project.id, [owner], '0'))[0]; assert('result' in entry); return entry.result;
+      };
+      const before = await read();
+      assert.equal((before.events.find(event => event.type === 'comment.reply.created')!.data as { comment: CommentView }).comment.revision, 1);
+      await prisma.user.delete({ where: { id: author.userId } });
+      const afterAuthor = await discussion.eventsBatch(project.id, [owner, author], '0');
+      assert('error' in afterAuthor.find(entry => entry.userId === author.userId)!);
+      const surviving = afterAuthor.find(entry => entry.userId === owner.userId)!; assert('result' in surviving);
+      const retained = (surviving.result.events.find(event => event.type === 'chat.message.created')!.data as { message: MessageView }).message;
+      assert.equal(retained.author.id, null); assert.equal(retained.author.displayName, 'Người dùng đã xóa'); assert.equal(retained.body, 'Batch retained message');
+      const edited = await discussion.changeComment(project.id, owner, reply.id, reply.revision, 'Batch edited reply body');
+      const renamed = await fileRepo.rename({ actorId: owner.userId, projectId: project.id, fileId: source.id,
+        baseRevision: source.revision, oldPath: source.path, newPath: 'batch-renamed.typ' });
+      const current = await read();
+      const updated = current.events.find(event => event.type === 'comment.reply.created')!.data as { comment: CommentView; thread: ThreadView };
+      assert.equal(updated.comment.body, 'Batch edited reply body'); assert.equal(updated.comment.revision, edited.revision);
+      assert.equal(updated.comment.author.id, null); assert.equal(updated.thread.createdById, null);
+      assert.equal(updated.thread.anchorStatus, 'stale'); assert.equal(updated.thread.filePath, 'batch-renamed.typ');
+      assert.equal(updated.thread.revision, 3, 'Thread revision includes reply creation and editing');
+      await fileRepo.delete(project.id, renamed.path, { actorId: owner.userId, fileId: renamed.id, baseRevision: renamed.revision });
+      const missing = (await read()).events.find(event => event.type === 'comment.thread.created')!.data as { thread: ThreadView };
+      assert.equal(missing.thread.anchorStatus, 'file_deleted');
+      const latestThread = (await discussion.threads(project.id, owner)).threads.find(value => value.id === thread.id)!;
+      await discussion.changeThread(project.id, owner, thread.id, latestThread.revision, undefined, true);
+      await discussion.deleteMessage(project.id, owner, message.message.id);
+      const final = await read();
+      const tombstoneMessage = (final.events.find(event => event.type === 'chat.message.created')!.data as { message: MessageView }).message;
+      assert.equal(tombstoneMessage.body, null); assert(tombstoneMessage.deletedAt);
+      const tombstone = final.events.find(event => event.type === 'comment.reply.created')!.data as { comment: CommentView; thread: ThreadView };
+      assert.equal(tombstone.comment.body, null); assert(tombstone.comment.deletedAt);
+      assert.deepEqual(tombstone.thread.anchor, { kind: 'project' }); assert.equal(tombstone.thread.filePath, null);
+      assert(tombstone.thread.comments.every(comment => comment.body === null && comment.deletedAt));
+      assert(!JSON.stringify(final).includes('Batch private root body')); assert(!JSON.stringify(final).includes('Batch edited reply body'));
+      assert.equal((before.events.find(event => event.type === 'chat.message.created')!.data as { message: MessageView }).message.body,
+        'Batch retained message', 'A later read must not mutate an already returned snapshot');
+    });
+    await t.test('100 native room recipients require two current payload hydrations per committed page', { timeout: 20_000 }, async () => {
+      const project = await prisma.project.create({ data: { title: 'Hot room cohort fixture', category: 'other', ownerId: owner.userId } });
+      const people: ProjectActor[] = Array.from({ length: 100 }, () => ({ userId: randomUUID(), role: 'student' }));
+      await prisma.user.createMany({ data: people.map((person, index) => ({ id: person.userId,
+        email: `cohort-hot-${index}@example.invalid`, role: 'student', passwordHash: randomBytes(32).toString('hex') })) });
+      await prisma.projectMember.createMany({ data: people.map(person => ({ projectId: project.id, userId: person.userId, roleOverride: 'viewer' })) });
+      const initial = await discussion.send(project.id, owner, randomUUID(), 'Hot room baseline');
+      const issued = await Promise.all(people.map(actor => tickets.create({ projectId: project.id, actor, jti: randomUUID(), expiresAt: Date.now() + 60_000 })));
+      const server = Fastify(), controlledWake = new ControlledProjectWakeSource();
+      const sockets = new Set<WebSocket>(), queries: string[] = [], validated = new Set<string>();
+      const metrics = new ServiceMetrics(); server.decorate('serviceMetrics', metrics);
+      let measuring = false, held = 0, release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      const observe = (query: string) => { queries.push(query); };
+      registerProjectRealtime(server, { consume: tickets.consume.bind(tickets), validate: async session => {
+        const valid = await tickets.validate(session); validated.add(session.actor.userId); return valid;
+      } }, { events: discussion.events.bind(discussion), eventsBatch: async (...args) => {
+        const result = await discussion.eventsBatch(...args);
+        if (measuring) { held++; await gate; }
+        return result;
+      } }, ['http://collaboration.test'],
+      new RealtimeSocketLeases(new LocalRealtimeSocketLeaseStore(), () => randomBytes(16).toString('hex')), controlledWake);
+      try {
+        await server.listen({ host: '127.0.0.1', port: 0 });
+        const location = server.server.address(); assert(location && typeof location !== 'string');
+        const url = `ws://127.0.0.1:${location.port}/api/v1/projects/${project.id}/realtime`;
+        const clients = await Promise.all(issued.map(ticket => connectRealtime(url, ticket.ticket, initial.message.seq, sockets)));
+        // All 100 sockets must finish their empty initial replay before counting the next commit.
+        // The initial handshake itself is deliberately not used as a deterministic cohort benchmark.
+        await waitUntil(() => validated.size === people.length);
+        measuring = true;
+        queryObservers.add(observe);
+        const sent = await discussionRepo.run(project.id, people[0], async tx => {
+          const message = await tx.send(randomUUID(), 'Hot room committed delivery');
+          await tx.readState(message.seq);
+          return message;
+        });
+        const head = (await prisma.projectCollaborationState.findUniqueOrThrow({ where: { projectId: project.id } })).lastEventSeq.toString();
+        controlledWake.wake(project.id);
+        await waitUntil(() => held === 2);
+        const duringReplay = await metrics.registry.metrics();
+        assert.match(duringReplay, /tlu_realtime_state\{state="activeReplays"\} 2\b/);
+        assert.match(duringReplay, /tlu_realtime_state\{state="activeReplayRecipients"\} 100\b/);
+        for (const person of people) assert(!duringReplay.includes(person.userId), 'Metrics must not label recipients');
+        assert(!duringReplay.includes(project.id), 'Metrics must not label rooms');
+        release();
+        await waitUntil(() => clients.every(client => client.sequences().includes(head)));
+        queryObservers.delete(observe);
+        const eventQueries = queries.filter(query => /^SELECT\b/.test(query) && query.includes('"ProjectEvent"'));
+        const messageHydrations = queries.filter(query => /^SELECT\b/.test(query) && query.includes('"ProjectChatMessage"') && !/\bCOUNT\s*\(/i.test(query));
+        assert.equal(eventQueries.length, 2, '100 recipients at the same cursor must scan two frozen cohorts of at most 50');
+        assert.equal(messageHydrations.length, 2, 'Payload hydration must follow cohort count instead of recipient count');
+        for (const [index, client] of clients.entries()) {
+          assert.deepEqual(client.sequences(), [sent.seq, head]);
+          const stateEvent = client.frames.flatMap(frame => frame.events ?? []).find(event => event.type === 'chat.read.changed')!;
+          assert.deepEqual(stateEvent.data, index === 0 ? { lastReadMessageSeq: sent.seq, unreadCount: 0 } : {},
+            'Sharing hydration must not share the sender private read-state with the other 99 native recipients');
+        }
+        t.diagnostic(`Actual hot-room SQL: recipients=${clients.length}; event scans=${eventQueries.length}; message hydrations=${messageHydrations.length}`);
+      } finally { release(); queryObservers.delete(observe); for (const socket of sockets) socket.terminate(); await server.close(); metrics.close(); }
+    });
+    await t.test('native room replay keeps distinct bigint cursors and rejects only the ahead-of-head socket', async () => {
+      const project = await prisma.project.create({ data: { title: 'Mixed bigint cursor fixture', category: 'other', ownerId: owner.userId } });
+      await discussion.send(project.id, owner, randomUUID(), 'Bigint cursor initial');
+      const base = 9007199254740993n;
+      await prisma.projectCollaborationState.update({ where: { projectId: project.id }, data: { lastEventSeq: base } });
+      const sent = await discussionRepo.run(project.id, owner, async tx => {
+        const messages: MessageView[] = [];
+        for (let index = 0; index < 3; index++) messages.push(await tx.send(randomUUID(), `Bigint cohort message ${index}`));
+        return messages;
+      });
+      const issued = await Promise.all(Array.from({ length: 4 }, () => tickets.create({ projectId: project.id, actor: owner,
+        jti: randomUUID(), expiresAt: Date.now() + 60_000 })));
+      const cursors = [base.toString(), sent[1].seq, sent[2].seq, (BigInt(sent[2].seq) + 1n).toString()];
+      const sockets = new Set<WebSocket>();
+      try {
+        const clients = await Promise.all(issued.map((ticket, index) => connectRealtime(
+          `ws://127.0.0.1:${address.port}/api/v1/projects/${project.id}/realtime`, ticket.ticket, cursors[index], sockets)));
+        await waitUntil(() => clients[0].sequences().length === 3 && clients[1].sequences().length === 1 && clients[3].closeCode() === 4403);
+        assert.deepEqual(clients[0].sequences(), sent.map(message => message.seq));
+        assert.deepEqual(clients[1].sequences(), [sent[2].seq]);
+        assert.deepEqual(clients[2].sequences(), []); assert.equal(clients[2].socket.readyState, WebSocket.OPEN);
+        assert.deepEqual(clients[3].sequences(), []);
+        assert.equal(clients[0].frames.find(frame => frame.type === 'events')!.highWatermark, sent[2].seq);
+        assert.equal(clients[1].frames.find(frame => frame.type === 'events')!.nextCursor, sent[2].seq);
+      } finally { for (const socket of sockets) socket.terminate(); }
+    });
+    await t.test('post-snapshot revoke, lease loss and socket close cannot leak a grouped native replay to invalid peers', { timeout: 15_000 }, async () => {
+      const project = await prisma.project.create({ data: { title: 'Grouped send barriers fixture', category: 'other', ownerId: owner.userId } });
+      const peers = await Promise.all(['revoked', 'lost-lease', 'closed'].map(async label => {
+        const account = await prisma.user.create({ data: { email: `cohort-barrier-${label}@example.invalid`,
+          role: 'student', passwordHash: randomBytes(32).toString('hex') } });
+        return { userId: account.id, role: 'student' as const };
+      }));
+      await prisma.projectMember.createMany({ data: peers.map(actor => ({ projectId: project.id, userId: actor.userId, roleOverride: 'viewer' })) });
+      const baseline = await discussion.send(project.id, owner, randomUUID(), 'Send barrier baseline');
+      const server = Fastify(), controlledWake = new ControlledProjectWakeSource(), store = new LocalRealtimeSocketLeaseStore();
+      const droppedUsers = new Set<string>(), sockets = new Set<WebSocket>(), warmed = new Set<string>();
+      let armed = false, release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      const heldCohorts: string[][] = [];
+      const leases = new RealtimeSocketLeases({ acquire: (lease, ttl) => store.acquire(lease, ttl),
+        renew: (held, ttl) => store.renew(held.filter(lease => !droppedUsers.has(lease.userId)), ttl), release: lease => store.release(lease) },
+      () => randomBytes(16).toString('hex'), { ttlMs: 1000, renewEveryMs: 50, sweepMs: 10 });
+      registerProjectRealtime(server, tickets, {
+        events: discussion.events.bind(discussion),
+        eventsBatch: async (id, actors, since, limit) => {
+          const result = await discussion.eventsBatch(id, actors, since, limit);
+          if (armed) { heldCohorts.push(actors.map(actor => actor.userId)); await gate; }
+          else for (const actor of actors) warmed.add(actor.userId);
+          return result;
+        },
+      }, ['http://collaboration.test'], leases, controlledWake);
+      try {
+        await server.listen({ host: '127.0.0.1', port: 0 });
+        const location = server.server.address(); assert(location && typeof location !== 'string');
+        const selected = [owner, ...peers];
+        const issued = await Promise.all(selected.map(actor => tickets.create({ projectId: project.id, actor, jti: randomUUID(), expiresAt: Date.now() + 60_000 })));
+        const clients = await Promise.all(issued.map(ticket => connectRealtime(`ws://127.0.0.1:${location.port}/api/v1/projects/${project.id}/realtime`, ticket.ticket, baseline.message.seq, sockets)));
+        await waitUntil(() => warmed.size === selected.length);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        armed = true;
+        const sent = await discussion.send(project.id, owner, randomUUID(), 'Only the valid peer receives this commit');
+        controlledWake.wake(project.id);
+        await waitUntil(() => heldCohorts.some(cohort => selected.every(actor => cohort.includes(actor.userId))));
+        const member = await prisma.projectMember.findUniqueOrThrow({ where: { projectId_userId: { projectId: project.id, userId: peers[0].userId } } });
+        await sharing.changeMember(project.id, member.id, owner, {}, true);
+        clients[3].socket.terminate();
+        droppedUsers.add(peers[1].userId);
+        await waitUntil(() => clients[2].closeCode() === 1013 && clients[3].closeCode() !== undefined);
+        release();
+        await waitUntil(() => clients[0].sequences().includes(sent.message.seq) && clients[1].closeCode() === 4403);
+        assert.deepEqual(clients[0].sequences(), [sent.message.seq]);
+        for (const client of clients.slice(1)) assert.deepEqual(client.sequences(), [], 'A page read before a guard changed must not be sent afterwards');
+      } finally { release(); for (const socket of sockets) socket.terminate(); await server.close(); }
+    });
+    await t.test('realtime policy server-cancels locked reads, drains later batches and restores pooled statement timeout', { timeout: 20_000 }, async () => {
+      const project = await prisma.project.create({ data: { title: 'Policy SQL deadline fixture', category: 'other', ownerId: owner.userId } });
+      const fixture = policyTimeoutFixture(schema, admin), pending: Promise<unknown>[] = [];
+      const session = { projectId: project.id, actor: owner, jti: randomUUID(), expiresAt: Date.now() + 60_000 };
+      const outcomes: Array<PromiseSettledResult<boolean> | undefined> = [];
+      const observe = (index: number) => {
+        const completion = fixture.policy.validate({ ...session, jti: randomUUID() }).then(
+          value => { outcomes[index] = { status: 'fulfilled', value }; },
+          reason => { outcomes[index] = { status: 'rejected', reason }; });
+        pending.push(completion);
+      };
+      try {
+        const initial = (await fixture.settings())[0]; assert.equal(initial.timeout, '7s');
+        await fixture.lock(); assert.equal(await fixture.isHeld(), true);
+        const started = performance.now(); observe(0);
+        const firstWait = await waitForDatabase(() => fixture.waiting(), rows => rows.length === 1);
+        observe(1); // This check must queue behind the running transaction, then obtain a fresh bounded transaction.
+        await waitUntil(() => outcomes[0] !== undefined, 3500);
+        const first = outcomes[0]!; assert.equal(first.status, 'rejected');
+        if (first.status === 'rejected') assert.match(String(first.reason), /57014|statement timeout/i);
+        assert(performance.now() - started < 3500, 'The SQL deadline must cancel work before the four-second transaction deadline');
+        await waitForDatabase(() => fixture.waiting(), rows => rows.some(row => row.queryStartedAt !== firstWait[0].queryStartedAt));
+        await waitUntil(() => outcomes[1] !== undefined, 3500);
+        const second = outcomes[1]!; assert.equal(second.status, 'rejected');
+        if (second.status === 'rejected') assert.match(String(second.reason), /57014|statement timeout/i);
+        assert.equal(await fixture.isHeld(), true, 'Cancellation must happen while the conflicting lock still exists');
+        assert.deepEqual(await fixture.waiting(), [], 'Timed-out SQL must disappear on the PostgreSQL server');
+        assert.equal(await fixture.activeWork(), 0, 'A settled failure must not leave an active or aborted transaction behind');
+        const afterFailure = (await fixture.settings())[0]; assert.equal(afterFailure.timeout, initial.timeout);
+        await fixture.unlock();
+        assert.deepEqual(await Promise.all([
+          fixture.policy.validate(session),
+          fixture.policy.validate({ ...session, actor: { ...actors.outsider, role: 'admin' } }),
+          fixture.policy.validate({ ...session, actor: actors.admin }),
+        ]), [true, false, false], 'The recovered scheduler must preserve persisted-role and discussion access policy');
+        // A present invalid-token record remains authoritative even if its cleanup deadline is old.
+        await prisma.invalidToken.create({ data: { jti: session.jti, userId: owner.userId, expiresAt: new Date(0) } });
+        assert.equal(await fixture.policy.validate(session), false);
+        const afterSuccess = (await fixture.settings())[0]; assert.equal(afterSuccess.timeout, initial.timeout);
+        assert.equal(await fixture.activeWork(), 0);
+        t.diagnostic(`Policy SQL cancellation: two queued batches rejected with PostgreSQL statement timeout; pool setting ${initial.timeout} restored; physical connection reused=${initial.pid === afterSuccess.pid}`);
+      } finally { await fixture.close(pending); }
+    });
+    await t.test('a native cohort releases its page after real policy SQL timeout and reconnects after lock recovery', { timeout: 20_000 }, async () => {
+      const project = await prisma.project.create({ data: { title: 'Native policy SQL deadline fixture', category: 'other', ownerId: owner.userId } });
+      const account = await prisma.user.create({ data: { email: 'policy-timeout-peer@example.invalid', role: 'student', passwordHash: randomBytes(32).toString('hex') } });
+      const peer: ProjectActor = { userId: account.id, role: 'student' };
+      await prisma.projectMember.create({ data: { projectId: project.id, userId: peer.userId, roleOverride: 'viewer' } });
+      const baseline = await discussion.send(project.id, owner, randomUUID(), 'Policy timeout baseline');
+      const fixture = policyTimeoutFixture(schema, admin);
+      const boundedTickets = new RealtimeTickets(new ShareTokenCrypto(), fixture.policy, new LocalRealtimeTicketStore());
+      const server = Fastify(), controlledWake = new ControlledProjectWakeSource(), metrics = new ServiceMetrics();
+      const sockets = new Set<WebSocket>(), warmed = new Set<string>();
+      let armed = false, held = false, release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      server.decorate('serviceMetrics', metrics);
+      registerProjectRealtime(server, { consume: boundedTickets.consume.bind(boundedTickets), validate: async session => {
+        const result = await boundedTickets.validate(session);
+        if (!armed) warmed.add(session.actor.userId);
+        return result;
+      } }, { events: discussion.events.bind(discussion), eventsBatch: async (...args) => {
+        const result = await discussion.eventsBatch(...args);
+        if (armed) { assert.equal(args[1].length, 2); held = true; await gate; }
+        return result;
+      } }, ['http://collaboration.test'],
+      new RealtimeSocketLeases(new LocalRealtimeSocketLeaseStore(), () => randomBytes(16).toString('hex')), controlledWake);
+      try {
+        const initial = (await fixture.settings())[0]; assert.equal(initial.timeout, '7s');
+        await server.listen({ host: '127.0.0.1', port: 0 });
+        const address = server.server.address(); assert(address && typeof address !== 'string');
+        const url = `ws://127.0.0.1:${address.port}/api/v1/projects/${project.id}/realtime`;
+        const issued = await Promise.all([owner, peer].map(actor => boundedTickets.create({ projectId: project.id, actor,
+          jti: randomUUID(), expiresAt: Date.now() + 60_000 })));
+        const clients = await Promise.all(issued.map(ticket => connectRealtime(url, ticket.ticket, baseline.message.seq, sockets)));
+        await waitUntil(() => warmed.size === 2);
+        armed = true;
+        const committed = await discussion.send(project.id, owner, randomUUID(), 'Recovered native policy commit');
+        controlledWake.wake(project.id); await waitUntil(() => held);
+        // Access facts and payload already came from a real committed snapshot. Only the post-read primary policy is blocked.
+        await fixture.lock(); release();
+        await waitForDatabase(() => fixture.waiting(), rows => rows.length === 1);
+        await waitUntil(() => clients.every(client => client.closeCode() === 4403), 3500);
+        for (const client of clients) assert.deepEqual(client.sequences(), [], 'A failed session recheck must not publish the earlier snapshot');
+        await waitForDatabase(() => metrics.registry.metrics(), snapshot =>
+          /tlu_realtime_state\{state="activeReplays"\} 0\b/.test(snapshot) &&
+          /tlu_realtime_state\{state="activeReplayRecipients"\} 0\b/.test(snapshot));
+        assert.equal(await fixture.isHeld(), true, 'The cohort must release its page before the test removes the database lock');
+        // A periodic authorization check may have queued another bounded batch; releasing the lock lets every remaining check settle.
+        await fixture.unlock(); armed = false;
+        const recovered = await boundedTickets.create({ projectId: project.id, actor: owner, jti: randomUUID(), expiresAt: Date.now() + 60_000 });
+        const client = await connectRealtime(url, recovered.ticket, baseline.message.seq, sockets);
+        await waitUntil(() => client.sequences().includes(committed.message.seq));
+        assert.deepEqual(client.sequences(), [committed.message.seq]);
+        assert.equal((await fixture.settings())[0].timeout, initial.timeout);
+        t.diagnostic('Native policy SQL timeout closed both recipients, released active cohort/recipient counts while locked, and replayed the committed event after recovery');
+      } finally {
+        release(); await fixture.unlock().catch(() => {});
+        for (const socket of sockets) socket.terminate();
+        try { await server.close(); }
+        finally { metrics.close(); await fixture.close(); }
+      }
+    });
     await t.test('committed events reach multiple sockets below one second, drain over 100 events, and idle sockets do not poll replay every two seconds', async () => {
       const head = (await prisma.projectCollaborationState.findUniqueOrThrow({ where: { projectId: p.id } })).lastEventSeq.toString();
       const clients = await Promise.all([owner, viewer, commenter].map(async actor => {
@@ -461,9 +908,10 @@ test('Project collaboration: additive migration, PostgreSQL, HTTP and native Web
         const missed = await discussion.send(p.id, owner, randomUUID(), 'Fallback repairs a missed notification');
         await waitUntil(() => clients.every(client => client.frames.some(frame => frame.events?.some(event => event.seq === missed.message.seq))), 11_000);
         await wakeSource.start();
-        const readsBeforeIdle = replayReads;
+        const readsBeforeIdle = replayHeadReads, eventsBeforeIdle = eventReads;
         await new Promise(resolve => setTimeout(resolve, 2300));
-        assert.equal(replayReads, readsBeforeIdle, 'Access checks must not invoke event replay during idle two-second periods');
+        assert.equal(replayHeadReads, readsBeforeIdle, 'Access checks must not read event heads during idle two-second periods');
+        assert.equal(eventReads, eventsBeforeIdle, 'Access checks must not scan event rows during idle two-second periods');
         t.diagnostic(`Local PostgreSQL + ${clients.length} native sockets: five commits max ${Math.max(...latencies).toFixed(1)}ms; 125-event burst ${burstMs.toFixed(1)}ms; burst replay queries ${burstReads}.`);
       } finally { for (const client of clients) client.ws.terminate(); }
     });
@@ -486,7 +934,7 @@ test('Project collaboration: additive migration, PostgreSQL, HTTP and native Web
     });
     await t.test('bibliography concurrent imports merge without lost updates and recheck write permission', async () => {
       const bib = new BibliographyService(fileRepo);
-      const entries = [{ key: 'first', type: 'article', fields: { title: 'First' } }, { key: 'second', type: 'article', fields: { title: 'Second' } }];
+      const entries = [{ key: 'first', type: 'article' as const, fields: { title: 'First' } }, { key: 'second', type: 'article' as const, fields: { title: 'Second' } }];
       await Promise.all(entries.map(entry => bib.writeBibFile(p.id, 'refs.bib', [entry], editor.userId, [entry])));
       assert.equal((await bib.readBibFile(p.id, 'refs.bib')).length, 2);
       await assert.rejects(bib.writeBibFile(p.id, 'refs.bib', entries, viewer.userId));
@@ -522,7 +970,8 @@ test('Project collaboration: additive migration, PostgreSQL, HTTP and native Web
     await t.test('WebSocket origin and one-use tickets; project-scoped replay and revocation under five seconds', async () => {
       const rejected = new WebSocket(wsUrl, { origin: 'http://wrong.test' });
       await new Promise<void>(resolve => { rejected.on('error', () => resolve()); });
-      const ticket = await tickets.create({ projectId: p.id, actor: viewer, jti: app.jwt.decode<{ jti: string }>(tokens.viewer).jti, expiresAt: Date.now() + 60_000 });
+      const claims = app.jwt.decode<{ jti: string }>(tokens.viewer); assert(claims);
+      const ticket = await tickets.create({ projectId: p.id, actor: viewer, jti: claims.jti, expiresAt: Date.now() + 60_000 });
       const ws = new WebSocket(wsUrl, { origin: 'http://collaboration.test' }); const frames: unknown[] = [];
       ws.on('message', data => frames.push(JSON.parse(data.toString())));
       await new Promise<void>((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });

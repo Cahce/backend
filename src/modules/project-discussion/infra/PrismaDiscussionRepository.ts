@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '../../../generated/prisma/index.js';
-import type { Anchor, CommentView, DiscussionEventSnapshot, DiscussionRepository, DiscussionTransaction, MessageView, ThreadView } from '../domain/Ports.js';
+import { MAX_REPLAY_ACTORS, type Anchor, type CommentView, type DiscussionEventSnapshot, type DiscussionRepository,
+  type DiscussionTransaction, type MessageView, type ThreadView, type DiscussionEventBatchResult } from '../domain/Ports.js';
 import type { ProjectActor } from '../../projects/domain/sharing/Ports.js';
-import { accessFor, appendProjectEvent, lockProject } from '../../projects/infra/CollaborationTransaction.js';
-import { requireCondition } from '../../projects/domain/access/CollaborationErrors.js';
+import { accessFor, accessForMany, appendProjectEvent, lockProject } from '../../projects/infra/CollaborationTransaction.js';
+import { CollaborationError, requireCondition } from '../../projects/domain/access/CollaborationErrors.js';
 
 type MessageRow = Prisma.ProjectChatMessageGetPayload<{}>;
 type CommentRow = Prisma.ProjectCommentGetPayload<{}>;
@@ -29,16 +30,35 @@ const threadView = (t: ThreadRow, comments: CommentRow[]): ThreadView => {
 
 export class PrismaDiscussionRepository implements DiscussionRepository {
   constructor(private readonly prisma: PrismaClient) {}
-  readEvents(projectId: string, actor: ProjectActor, since: string, limit: number): Promise<DiscussionEventSnapshot> {
+  async readEvents(projectId: string, actor: ProjectActor, since: string, limit: number): Promise<DiscussionEventSnapshot> {
+    const [entry] = await this.readEventCohort(projectId, [actor], since, limit, false);
+    if ('error' in entry) throw entry.error;
+    return entry.snapshot;
+  }
+  readEventsBatch(projectId: string, actors: readonly ProjectActor[], since: string, limit: number): Promise<DiscussionEventBatchResult[]> {
+    requireCondition(actors.length <= MAX_REPLAY_ACTORS, 'VALIDATION_ERROR', 'Nhóm đọc sự kiện quá lớn', 400);
+    return this.readEventCohort(projectId, [...new Map(actors.map(actor => [actor.userId, actor])).values()], since, limit, true);
+  }
+  private readEventCohort(projectId: string, actors: readonly ProjectActor[], since: string, limit: number,
+    batchAccess: boolean): Promise<DiscussionEventBatchResult[]> {
+    requireCondition(Number.isSafeInteger(limit) && limit > 0 && limit <= 200, 'VALIDATION_ERROR', 'Giới hạn sự kiện không hợp lệ', 400);
+    if (!actors.length) return Promise.resolve([]);
     return this.prisma.$transaction(async db => {
       // One committed snapshot keeps the access decision, head and hydrated state aligned,
       // while readers do not contend with the project mutation/revocation row lock.
       await db.$executeRaw`SET TRANSACTION READ ONLY`;
-      const access = await accessFor(db, projectId, actor);
-      requireCondition(access.canReadChat, 'PROJECT_ACCESS_DENIED', 'Bạn không có quyền đọc thảo luận của dự án');
+      const accessMap = batchAccess ? await accessForMany(db, projectId, actors) :
+        new Map([[actors[0].userId, await accessFor(db, projectId, actors[0])]]);
+      const denied = (userId: string): DiscussionEventBatchResult => ({ userId,
+        error: new CollaborationError('PROJECT_ACCESS_DENIED', 'Bạn không có quyền đọc thảo luận của dự án', 403) });
+      const allowed = actors.filter(actor => accessMap.get(actor.userId)?.canReadChat);
+      if (!allowed.length) return actors.map(actor => denied(actor.userId));
       const state = await db.projectCollaborationState.findUnique({ where: { projectId } });
       const highWatermark = (state?.lastEventSeq ?? 0n).toString();
-      if (BigInt(since) >= BigInt(highWatermark)) return { access, highWatermark, events: [] };
+      if (BigInt(since) >= BigInt(highWatermark)) return actors.map(actor => {
+        const access = accessMap.get(actor.userId);
+        return access?.canReadChat ? { userId: actor.userId, snapshot: { access, highWatermark, events: [] } } : denied(actor.userId);
+      });
       const rows = await db.projectEvent.findMany({ where: { projectId, seq: { gt: BigInt(since) } },
         orderBy: { seq: 'asc' }, take: limit });
       const idsFor = (prefix: string) => [...new Set(rows.filter(e => e.type.startsWith(prefix) && e.entityId).map(e => e.entityId!))];
@@ -79,16 +99,32 @@ export class PrismaDiscussionRepository implements DiscussionRepository {
         const comments = [...new Map([...first.slice(0, 1), ...(reply ? [reply] : [])].map(c => [c.id, c])).values()];
         return { ...threadView(t, comments), commentsNextCursor: first.length > 1 ? first[0].id : null };
       };
-      let readState: { lastReadMessageSeq: string; unreadCount: number } | undefined;
-      if (rows.some(e => e.type === 'chat.read.changed' && e.actorId === actor.userId)) {
+      const readStates = new Map<string, { lastReadMessageSeq: string; unreadCount: number }>();
+      const changedActors = new Set(rows.filter(e => e.type === 'chat.read.changed').map(e => e.actorId));
+      const interested = allowed.filter(actor => changedActors.has(actor.userId));
+      if (batchAccess && interested.length) {
+        // The aggregate remains actor-specific (own messages never count as unread).
+        // Only actors represented by a private read-state event need this query.
+        const marks = await db.$queryRaw<Array<{ userId: string; lastReadMessageSeq: string; unreadCount: number }>>(Prisma.sql`
+          SELECT wanted."userId", COALESCE(r."lastReadMessageSeq", 0)::text AS "lastReadMessageSeq",
+            (SELECT count(*)::integer FROM "ProjectChatMessage" m
+              WHERE m."projectId" = ${projectId} AND m."deletedAt" IS NULL
+                AND m."creationSeq" > COALESCE(r."lastReadMessageSeq", 0)
+                AND m."authorId" IS DISTINCT FROM wanted."userId") AS "unreadCount"
+          FROM (VALUES ${Prisma.join(interested.map(actor => Prisma.sql`(${actor.userId}::text)`))}) wanted("userId")
+          LEFT JOIN "ProjectChatReadState" r ON r."projectId" = ${projectId} AND r."userId" = wanted."userId"
+        `);
+        for (const mark of marks) readStates.set(mark.userId, { lastReadMessageSeq: mark.lastReadMessageSeq, unreadCount: mark.unreadCount });
+      } else if (!batchAccess && interested.length) {
+        const actor = interested[0];
         const mark = await db.projectChatReadState.findUnique({ where: { projectId_userId: { projectId, userId: actor.userId } } });
         const lastRead = mark?.lastReadMessageSeq ?? 0n;
-        readState = { lastReadMessageSeq: lastRead.toString(), unreadCount: await db.projectChatMessage.count({
+        readStates.set(actor.userId, { lastReadMessageSeq: lastRead.toString(), unreadCount: await db.projectChatMessage.count({
           where: { projectId, deletedAt: null, creationSeq: { gt: lastRead },
             OR: [{ authorId: null }, { authorId: { not: actor.userId } }] },
-        }) };
+        }) });
       }
-      const events = rows.map(e => {
+      const publicData = rows.map(e => {
         let data: unknown = e.metadata;
         if (e.type.startsWith('chat.message.') && e.entityId) data = { message: messages.get(e.entityId) ?? null };
         if (e.type.startsWith('comment.thread.') && e.entityId) data = { thread: compact(e.entityId) };
@@ -97,10 +133,16 @@ export class PrismaDiscussionRepository implements DiscussionRepository {
           const thread = c ? compact(c.threadId, c) : null;
           data = { thread, comment: c ? commentView(thread?.deletedAt ? { ...c, body: null, deletedAt: new Date(thread.deletedAt) } : c) : null };
         }
-        if (e.type === 'chat.read.changed') data = e.actorId === actor.userId ? readState : {};
-        return { type: e.type, projectId, seq: e.seq.toString(), accessVersion: access.version, occurredAt: e.createdAt.toISOString(), data };
+        return data;
       });
-      return { access, highWatermark, events };
+      return actors.map(actor => {
+        const access = accessMap.get(actor.userId);
+        if (!access?.canReadChat) return denied(actor.userId);
+        const events = rows.map((e, index) => ({ type: e.type, projectId, seq: e.seq.toString(), accessVersion: access.version,
+          occurredAt: e.createdAt.toISOString(), data: e.type === 'chat.read.changed' ?
+            e.actorId === actor.userId ? readStates.get(actor.userId) : {} : publicData[index] }));
+        return { userId: actor.userId, snapshot: { access, highWatermark, events } };
+      });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, maxWait: 10_000, timeout: 15_000 });
   }
   run<T>(projectId: string, actor: ProjectActor, work: (tx: DiscussionTransaction) => Promise<T>): Promise<T> {

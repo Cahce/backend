@@ -105,11 +105,32 @@ async function fixture(docs: boolean) {
     await projectRoutes(child, projects); await projectSettingsRoutes(child, projects); await projectFileRoutes(child, files);
   }, { prefix: '/api/v1' });
   await app.ready();
-  return { app, commands };
+  return { app, commands, projects };
 }
 const schema = (value: OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject | undefined): OpenAPIV3.SchemaObject => {
   assert(value && !('$ref' in value)); return value;
 };
+
+test('settings serialization retains permitted nested configuration in GET and PUT with Swagger on or off', async () => {
+  const zotero = { library: { id: 'fixture-library', enabled: true }, collections: ['fixture-collection'] };
+  const openalex = { contact: { email: 'fixture@example.invalid' } };
+  for (const docs of [false, true]) {
+    const { app, projects } = await fixture(docs);
+    try {
+      const value = new ProjectSettings('p', 'main.typ', { ppi: 144 }, zotero, openalex, date, 7);
+      projects.getProjectSettings.execute = async () => value;
+      projects.updateProjectSettings.execute = async () => value;
+      for (const method of ['GET', 'PUT'] as const) {
+        const result = await app.inject({ method, url: '/api/v1/projects/p/settings', headers: { authorization: 'fixture' },
+          ...(method === 'PUT' ? { payload: { baseRevision: 7, compileOptions: { ppi: 144 } } } : {}) });
+        assert.equal(result.statusCode, 200);
+        assert.deepEqual(result.json().settings.compileOptions, { ppi: 144 });
+        assert.deepEqual(result.json().settings.zoteroConfig, zotero);
+        assert.deepEqual(result.json().settings.openalexConfig, openalex);
+      }
+    } finally { await app.close(); }
+  }
+});
 const op = (doc: OpenAPIV3.Document, path: string, method: 'get' | 'post' | 'put' | 'patch' | 'delete') => {
   const value = doc.paths[`/api/v1${path}`]?.[method]; assert(value, `${method} ${path}`); return value;
 };

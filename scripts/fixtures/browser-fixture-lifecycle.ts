@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { rm, unlink, writeFile } from 'node:fs/promises';
+import { readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import type { IncomingMessage, Server } from 'node:http';
+import type { Duplex } from 'node:stream';
 
 export const BROWSER_FIXTURE_DATABASE = /^codex_browser_([a-f0-9]{16})$/;
 
@@ -52,4 +54,78 @@ export async function writeCleanupReport(backend: string, metadata: BrowserFixtu
   const { directory } = fixturePaths(backend, metadata);
   await writeFile(join(directory, 'cleanup.json'), JSON.stringify({ database: metadata.database,
     cleanedUp: failedSteps.length === 0, failedSteps, recovery, at: new Date().toISOString() }, null, 2));
+}
+
+/** Test-only transport interruption. The real authentication/replay handlers remain authoritative. */
+export async function installFixtureRealtimeControl(server: Server, backend: string, metadata: BrowserFixtureMetadata) {
+  const { directory } = fixturePaths(backend, metadata);
+  assert.deepEqual(metadata.ports, [3031, 5180], 'Unexpected browser fixture ports');
+  assert(!server.listening, 'Install fixture control before listening');
+  type UpgradeHandler = (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
+  const original = server.listeners('upgrade') as UpgradeHandler[];
+  assert.equal(original.length, 1, 'Expected the real project realtime upgrade handler');
+  const markerPath = join(directory, 'REALTIME_OUTAGE.json');
+  const statusPath = join(directory, 'realtime-control.json');
+  const sockets = new Set<Duplex>();
+  let pausedUntil = 0, droppedSockets = 0, rejectedUpgrades = 0, stopped = false;
+  let lastOutageStartedAt: string | null = null, lastOutageResumesAt: string | null = null;
+  let lastControlError: string | null = null;
+  const publish = () => writeFile(statusPath, JSON.stringify({
+    state: stopped ? 'stopped' : Date.now() < pausedUntil ? 'outage' : 'live',
+    connectedSockets: sockets.size, droppedSockets, rejectedUpgrades,
+    lastOutageStartedAt, lastOutageResumesAt, lastControlError, updatedAt: new Date().toISOString(),
+  }, null, 2));
+  const wrapper: UpgradeHandler = (request, socket, head) => {
+    const projectRealtime = /^\/api\/v1\/projects\/[^/?]+\/realtime$/.test(request.url ?? '');
+    if (projectRealtime && Date.now() < pausedUntil) {
+      rejectedUpgrades++;
+      socket.end('HTTP/1.1 503 Service Unavailable\r\nRetry-After: 1\r\nConnection: close\r\n\r\n');
+      return;
+    }
+    if (projectRealtime) {
+      sockets.add(socket);
+      socket.once('close', () => sockets.delete(socket));
+    }
+    for (const handler of original) handler.call(server, request, socket, head);
+  };
+  server.removeListener('upgrade', original[0]);
+  server.on('upgrade', wrapper);
+  try { await publish(); }
+  catch (error) {
+    server.removeListener('upgrade', wrapper);
+    server.on('upgrade', original[0]);
+    throw error;
+  }
+  return {
+    markerPath, statusPath,
+    async poll() {
+      if (stopped) return;
+      let marker: string | undefined;
+      try { marker = await readFile(markerPath, 'utf8'); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      if (marker !== undefined) {
+        // Consume once; a second outage requires creating a new marker. Never record marker contents.
+        await unlink(markerPath);
+        let durationMs: unknown;
+        try { durationMs = JSON.parse(marker)?.durationMs; } catch { /* rejected below */ }
+        if (typeof durationMs === 'number' && Number.isSafeInteger(durationMs) && durationMs >= 1000 && durationMs <= 120_000) {
+          const now = Date.now();
+          pausedUntil = now + durationMs;
+          lastOutageStartedAt = new Date(now).toISOString();
+          lastOutageResumesAt = new Date(pausedUntil).toISOString();
+          lastControlError = null;
+          for (const socket of sockets) { droppedSockets++; socket.destroy(); }
+        } else lastControlError = 'Expected durationMs to be an integer between 1000 and 120000';
+      }
+      // The wrapper also checks the deadline, so upgrades resume even if a later status write fails.
+      await publish();
+    },
+    async close() {
+      stopped = true; pausedUntil = 0;
+      server.removeListener('upgrade', wrapper);
+      server.on('upgrade', original[0]);
+      await unlink(markerPath).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
+      await publish();
+    },
+  };
 }
