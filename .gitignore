@@ -39,6 +39,11 @@ references/
 .env.local
 .env.*.local
 
+# Private Docker runtime values and local database/storage transfers.
+deploy/.env.docker
+deploy/secrets/
+deploy/backups/
+
 # IDE
 .vscode/
 .idea/

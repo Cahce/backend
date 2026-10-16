@@ -26,6 +26,13 @@ var/*
 # Secrets never enter the image.
 .env
 .env.*
+**/.env
+**/.env.*
+deploy/.env.docker
+.npmrc
+**/.npmrc
+**/*.pem
+**/*.key
 
 # Noise
 .git
@@ -37,3 +44,15 @@ var/*
 *.log
 coverage
 docs
+
+# Private verification backups/logs and deployment secrets stay on the host.
+tmp
+temp
+deploy/secrets
+deploy/backups
+**/*.dump
+**/*.bak
+**/*.tar.gz
+
+# Regenerated for Linux by the explicit prisma generate build step.
+src/generated

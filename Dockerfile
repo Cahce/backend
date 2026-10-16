@@ -25,6 +25,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+RUN test ! -f .env && test ! -f deploy/.env.docker && test ! -d tmp
 
 # Plain `prisma generate` also runs the `erd` generator, which needs a browser
 # and dies with ENOENT. Only the client generator is needed.

@@ -1,0 +1,102 @@
+name: tlu-scholar
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tlu
+      POSTGRES_DB: tluscholar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.docker}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U tlu -d tluscholar"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [app]
+
+  backend-migrate:
+    image: ${BACKEND_IMAGE:-tlu-scholar-backend:local}
+    build: .
+    command: [node, node_modules/prisma/build/index.js, migrate, deploy]
+    environment:
+      DATABASE_URL: postgresql://tlu:${POSTGRES_PASSWORD}@db:5432/tluscholar
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    networks: [app]
+
+  backend:
+    image: ${BACKEND_IMAGE:-tlu-scholar-backend:local}
+    build: .
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      DATABASE_URL: postgresql://tlu:${POSTGRES_PASSWORD}@db:5432/tluscholar
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in deploy/.env.docker}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-1d}
+      CORS_ORIGIN: ${WEB_ORIGIN:-http://127.0.0.1:8080}
+      PROJECT_SHARING_ENABLED: "true"
+      PROJECT_REALTIME_ORIGINS: ${PROJECT_REALTIME_ORIGINS:-http://127.0.0.1:8080,http://localhost:8080}
+      BLOB_STORAGE_DRIVER: local
+      STORAGE_DIR: /app/.storage
+      TEMPLATE_STORAGE_DIR: /app/storage/templates
+      COMPILE_FONT_DIRS: /app/var/fonts
+      COMPILE_WORKER_ENABLED: "true"
+      ENABLE_SWAGGER: "false"
+      LOG_LEVEL: warn
+      TRANSLATION_SERVER_URL: http://translation-server:1969
+    depends_on:
+      db: { condition: service_healthy }
+      backend-migrate: { condition: service_completed_successfully }
+    volumes:
+      - storage:/app/.storage
+      - templates:/app/storage/templates
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    networks: [app]
+
+  web:
+    image: ${FRONTEND_IMAGE:-tlu-scholar-frontend:local}
+    build:
+      context: ../Frontendtluscholareditor
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_PROJECT_SHARING_ENABLED: "true"
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_HTTP_PORT:-8080}:80"
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1/health/ready]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [app]
+
+  translation-server:
+    image: zotero/translation-server
+    profiles: [capture]
+    restart: unless-stopped
+    networks: [app]
+
+volumes:
+  postgres-data:
+  storage:
+  templates:
+
+networks:
+  app:
